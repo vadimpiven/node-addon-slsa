@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+mise.local.toml
+mise.local.lock
+.claude/settings.local.json
+.DS_Store
+lcov.info
+package.tar.gz
+trivy-results.sarif
+
+.cache/
+dist/
+node_modules/
+coverage-vitest/

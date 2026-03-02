@@ -1,0 +1,285 @@
+# $schema: https://mise.jdx.dev/schema/mise.json
+
+# mise.toml - Single source of truth for all tool versions
+# https://mise.jdx.dev/
+
+redactions = ["*_TOKEN", "*_SECRET", "*_KEY", "*_PASSWORD"]
+
+[settings]
+env_file = ".env"
+npm.package_manager = "pnpm"
+quiet = true
+experimental = true
+lockfile = true
+
+[env]
+MISE_ACTIVE = "1"
+
+# Cache directories
+npm_config_store_dir = "{{ config_root }}/.cache/native/pnpm"
+
+# Add node_modules/.bin to PATH
+_.path = ["{{ config_root }}/node_modules/.bin"]
+
+[tools]
+node = "24.14.0"
+
+"aqua:jqlang/jq" = "1.8.1"
+"github:mikefarah/yq" = "4.52.4"
+"aqua:BurntSushi/ripgrep" = "15.1.0"
+"aqua:aquasecurity/trivy" = "0.69.1"
+"aqua:google/yamlfmt" = "0.21.0"
+"aqua:gitleaks/gitleaks" = "8.30.0"
+"aqua:rhysd/actionlint" = "1.7.11"
+
+# Tools with no Windows ARM64 binary available
+[tools."aqua:koalaman/shellcheck"]
+version = "0.11.0"
+os = ["linux", "macos"]
+
+[tools."aqua:crate-ci/typos"]
+version = "1.44.0"
+os = ["linux", "macos"]
+
+# ============================================================================
+# SETUP TASKS - Initialize environment and tools
+# ============================================================================
+
+[tasks."setup:pnpm"]
+description = "Install pnpm dependencies"
+hide = true
+env = { CI = "true" }
+run = [
+  "corepack enable pnpm",
+  "pnpm install --frozen-lockfile --prefer-offline",
+]
+sources = ["pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json"]
+
+[tasks.setup]
+description = "Install all dependencies"
+depends = ["setup:pnpm"]
+
+# ============================================================================
+# LINT & CHECK/FIX TASKS - Verify and fix code quality and security
+# ============================================================================
+
+# --- oxlint (JS/TS) ---
+[tasks."check:oxlint"]
+description = "Check JS/TS with oxlint"
+hide = true
+depends = ["setup:pnpm"]
+run = "pnpm exec oxlint . --deny-warnings"
+sources = ["{src,tests,bin}/**/*.{ts,js,mts,mjs}"]
+
+[tasks."fix:oxlint"]
+description = "Fix JS/TS with oxlint"
+hide = true
+depends = ["setup:pnpm"]
+run = "pnpm exec oxlint . --fix"
+sources = ["{src,tests,bin}/**/*.{ts,js,mts,mjs}"]
+
+# --- oxfmt (JS/TS/JSON) ---
+[tasks."check:oxfmt"]
+description = "Check JS/TS/JSON with oxfmt"
+hide = true
+depends = ["setup:pnpm"]
+run = "pnpm exec oxfmt --check ."
+sources = [
+  "*.{json,jsonc}",
+  "{src,tests,bin}/**/*.{ts,js,mts,mjs,json,jsonc}",
+  ".oxfmtrc.json",
+]
+
+[tasks."fix:oxfmt"]
+description = "Format JS/TS/JSON with oxfmt"
+hide = true
+depends = ["setup:pnpm"]
+run = "pnpm exec oxfmt --write ."
+sources = [
+  "*.{json,jsonc}",
+  "{src,tests,bin}/**/*.{ts,js,mts,mjs,json,jsonc}",
+  ".oxfmtrc.json",
+]
+
+# --- taplo (TOML) ---
+[tasks."check:taplo"]
+description = "Check TOML files with taplo"
+hide = true
+depends = ["setup:pnpm"]
+run = "pnpm exec taplo check"
+sources = ["*.toml"]
+
+[tasks."fix:taplo"]
+description = "Format TOML files with taplo"
+hide = true
+depends = ["setup:pnpm"]
+run = "pnpm exec taplo format"
+sources = ["*.toml"]
+
+# --- markdownlint (Markdown) ---
+[tasks."check:markdownlint"]
+description = "Check Markdown files"
+hide = true
+depends = ["setup:pnpm"]
+run = "pnpm exec markdownlint-cli2"
+sources = ["*.md", ".markdownlint-cli2.jsonc"]
+
+[tasks."fix:markdownlint"]
+description = "Fix Markdown files"
+hide = true
+depends = ["setup:pnpm"]
+run = "pnpm exec markdownlint-cli2 --fix"
+sources = ["*.md", ".markdownlint-cli2.jsonc"]
+
+# --- yamlfmt (YAML) ---
+[tasks."check:yamlfmt"]
+description = "Check YAML formatting"
+hide = true
+run = "yamlfmt -gitignore_excludes -lint"
+sources = ["*.{yaml,yml}", ".github/**/*.{yaml,yml}"]
+
+[tasks."fix:yamlfmt"]
+description = "Format YAML files"
+hide = true
+run = "yamlfmt -gitignore_excludes"
+sources = ["*.{yaml,yml}", ".github/**/*.{yaml,yml}"]
+
+# --- typos ---
+[tasks."check:typos"]
+description = "Check for typos in all files"
+hide = true
+run = "typos ."
+run_windows = "exit 0"
+sources = [
+  "*.{md,toml,json,yaml,yml}",
+  "{.github,src,tests,bin}/**/*.{ts,js,mts,mjs,md,toml,json,yaml,yml}",
+]
+
+[tasks."fix:typos"]
+description = "Fix typos in all files"
+hide = true
+run = "typos . -w"
+run_windows = "exit 0"
+sources = [
+  "*.{md,toml,json,yaml,yml}",
+  "{.github,src,tests,bin}/**/*.{ts,js,mts,mjs,md,toml,json,yaml,yml}",
+]
+
+# --- gitleaks (secret detection) ---
+[tasks."check:gitleaks"]
+description = "Scan for secrets with gitleaks"
+hide = true
+run = "gitleaks detect --no-banner"
+
+[tasks."fix:gitleaks"]
+description = "Scan for secrets (no auto-fix available)"
+hide = true
+run = [{ task = "check:gitleaks" }]
+
+# --- zizmor (GitHub Actions) ---
+[tasks."check:zizmor"]
+description = "Security audit GitHub Actions with zizmor"
+hide = true
+run = "zizmor -q --persona auditor .github"
+run_windows = "exit 0"
+sources = [".github/**/*.{yaml,yml}"]
+
+[tasks."fix:zizmor"]
+description = "Check GitHub Actions (no auto-fix available)"
+hide = true
+run = [{ task = "check:zizmor" }]
+
+# --- actionlint (GitHub Actions syntax) ---
+[tasks."check:actionlint"]
+description = "Lint GitHub Actions workflows"
+hide = true
+run = "actionlint"
+sources = [".github/**/*.{yaml,yml}"]
+
+[tasks."fix:actionlint"]
+description = "Lint GitHub Actions (no auto-fix available)"
+hide = true
+run = [{ task = "check:actionlint" }]
+
+# --- trivy (filesystem) ---
+[tasks."check:trivy-fs"]
+description = "Security scan filesystem with trivy"
+hide = true
+depends = ["setup"]
+run = "trivy fs . --format table --ignore-unfixed"
+sources = ["*.{toml,lock,json,yaml,yml}"]
+
+[tasks."fix:trivy-fs"]
+description = "Scan filesystem with trivy (no auto-fix available)"
+hide = true
+run = [{ task = "check:trivy-fs" }]
+
+# --- Global check/fix tasks ---
+[tasks.check]
+description = "Verify code quality"
+alias = "c"
+depends = [
+  "check:oxlint",
+  "check:oxfmt",
+  "check:taplo",
+  "check:markdownlint",
+  "check:yamlfmt",
+  "check:typos",
+  "check:gitleaks",
+  "check:zizmor",
+  "check:actionlint",
+  "check:trivy-fs",
+]
+
+[tasks.fix]
+description = "Auto-fix code issues"
+alias = "f"
+depends = [
+  "fix:oxlint",
+  "fix:oxfmt",
+  "fix:taplo",
+  "fix:markdownlint",
+  "fix:yamlfmt",
+  "fix:typos",
+  "fix:gitleaks",
+  "fix:zizmor",
+  "fix:actionlint",
+  "fix:trivy-fs",
+  "fix:lock",
+]
+
+[tasks."fix:lock"]
+description = "Update mise lockfile for all platforms"
+hide = true
+run = """
+mise lock --platform linux-x64,linux-arm64,linux-x64-musl,linux-arm64-musl,macos-x64,macos-arm64,windows-x64,windows-arm64
+"""
+sources = ["mise.toml"]
+
+# ============================================================================
+# BUILD & TEST TASKS - Build and test the project
+# ============================================================================
+
+[tasks.build]
+description = "Compile the package"
+alias = "b"
+depends = ["setup:pnpm"]
+run = "pnpm run build"
+
+[tasks.test]
+description = "Run all tests"
+alias = "t"
+depends = ["fix"]
+run = "pnpm run test"
+
+[tasks."ci-build"]
+description = "Build for CI"
+hide = true
+depends = ["setup:pnpm"]
+run = "pnpm run ci-build"
+
+[tasks."ci-test"]
+description = "Run CI tests"
+hide = true
+depends = ["check"]
+run = "pnpm run ci-test"

@@ -1,0 +1,84 @@
+name: "Build and test"
+on:
+  pull_request:
+    types: ["opened", "reopened", "synchronize"]
+    branches:
+      - "main"
+  push:
+    branches:
+      - "main"
+  schedule:
+    - cron: "32 4 * * *"
+  workflow_dispatch: {}
+permissions: {}
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+jobs:
+  build-and-test:
+    name: "Build and test"
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 15
+    permissions:
+      contents: "read" # to fetch code
+      id-token: "write" # for OIDC authentication
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
+        with:
+          ref: "${{ github.ref }}"
+          fetch-depth: 1
+          persist-credentials: false
+      - name: "Setup mise"
+        uses: "jdx/mise-action@13abe505c6630e4a44da3b1e87b5caf5157e3cf0" # v2.26.8
+        with:
+          version: "v2026.2.23"
+      - name: "Build and test"
+        run: "mise run --force ci-test"
+  zizmor:
+    name: "Check CI scripts"
+    timeout-minutes: 15
+    permissions:
+      contents: "read" # to fetch code
+      security-events: "write" # to upload sarif results
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Checkout repository"
+        uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
+        with:
+          ref: "${{ github.ref }}"
+          fetch-depth: 1
+          persist-credentials: false
+      - name: "Run zizmor"
+        uses: "zizmorcore/zizmor-action@0dce2577a4760a2749d8cfb7a84b7d5585ebcb7d" # v0.5.0
+        with:
+          persona: "auditor"
+        env:
+          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+  trivy:
+    name: "Security scan"
+    timeout-minutes: 15
+    permissions:
+      contents: "read" # to fetch code
+      security-events: "write" # to upload sarif results
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Checkout repository"
+        uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
+        with:
+          ref: "${{ github.ref }}"
+          fetch-depth: 1
+          persist-credentials: false
+      - name: "Run Trivy vulnerability scanner"
+        uses: "aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518" # v0.34.1
+        with:
+          trivy-config: "trivy.yaml"
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
+          ignore-unfixed: true
+      - name: "Upload Trivy scan results to GitHub Security tab"
+        uses: "github/codeql-action/upload-sarif@89a39a4e59826350b863aa6b6252a07ad50cf83e" # v4.32.4
+        with:
+          sarif_file: "trivy-results.sarif"

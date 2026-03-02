@@ -1,0 +1,65 @@
+name: "Build and publish"
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+permissions: {}
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+jobs:
+  build:
+    name: "Build"
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 15
+    permissions:
+      contents: "write" # for release creation
+      id-token: "write" # for OIDC authentication
+      attestations: "write" # for build provenance
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
+        with:
+          ref: "${{ github.ref }}"
+          fetch-depth: 1
+          persist-credentials: false
+      - name: "Setup mise"
+        uses: "jdx/mise-action@13abe505c6630e4a44da3b1e87b5caf5157e3cf0" # v2.26.8
+        with:
+          version: "v2026.2.23"
+          cache: false
+      - name: "Bump version"
+        run: 'npm version --no-git-tag-version --allow-same-version "${GITHUB_REF_NAME#v}"'
+      - name: "Build"
+        run: "pnpm run build"
+      - name: "Attest build provenance"
+        uses: "actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32" # v4.1.0
+        with:
+          subject-path: "package.tar.gz"
+      - name: "Create release"
+        uses: "softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b" # v2.5.0
+        with:
+          files: "package.tar.gz"
+          draft: false
+  publish:
+    name: "Publish"
+    needs: "build"
+    if: "needs.build.result == 'success'"
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 15
+    permissions:
+      contents: "read" # to fetch code
+      id-token: "write" # for OIDC authentication
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
+        with:
+          ref: "${{ github.ref }}"
+          fetch-depth: 1
+          persist-credentials: false
+      - name: "Publish npm package"
+        uses: "./.github/actions/npm-publish"
+        with:
+          artifact: "package.tar.gz"
+          github-token: "${{ secrets.GITHUB_TOKEN }}"

@@ -1,0 +1,75 @@
+{
+  "name": "node-addon-slsa",
+  "version": "0.0.0",
+  "description": "Supply-chain provenance verification for npm packages with prebuilt native addons",
+  "keywords": [
+    "addon",
+    "attestation",
+    "native addon",
+    "node",
+    "provenance",
+    "security",
+    "sigstore",
+    "slsa",
+    "supply chain"
+  ],
+  "homepage": "https://github.com/vadimpiven/node-addon-slsa",
+  "bugs": {
+    "url": "https://github.com/vadimpiven/node-addon-slsa/issues"
+  },
+  "license": "Apache-2.0 OR MIT",
+  "author": "Vadim Piven <vadim@piven.tech> (https://piven.tech)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vadimpiven/node-addon-slsa.git"
+  },
+  "bin": {
+    "slsa": "./bin/slsa.mjs"
+  },
+  "files": [
+    "dist/**/*",
+    "bin/**/*"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org"
+  },
+  "scripts": {
+    "bump-version": "npm version --no-git-tag-version --allow-same-version",
+    "type-check": "pnpm exec tsc --noEmit",
+    "build": "vite build && pnpm pack --out package.tar.gz",
+    "test:vitest": "pnpm exec vitest run --coverage",
+    "pretest": "pnpm run build",
+    "test": "pnpm run type-check && pnpm run test:vitest",
+    "ci-build": "pnpm run build",
+    "ci-test": "pnpm run test"
+  },
+  "devDependencies": {
+    "@sigstore/bundle": "4.0.0",
+    "@sigstore/core": "3.1.0",
+    "@taplo/cli": "0.7.0",
+    "@types/node": "24.10.15",
+    "@vitest/coverage-istanbul": "4.1.0-beta.5",
+    "markdownlint-cli2": "0.20.0",
+    "oxfmt": "0.32.0",
+    "oxlint": "1.50.0",
+    "sigstore": "4.1.0",
+    "typescript": "6.0.0-beta",
+    "vite": "8.0.0-beta.16",
+    "vite-plugin-dts": "5.0.0-beta.6",
+    "vitest": "4.1.0-beta.5",
+    "zod": "4.3.6"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0",
+    "pnpm": "^10.26.0"
+  },
+  "packageManager": "pnpm@10.28.2+sha512.41872f037ad22f7348e3b1debbaf7e867cfd448f2726d9cf74c08f19507c31d2c8e7a11525b983febc2df640b5438dee6023ebb1f84ed43cc2d654d2bc326264"
+}
