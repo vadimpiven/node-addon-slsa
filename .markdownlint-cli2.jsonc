@@ -21,6 +21,5 @@
     },
   },
   "globs": ["*.md"],
-  "ignores": ["**/*_REFERENCE.md"],
   "gitignore": ".gitignore",
 }

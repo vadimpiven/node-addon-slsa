@@ -19,4 +19,4 @@ severity:
   - HIGH
   - CRITICAL
 exit-code: 1
-cache-dir: .cache/shared/trivy
+cache-dir: .cache/trivy

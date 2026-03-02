@@ -9,7 +9,13 @@ lcov.info
 package.tar.gz
 trivy-results.sarif
 
-.cache/
+.cache/**
+!.cache/
+!.cache/.gitkeep
+!.cache/pnpm/
+!.cache/pnpm/.gitkeep
+!.cache/trivy/
+!.cache/trivy/.gitkeep
 dist/
 node_modules/
-coverage-vitest/
+coverage/

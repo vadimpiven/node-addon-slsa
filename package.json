@@ -3,15 +3,9 @@
   "version": "0.0.0",
   "description": "Supply-chain provenance verification for npm packages with prebuilt native addons",
   "keywords": [
-    "addon",
     "attestation",
-    "native addon",
-    "node",
     "provenance",
-    "security",
-    "sigstore",
-    "slsa",
-    "supply chain"
+    "sigstore"
   ],
   "homepage": "https://github.com/vadimpiven/node-addon-slsa",
   "bugs": {
@@ -35,8 +29,7 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./package.json": "./package.json"
+    }
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org"
@@ -52,20 +45,19 @@
     "ci-test": "pnpm run test"
   },
   "devDependencies": {
-    "@sigstore/bundle": "4.0.0",
-    "@sigstore/core": "3.1.0",
-    "@taplo/cli": "0.7.0",
-    "@types/node": "24.10.15",
-    "@vitest/coverage-istanbul": "4.1.0-beta.5",
-    "markdownlint-cli2": "0.20.0",
-    "oxfmt": "0.32.0",
-    "oxlint": "1.50.0",
-    "sigstore": "4.1.0",
-    "typescript": "6.0.0-beta",
-    "vite": "8.0.0-beta.16",
-    "vite-plugin-dts": "5.0.0-beta.6",
-    "vitest": "4.1.0-beta.5",
-    "zod": "4.3.6"
+    "@sigstore/bundle": "catalog:",
+    "@sigstore/core": "catalog:",
+    "@types/node": "catalog:",
+    "@vitest/coverage-istanbul": "catalog:",
+    "markdownlint-cli2": "catalog:",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "sigstore": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-dts": "catalog:",
+    "vitest": "catalog:",
+    "zod": "catalog:"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0",

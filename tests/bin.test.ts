@@ -87,6 +87,28 @@ describe("slsa bin", () => {
     }
   });
 
+  it("--help prints usage and exits 0", async ({ expect }) => {
+    const dir = await mkdtemp(join(tmpdir(), "slsa-bin-"));
+    try {
+      const { code, stdout } = await run(["--help"], dir);
+      expect(code).toBe(0);
+      expect(stdout).toContain("Usage:");
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
+
+  it("no command prints usage and exits 0", async ({ expect }) => {
+    const dir = await mkdtemp(join(tmpdir(), "slsa-bin-"));
+    try {
+      const { code, stdout } = await run([], dir);
+      expect(code).toBe(0);
+      expect(stdout).toContain("Usage:");
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
+
   it("exits with error for unknown command", async ({ expect }) => {
     const dir = await mkdtemp(join(tmpdir(), "slsa-bin-"));
     try {

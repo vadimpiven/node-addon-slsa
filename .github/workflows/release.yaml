@@ -30,9 +30,9 @@ jobs:
           version: "v2026.2.23"
           cache: false
       - name: "Bump version"
-        run: 'npm version --no-git-tag-version --allow-same-version "${GITHUB_REF_NAME#v}"'
+        run: 'pnpm run bump-version "${GITHUB_REF_NAME#v}"'
       - name: "Build"
-        run: "pnpm run build"
+        run: "pnpm run ci-build"
       - name: "Attest build provenance"
         uses: "actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32" # v4.1.0
         with:
@@ -58,8 +58,18 @@ jobs:
           ref: "${{ github.ref }}"
           fetch-depth: 1
           persist-credentials: false
-      - name: "Publish npm package"
-        uses: "./.github/actions/npm-publish"
+      - name: "Install latest Node.js with correct .npmrc"
+        uses: "actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238" # v6.2.0
         with:
-          artifact: "package.tar.gz"
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "latest"
+          check-latest: true
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+      - name: "Update npm CLI"
+        run: "npm install -g npm@latest"
+      - name: "Download release artifact"
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+        run: 'gh release download "$GITHUB_REF_NAME" --pattern "package.tar.gz"'
+      - name: "Publish to npmjs.org"
+        run: 'npm publish "package.tar.gz" --access public --provenance'

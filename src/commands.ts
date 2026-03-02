@@ -41,7 +41,7 @@ function assertWithinDir(baseDir: string, target: string, label: string): void {
 /**
  * Download, verify, and install the native binary.
  */
-export async function wget(packageDir: string): Promise<void> {
+export async function wget(packageDir: string, noVerify = false): Promise<void> {
   const { name, version, addon, repository } = await readPackageJson(packageDir);
 
   const expectedRepo = extractExpectedRepo(repository);
@@ -67,7 +67,10 @@ export async function wget(packageDir: string): Promise<void> {
   if (version === "0.0.0") return;
 
   // Verify npm package provenance
-  const runInvocationURI = await verifyNpmProvenance(name, version, expectedRepo);
+  let runInvocationURI = "";
+  if (!noVerify) {
+    runInvocationURI = await verifyNpmProvenance(name, version, expectedRepo);
+  }
 
   // Stream: download → hash compressed bytes → decompress → write temp file.
   // The hash is computed over the compressed bytes because
@@ -86,7 +89,9 @@ export async function wget(packageDir: string): Promise<void> {
     );
 
     // Verify binary provenance against the same workflow run
-    await verifyBinaryProvenance(digest(), runInvocationURI, expectedRepo);
+    if (!noVerify) {
+      await verifyBinaryProvenance(digest(), runInvocationURI, expectedRepo);
+    }
 
     // Guard against symlink at destination. A symlink here should
     // never exist in a legitimate installation — refuse to proceed.

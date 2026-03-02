@@ -1,3 +1,17 @@
 packages:
   - "."
 onlyBuiltDependencies: []
+catalog:
+  "@sigstore/bundle": 4.0.0
+  "@sigstore/core": 3.1.0
+  "@types/node": 25.3.3
+  "@vitest/coverage-istanbul": 4.1.0-beta.5
+  markdownlint-cli2: 0.20.0
+  oxfmt: 0.32.0
+  oxlint: 1.50.0
+  sigstore: 4.1.0
+  typescript: 6.0.0-beta
+  vite: 8.0.0-beta.16
+  vite-plugin-dts: 5.0.0-beta.6
+  vitest: 4.1.0-beta.5
+  zod: 4.3.6

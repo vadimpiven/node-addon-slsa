@@ -31,12 +31,12 @@ export default defineConfig({
     coverage: {
       provider: "istanbul",
       reporter: ["lcovonly", "text"],
-      reportsDirectory: "./coverage-vitest",
+      reportsDirectory: "./coverage",
     },
     reporters: ["default"],
     detectAsyncLeaks: false,
     includeSource: ["src/**/*.ts"],
-    include: ["tests/vitest/**/*.test.ts"],
+    include: ["tests/**/*.test.ts"],
   },
   plugins: [
     dts({

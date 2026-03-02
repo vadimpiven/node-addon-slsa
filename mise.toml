@@ -13,51 +13,40 @@ experimental = true
 lockfile = true
 
 [env]
-MISE_ACTIVE = "1"
-
 # Cache directories
-npm_config_store_dir = "{{ config_root }}/.cache/native/pnpm"
+npm_config_store_dir = "{{ config_root }}/.cache/pnpm"
 
 # Add node_modules/.bin to PATH
 _.path = ["{{ config_root }}/node_modules/.bin"]
 
 [tools]
-node = "24.14.0"
+node = "25.7.0"
 
 "aqua:jqlang/jq" = "1.8.1"
-"github:mikefarah/yq" = "4.52.4"
+"aqua:mikefarah/yq" = "4.52.4"
 "aqua:BurntSushi/ripgrep" = "15.1.0"
 "aqua:aquasecurity/trivy" = "0.69.1"
 "aqua:google/yamlfmt" = "0.21.0"
 "aqua:gitleaks/gitleaks" = "8.30.0"
 "aqua:rhysd/actionlint" = "1.7.11"
-
-# Tools with no Windows ARM64 binary available
-[tools."aqua:koalaman/shellcheck"]
-version = "0.11.0"
-os = ["linux", "macos"]
-
-[tools."aqua:crate-ci/typos"]
-version = "1.44.0"
-os = ["linux", "macos"]
+"aqua:koalaman/shellcheck" = "0.11.0"
+"aqua:crate-ci/typos" = "1.44.0"
+"aqua:tamasfe/taplo" = "0.10.0"
+"aqua:zizmorcore/zizmor" = "1.22.0"
+"aqua:cli/cli" = "2.87.3"
 
 # ============================================================================
 # SETUP TASKS - Initialize environment and tools
 # ============================================================================
 
-[tasks."setup:pnpm"]
+[tasks.setup]
 description = "Install pnpm dependencies"
-hide = true
 env = { CI = "true" }
 run = [
   "corepack enable pnpm",
   "pnpm install --frozen-lockfile --prefer-offline",
 ]
 sources = ["pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json"]
-
-[tasks.setup]
-description = "Install all dependencies"
-depends = ["setup:pnpm"]
 
 # ============================================================================
 # LINT & CHECK/FIX TASKS - Verify and fix code quality and security
@@ -67,14 +56,14 @@ depends = ["setup:pnpm"]
 [tasks."check:oxlint"]
 description = "Check JS/TS with oxlint"
 hide = true
-depends = ["setup:pnpm"]
+depends = ["setup"]
 run = "pnpm exec oxlint . --deny-warnings"
 sources = ["{src,tests,bin}/**/*.{ts,js,mts,mjs}"]
 
 [tasks."fix:oxlint"]
 description = "Fix JS/TS with oxlint"
 hide = true
-depends = ["setup:pnpm"]
+depends = ["setup"]
 run = "pnpm exec oxlint . --fix"
 sources = ["{src,tests,bin}/**/*.{ts,js,mts,mjs}"]
 
@@ -82,7 +71,7 @@ sources = ["{src,tests,bin}/**/*.{ts,js,mts,mjs}"]
 [tasks."check:oxfmt"]
 description = "Check JS/TS/JSON with oxfmt"
 hide = true
-depends = ["setup:pnpm"]
+depends = ["setup"]
 run = "pnpm exec oxfmt --check ."
 sources = [
   "*.{json,jsonc}",
@@ -93,7 +82,7 @@ sources = [
 [tasks."fix:oxfmt"]
 description = "Format JS/TS/JSON with oxfmt"
 hide = true
-depends = ["setup:pnpm"]
+depends = ["setup"]
 run = "pnpm exec oxfmt --write ."
 sources = [
   "*.{json,jsonc}",
@@ -105,29 +94,27 @@ sources = [
 [tasks."check:taplo"]
 description = "Check TOML files with taplo"
 hide = true
-depends = ["setup:pnpm"]
-run = "pnpm exec taplo check"
+run = "taplo check"
 sources = ["*.toml"]
 
 [tasks."fix:taplo"]
 description = "Format TOML files with taplo"
 hide = true
-depends = ["setup:pnpm"]
-run = "pnpm exec taplo format"
+run = "taplo format"
 sources = ["*.toml"]
 
 # --- markdownlint (Markdown) ---
 [tasks."check:markdownlint"]
 description = "Check Markdown files"
 hide = true
-depends = ["setup:pnpm"]
+depends = ["setup"]
 run = "pnpm exec markdownlint-cli2"
 sources = ["*.md", ".markdownlint-cli2.jsonc"]
 
 [tasks."fix:markdownlint"]
 description = "Fix Markdown files"
 hide = true
-depends = ["setup:pnpm"]
+depends = ["setup"]
 run = "pnpm exec markdownlint-cli2 --fix"
 sources = ["*.md", ".markdownlint-cli2.jsonc"]
 
@@ -249,11 +236,9 @@ depends = [
 ]
 
 [tasks."fix:lock"]
-description = "Update mise lockfile for all platforms"
+description = "Update mise lockfile"
 hide = true
-run = """
-mise lock --platform linux-x64,linux-arm64,linux-x64-musl,linux-arm64-musl,macos-x64,macos-arm64,windows-x64,windows-arm64
-"""
+run = "mise lock"
 sources = ["mise.toml"]
 
 # ============================================================================
@@ -263,7 +248,7 @@ sources = ["mise.toml"]
 [tasks.build]
 description = "Compile the package"
 alias = "b"
-depends = ["setup:pnpm"]
+depends = ["setup"]
 run = "pnpm run build"
 
 [tasks.test]
@@ -275,7 +260,7 @@ run = "pnpm run test"
 [tasks."ci-build"]
 description = "Build for CI"
 hide = true
-depends = ["setup:pnpm"]
+depends = ["setup"]
 run = "pnpm run ci-build"
 
 [tasks."ci-test"]
