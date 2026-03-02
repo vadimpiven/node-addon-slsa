@@ -30,7 +30,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: "Setup mise"
-        uses: "jdx/mise-action@13abe505c6630e4a44da3b1e87b5caf5157e3cf0" # v2.26.8
+        uses: "jdx/mise-action@e79ddf65a11cec7b0e882bedced08d6e976efb2d" # v3.6.2
         with:
           version: "v2026.2.23"
       - name: "Build and test"
