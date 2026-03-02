@@ -8,8 +8,13 @@ backend = "aqua:BurntSushi/ripgrep"
 "platforms.windows-x64" = { checksum = "sha256:124510b94b6baa3380d051fdf4650eaa80a302c876d611e9dba0b2e18d87493a", url = "https://github.com/BurntSushi/ripgrep/releases/download/15.1.0/ripgrep-15.1.0-x86_64-pc-windows-msvc.zip"}
 
 [[tools."aqua:aquasecurity/trivy"]]
-version = "0.69.1"
+version = "0.69.2"
 backend = "aqua:aquasecurity/trivy"
+"platforms.linux-arm64" = { checksum = "sha256:c73b97699c317b0d25532b3f188564b4e29d13d5472ce6f8eb078082546a6481", url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.2/trivy_0.69.2_Linux-ARM64.tar.gz"}
+"platforms.linux-x64" = { checksum = "sha256:affa59a1e37d86e4b8ab2cd02f0ab2e63d22f1bf9cf6a7aa326c884e25e26ce3", url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.2/trivy_0.69.2_Linux-64bit.tar.gz"}
+"platforms.macos-arm64" = { checksum = "sha256:320c0e6af90b5733b9326da0834240e944c6f44091e50019abdf584237ff4d0c", url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.2/trivy_0.69.2_macOS-ARM64.tar.gz"}
+"platforms.macos-x64" = { checksum = "sha256:41f6eac3ebe3a00448a16f08038b55ce769fe2d5128cb0d64bdf282cdad4831a", url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.2/trivy_0.69.2_macOS-64bit.tar.gz"}
+"platforms.windows-x64" = { checksum = "sha256:d772fa7c3c1bc52d2914ff78107596fbd20010b5f18bec6f39d63ee3bb31ad45", url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.2/trivy_0.69.2_windows-64bit.zip"}
 
 [[tools."aqua:cli/cli"]]
 version = "2.87.3"
