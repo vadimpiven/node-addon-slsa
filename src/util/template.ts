@@ -9,6 +9,10 @@ export function evalTemplate<T extends Record<string, string>>(template: string,
   for (const [key, value] of Object.entries(vars)) {
     result = result.replaceAll(`{${key}}`, value);
   }
+  const unresolved = result.match(/\{[a-zA-Z_]\w*\}/g);
+  if (unresolved) {
+    throw new Error(`Unresolved template placeholders: ${unresolved.join(", ")}`);
+  }
   return result;
 }
 
@@ -25,13 +29,19 @@ if (import.meta.vitest) {
       expect(result).toBe("name-v1.0.0-linux-x64.gz");
     });
 
-    it("handles missing keys by leaving placeholders", ({ expect }) => {
+    it("substitutes empty string values", ({ expect }) => {
       const result = evalTemplate("{version}-{platform}-{arch}", {
         version: "1.0.0",
         platform: "",
         arch: "",
       });
       expect(result).toBe("1.0.0--");
+    });
+
+    it("throws on unresolved placeholders", ({ expect }) => {
+      expect(() => evalTemplate("{version}-{libc}", { version: "1.0.0" })).toThrow(
+        /Unresolved template placeholders.*\{libc\}/,
+      );
     });
 
     it("returns empty string for empty template", ({ expect }) => {

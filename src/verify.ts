@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+import process from "node:process";
+
 import { bundleFromJSON, bundleToJSON } from "@sigstore/bundle";
 import { X509Certificate } from "@sigstore/core";
 import { createVerifier } from "sigstore";
 import { z } from "zod/v4";
 
 import type { SerializedBundle } from "@sigstore/bundle";
+
+import dedent from "dedent";
 
 import { fetchWithTimeout } from "./download.ts";
 import { SecurityError } from "./util/security-error.ts";
@@ -51,6 +55,13 @@ const SLSA_PROVENANCE_PREFIX = "https://slsa.dev/provenance/";
 
 // -- Internal helpers --
 
+let _verifier: Awaited<ReturnType<typeof createVerifier>> | undefined;
+
+async function getVerifier(): ReturnType<typeof createVerifier> {
+  _verifier ??= await createVerifier({ certificateIssuer: GITHUB_ACTIONS_ISSUER });
+  return _verifier;
+}
+
 /**
  * Extract string value from X509 extension.
  * Handles both v1 (raw ASCII) and v2 (DER-encoded UTF8String).
@@ -79,7 +90,11 @@ function verifyCertificateOIDs(cert: X509Certificate, expectedRepo: string): voi
 
   if (issuer !== GITHUB_ACTIONS_ISSUER) {
     throw new SecurityError(
-      "Certificate issuer mismatch.\n" + `Expected: ${GITHUB_ACTIONS_ISSUER}\n` + `Got: ${issuer}`,
+      dedent`
+        Certificate issuer mismatch.
+        Expected: ${GITHUB_ACTIONS_ISSUER}
+        Got: ${issuer}
+      `,
     );
   }
 
@@ -88,7 +103,11 @@ function verifyCertificateOIDs(cert: X509Certificate, expectedRepo: string): voi
 
   if (sourceRepoURI !== expectedRepoURI) {
     throw new SecurityError(
-      "Source repository mismatch.\n" + `Expected: ${expectedRepoURI}\n` + `Got: ${sourceRepoURI}`,
+      dedent`
+        Source repository mismatch.
+        Expected: ${expectedRepoURI}
+        Got: ${sourceRepoURI}
+      `,
     );
   }
 }
@@ -114,7 +133,10 @@ function extractCertFromBundle(bundle: SerializedBundle): X509Certificate {
 
   if (!certBytes) {
     throw new SecurityError(
-      "No certificate found in provenance bundle.\n" + "Provenance verification cannot proceed.",
+      dedent`
+        No certificate found in provenance bundle.
+        Provenance verification cannot proceed.
+      `,
     );
   }
 
@@ -129,14 +151,20 @@ async function fetchNpmAttestations(
   version: string,
 ): Promise<NpmAttestations> {
   const url = evalTemplate(NPM_ATTESTATIONS_URL, {
-    name: packageName,
+    name: encodeURIComponent(packageName),
     version: encodeURIComponent(version),
   });
   const response = await fetchWithTimeout(url);
-  if (!response.ok) {
-    throw new Error(
-      "Failed to fetch npm attestations: " + `${response.status} ${response.statusText}`,
+  if (response.status === 404) {
+    throw new SecurityError(
+      dedent`
+        No attestation found on npm for ${packageName}@${version}.
+        The package may have been published without provenance or tampered with.
+      `,
     );
+  }
+  if (!response.ok) {
+    throw new Error(`Failed to fetch npm attestations: ${response.status} ${response.statusText}`);
   }
   return NpmAttestationsSchema.parse(await response.json());
 }
@@ -157,34 +185,34 @@ async function fetchGitHubAttestations(
     repo: expectedRepo,
     hash: sha256Hash,
   });
-  const response = await fetchWithTimeout(url, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-  });
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+  const token = process.env["GITHUB_TOKEN"];
+  if (token) {
+    headers["Authorization"] = `token ${token}`;
+  }
+  const response = await fetchWithTimeout(url, { headers });
+
+  const noAttestationMsg = dedent`
+    No attestation found on GitHub for artifact hash ${sha256Hash}.
+    The artifact may have been tampered with.
+  `;
 
   if (response.status === 404) {
-    throw new SecurityError(
-      "No attestation found on GitHub for " +
-        `artifact hash ${sha256Hash}.\n` +
-        "The artifact may have been tampered with.",
-    );
+    throw new SecurityError(noAttestationMsg);
   }
   if (!response.ok) {
     throw new Error(
-      "Failed to fetch GitHub attestations: " + `${response.status} ${response.statusText}`,
+      `Failed to fetch GitHub attestations: ${response.status} ${response.statusText}`,
     );
   }
 
   const parsed = GitHubAttestationsSchema.parse(await response.json());
 
   if (parsed.attestations.length === 0) {
-    throw new SecurityError(
-      "No attestation found on GitHub for " +
-        `artifact hash ${sha256Hash}.\n` +
-        "The artifact may have been tampered with.",
-    );
+    throw new SecurityError(noAttestationMsg);
   }
 
   return parsed;
@@ -211,19 +239,15 @@ export async function verifyNpmProvenance(
 
   if (!provenanceAttestation) {
     throw new SecurityError(
-      "No SLSA provenance attestation found " +
-        "in npm package.\n" +
-        "The package may have been published without " +
-        "provenance or tampered with.",
+      dedent`
+        No SLSA provenance attestation found in npm package.
+        The package may have been published without provenance or tampered with.
+      `,
     );
   }
 
-  // createVerifier handles: certificate chain (Fulcio CA),
-  // tlog inclusion proof, SET, signature, SCTs, and issuer OID.
-  const verifier = await createVerifier({
-    certificateIssuer: GITHUB_ACTIONS_ISSUER,
-  });
-  await Promise.resolve(verifier.verify(provenanceAttestation.bundle));
+  const verifier = await getVerifier();
+  verifier.verify(provenanceAttestation.bundle);
 
   const cert = extractCertFromBundle(provenanceAttestation.bundle);
   verifyCertificateOIDs(cert, expectedRepo);
@@ -232,9 +256,10 @@ export async function verifyNpmProvenance(
 
   if (!runInvocationURI) {
     throw new SecurityError(
-      "Run Invocation URI not found in npm " +
-        "provenance certificate.\n" +
-        "Provenance verification cannot proceed.",
+      dedent`
+        Run Invocation URI not found in npm provenance certificate.
+        Provenance verification cannot proceed.
+      `,
     );
   }
 
@@ -255,21 +280,19 @@ export async function verifyBinaryProvenance(
 ): Promise<void> {
   const ghAttestations = await fetchGitHubAttestations(expectedRepo, artifactHash);
 
-  // createVerifier handles: Fulcio chain, tlog inclusion proof,
-  // SET, signature, SCTs, and issuer OID.
-  const verifier = await createVerifier({
-    certificateIssuer: GITHUB_ACTIONS_ISSUER,
-  });
+  const verifier = await getVerifier();
 
+  let verifyFailures = 0;
   for (const attestation of ghAttestations.attestations) {
     let cert: X509Certificate;
     try {
-      // verify() throws on any cryptographic failure.
-      // Only proceed to OID checks on bundles that pass.
+      // Wrap: verify() may throw synchronously in some sigstore versions
       await Promise.resolve(verifier.verify(attestation.bundle));
       cert = extractCertFromBundle(attestation.bundle);
-    } catch {
+    } catch (err) {
+      if (err instanceof SecurityError) throw err;
       // This bundle failed cryptographic verification; try next.
+      verifyFailures++;
       continue;
     }
 
@@ -280,10 +303,19 @@ export async function verifyBinaryProvenance(
     }
   }
 
+  const total = ghAttestations.attestations.length;
+  const detail =
+    verifyFailures === total
+      ? dedent`
+          All ${total} attestation(s) failed cryptographic verification.
+          This may indicate a sigstore trust root issue rather than tampering.
+        `
+      : `${total} attestation(s) found but none matched workflow run ${expectedRunInvocationURI}.`;
   throw new SecurityError(
-    "Binary was not built in the same workflow run " +
-      `(${expectedRunInvocationURI}) as the npm package.\n` +
-      "The binary may have been tampered with.",
+    dedent`
+      Binary provenance verification failed.
+      ${detail}
+    `,
   );
 }
 
@@ -291,6 +323,155 @@ if (import.meta.vitest) {
   const { FETCH_TIMEOUT_MS } = await import("./download.ts");
   const { describe, it, vi } = import.meta.vitest;
   vi.setConfig({ testTimeout: FETCH_TIMEOUT_MS });
+
+  describe("getExtensionValue", () => {
+    it("handles v1 raw ASCII extension format", ({ expect }) => {
+      const rawValue = Buffer.from("https://token.actions.githubusercontent.com");
+      const mockCert = {
+        extension: (oid: string) => {
+          if (oid === OID_ISSUER_V1) {
+            return { valueObj: {}, value: rawValue };
+          }
+          return null;
+        },
+      } as unknown as X509Certificate;
+      expect(getExtensionValue(mockCert, OID_ISSUER_V1)).toBe(rawValue.toString("ascii"));
+    });
+  });
+
+  describe("verifyCertificateOIDs", () => {
+    it("accepts correct issuer and source repo", ({ expect }) => {
+      const expectedRepo = "owner/repo";
+      const mockCert = {
+        extension: (oid: string) => {
+          if (oid === OID_ISSUER_V2)
+            return {
+              valueObj: { subs: [{ value: Buffer.from(GITHUB_ACTIONS_ISSUER) }] },
+              value: Buffer.from(GITHUB_ACTIONS_ISSUER),
+            };
+          if (oid === OID_SOURCE_REPO_URI)
+            return {
+              valueObj: { subs: [{ value: Buffer.from(`https://github.com/${expectedRepo}`) }] },
+              value: Buffer.from(`https://github.com/${expectedRepo}`),
+            };
+          return null;
+        },
+      } as unknown as X509Certificate;
+      expect(() => verifyCertificateOIDs(mockCert, expectedRepo)).not.toThrow();
+    });
+
+    it("rejects certificates with wrong issuer", ({ expect }) => {
+      const evilIssuer = "https://evil-ca.example.com";
+      const mockCert = {
+        extension: () => ({
+          valueObj: { subs: [{ value: Buffer.from(evilIssuer) }] },
+          value: Buffer.from(evilIssuer),
+        }),
+      } as unknown as X509Certificate;
+      expect(() => verifyCertificateOIDs(mockCert, "any/repo")).toThrow(SecurityError);
+    });
+
+    it("rejects certificates with wrong source repo", ({ expect }) => {
+      const wrongRepo = "https://github.com/evil/repo";
+      const mockCert = {
+        extension: (oid: string) => {
+          if (oid === OID_ISSUER_V2)
+            return {
+              valueObj: { subs: [{ value: Buffer.from(GITHUB_ACTIONS_ISSUER) }] },
+              value: Buffer.from(GITHUB_ACTIONS_ISSUER),
+            };
+          if (oid === OID_SOURCE_REPO_URI)
+            return {
+              valueObj: { subs: [{ value: Buffer.from(wrongRepo) }] },
+              value: Buffer.from(wrongRepo),
+            };
+          return null;
+        },
+      } as unknown as X509Certificate;
+      expect(() => verifyCertificateOIDs(mockCert, "owner/repo")).toThrow(SecurityError);
+      expect(() => verifyCertificateOIDs(mockCert, "owner/repo")).toThrow(
+        /Source repository mismatch/,
+      );
+    });
+  });
+
+  function stubFetch(impl: typeof fetch): Disposable {
+    vi.stubGlobal("fetch", impl);
+    return { [Symbol.dispose]: () => vi.unstubAllGlobals() };
+  }
+
+  function stubEnvVar(key: string, value: string): Disposable {
+    vi.stubEnv(key, value);
+    return { [Symbol.dispose]: () => vi.unstubAllEnvs() };
+  }
+
+  describe("fetchNpmAttestations", () => {
+    it("propagates server error as regular Error (not SecurityError)", async ({ expect }) => {
+      using _fetch = stubFetch(
+        async () => new Response(null, { status: 500, statusText: "Server Error" }),
+      );
+      await expect(fetchNpmAttestations("pkg", "1.0.0")).rejects.toThrow(Error);
+      await expect(fetchNpmAttestations("pkg", "1.0.0")).rejects.not.toThrow(SecurityError);
+    });
+  });
+
+  describe("fetchGitHubAttestations", () => {
+    it("includes Authorization header when GITHUB_TOKEN is set", async ({ expect }) => {
+      let capturedHeaders: Record<string, string> | undefined;
+      using _fetch = stubFetch(async (_url, init?: RequestInit) => {
+        capturedHeaders = init?.headers as Record<string, string> | undefined;
+        return new Response(JSON.stringify({ attestations: [] }), { status: 200 });
+      });
+      using _env = stubEnvVar("GITHUB_TOKEN", "ghp_test123");
+      await fetchGitHubAttestations("owner/repo", "abc123").catch(() => {});
+      expect(capturedHeaders).toHaveProperty("Authorization", "token ghp_test123");
+    });
+
+    it("omits Authorization header when GITHUB_TOKEN is not set", async ({ expect }) => {
+      let capturedHeaders: Record<string, string> | undefined;
+      using _fetch = stubFetch(async (_url, init?: RequestInit) => {
+        capturedHeaders = init?.headers as Record<string, string> | undefined;
+        return new Response(JSON.stringify({ attestations: [] }), { status: 200 });
+      });
+      using _env = stubEnvVar("GITHUB_TOKEN", "");
+      await fetchGitHubAttestations("owner/repo", "abc123").catch(() => {});
+      expect(capturedHeaders).not.toHaveProperty("Authorization");
+    });
+
+    it("returns SecurityError on 404", async ({ expect }) => {
+      using _fetch = stubFetch(
+        async () => new Response(null, { status: 404, statusText: "Not Found" }),
+      );
+      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(SecurityError);
+      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(
+        /No attestation found/,
+      );
+    });
+
+    it("propagates server error as regular Error", async ({ expect }) => {
+      using _fetch = stubFetch(
+        async () => new Response(null, { status: 500, statusText: "Server Error" }),
+      );
+      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(Error);
+      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.not.toThrow(
+        SecurityError,
+      );
+    });
+
+    it("returns SecurityError on empty attestation list", async ({ expect }) => {
+      using _fetch = stubFetch(
+        async () =>
+          new Response(JSON.stringify({ attestations: [] }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+      );
+      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(SecurityError);
+      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(
+        /No attestation found/,
+      );
+    });
+  });
 
   describe("verifyNpmProvenance (integration)", () => {
     it("succeeds for unscoped package", async ({ expect }) => {

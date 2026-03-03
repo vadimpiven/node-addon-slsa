@@ -138,7 +138,6 @@ Both CLI commands read it from `package.json` in the working directory.
 | ------------------------ | ----------------------------------------------- |
 | `slsa pack`              | Gzip-compress the native binary for release     |
 | `slsa wget`              | Download, verify, and install the native binary |
-| `slsa wget --no-verify`  | Download without provenance verification        |
 | `slsa --help`, `slsa -h` | Show usage information                          |
 
 ### Verification chain

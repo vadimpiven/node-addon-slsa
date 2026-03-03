@@ -1,0 +1,87 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+import { access, readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { gzipSync } from "node:zlib";
+import { MockAgent, setGlobalDispatcher, getGlobalDispatcher } from "undici";
+import { describe, it, vi } from "vitest";
+
+import { wget } from "../src/commands.ts";
+import { tempDir } from "../src/util/fs.ts";
+import { verifyBinaryProvenance } from "../src/verify.ts";
+import { FAKE_BINARY, writeTestPkg } from "./fixtures.ts";
+
+vi.mock("../src/verify.ts", () => ({
+  verifyNpmProvenance: vi
+    .fn()
+    .mockResolvedValue("https://github.com/vadimpiven/node_reqwest/actions/runs/123/attempts/1"),
+  verifyBinaryProvenance: vi.fn().mockResolvedValue(undefined),
+}));
+
+function mockDownload(status: number, body: Buffer | string): MockAgent & AsyncDisposable {
+  const original = getGlobalDispatcher();
+  const agent = new MockAgent();
+  agent.disableNetConnect();
+  setGlobalDispatcher(agent);
+
+  agent
+    .get("https://github.com")
+    .intercept({
+      path: /^\/vadimpiven\/node_reqwest\/releases\/download\//,
+      method: "GET",
+    })
+    .reply(status, body);
+
+  return Object.assign(agent, {
+    async [Symbol.asyncDispose]() {
+      setGlobalDispatcher(original);
+      await agent.close();
+    },
+  });
+}
+
+describe("wget (download pipeline)", () => {
+  it("downloads, decompresses, and writes binary correctly", async ({ expect }) => {
+    await using _mock = mockDownload(200, gzipSync(FAKE_BINARY));
+    await using tmp = await tempDir();
+    await writeTestPkg(tmp.path, "1.0.0");
+
+    await wget(tmp.path);
+
+    const written = await readFile(join(tmp.path, "dist", "node_reqwest.node"));
+    expect(written).toEqual(FAKE_BINARY);
+  });
+
+  it("propagates HTTP 503 error with status", async ({ expect }) => {
+    await using _mock = mockDownload(503, "Service Unavailable");
+    await using tmp = await tempDir();
+    await writeTestPkg(tmp.path, "1.0.0");
+
+    await expect(wget(tmp.path)).rejects.toThrow(/503/);
+  });
+
+  it("throws on invalid (non-gzip) content", async ({ expect }) => {
+    await using _mock = mockDownload(200, Buffer.from("this is not gzip data"));
+    await using tmp = await tempDir();
+    await writeTestPkg(tmp.path, "1.0.0");
+
+    await expect(wget(tmp.path)).rejects.toThrow();
+  });
+
+  it("cleans up temp file when verifyBinaryProvenance rejects", async ({ expect }) => {
+    await using _mock = mockDownload(200, gzipSync(FAKE_BINARY));
+    vi.mocked(verifyBinaryProvenance).mockRejectedValueOnce(new Error("provenance failed"));
+
+    await using tmp = await tempDir();
+    await writeTestPkg(tmp.path, "1.0.0");
+
+    await expect(wget(tmp.path)).rejects.toThrow("provenance failed");
+
+    // Final binary should not exist
+    await expect(access(join(tmp.path, "dist", "node_reqwest.node"))).rejects.toThrow();
+
+    // No temp files should remain in dist/
+    const files = await readdir(join(tmp.path, "dist"));
+    expect(files.filter((f) => f.startsWith(".tmp-"))).toHaveLength(0);
+  });
+});
