@@ -15,8 +15,31 @@ concurrency:
   group: "${{ github.workflow }}-${{ github.ref }}"
   cancel-in-progress: true
 jobs:
+  init:
+    name: "Init"
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 5
+    permissions:
+      contents: "read" # to fetch code
+    outputs:
+      cache-key: "${{ steps.init.outputs.cache-key }}"
+      env: "${{ steps.init.outputs.env }}"
+      test-coverage: "${{ steps.init.outputs.test-coverage }}"
+      test-reports: "${{ steps.init.outputs.test-reports }}"
+      mise-version: "${{ steps.init.outputs.mise-version }}"
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
+        with:
+          ref: "${{ github.ref }}"
+          fetch-depth: 1
+          persist-credentials: false
+      - name: "Init"
+        id: "init"
+        uses: "./.github/actions/init-workflow"
   build-and-test:
     name: "Build and test"
+    needs: "init"
     runs-on: "ubuntu-latest"
     timeout-minutes: 15
     permissions:
@@ -29,12 +52,19 @@ jobs:
           ref: "${{ github.ref }}"
           fetch-depth: 1
           persist-credentials: false
-      - name: "Setup mise"
-        uses: "jdx/mise-action@e79ddf65a11cec7b0e882bedced08d6e976efb2d" # v3.6.2
+      - name: "Setup"
+        uses: "./.github/actions/setup"
         with:
-          version: "v2026.2.23"
+          env: "${{ needs.init.outputs.env }}"
+          cache-key: "${{ needs.init.outputs.cache-key }}"
+          mise-version: "${{ needs.init.outputs.mise-version }}"
       - name: "Build and test"
         run: "mise run --force ci-test"
+      - name: "Upload reports"
+        uses: "./.github/actions/upload-reports"
+        with:
+          test-coverage: "${{ needs.init.outputs.test-coverage }}"
+          test-reports: "${{ needs.init.outputs.test-reports }}"
   zizmor:
     name: "Check CI scripts"
     timeout-minutes: 15

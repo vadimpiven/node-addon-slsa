@@ -1,0 +1,36 @@
+name: "Setup"
+description: "Restore caches, install tools, and set up the project"
+inputs:
+  env:
+    description: "Environment variables in JSON format"
+    required: true
+  cache-key:
+    description: "Cache key prefix"
+    required: true
+  mise-version:
+    description: "Mise version to use"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: "Create .env file"
+      shell: "bash"
+      env:
+        ENV: "${{ inputs.env }}"
+      run: |
+        printf "%s" "$ENV" | jq -er 'to_entries[] | "\(.key)=\(.value)"' > .env
+    - name: "Restore caches"
+      uses: "actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306" # v5.0.3
+      with:
+        path: ".cache"
+        key: "${{ inputs.cache-key }}-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}"
+        restore-keys: |
+          ${{ inputs.cache-key }}-cache-${{ runner.os }}-${{ runner.arch }}-
+    - name: "Install mise and tools"
+      uses: "jdx/mise-action@e79ddf65a11cec7b0e882bedced08d6e976efb2d" # v3.6.2
+      with:
+        version: "${{ inputs.mise-version }}"
+        cache_key_prefix: "${{ inputs.cache-key }}-mise"
+    - name: "Setup project"
+      shell: "bash"
+      run: "mise run setup"

@@ -1,3 +1,11 @@
+[![CI status][status-badge]][status-dashboard]
+[![Test coverage][coverage-badge]][coverage-dashboard]
+
+[status-badge]: https://img.shields.io/github/checks-status/vadimpiven/node-addon-slsa/main
+[status-dashboard]: https://github.com/vadimpiven/node-addon-slsa/actions?query=branch%3Amain
+[coverage-badge]: https://img.shields.io/codecov/c/github/vadimpiven/node-addon-slsa/main
+[coverage-dashboard]: https://app.codecov.io/gh/vadimpiven/node-addon-slsa/tree/main
+
 # node-addon-slsa
 
 Supply-chain provenance verification for npm packages with prebuilt native addons.

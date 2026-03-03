@@ -1,0 +1,24 @@
+name: "Upload Reports"
+description: "Upload coverage and test reports to Codecov"
+inputs:
+  test-coverage:
+    description: "Coverage report file path"
+    required: true
+  test-reports:
+    description: "Test report file path"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: "Upload coverage to Codecov"
+      uses: "codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de" # v5.5.2
+      with:
+        use_oidc: true
+        report_type: "coverage"
+        files: "${{ inputs.test-coverage }}"
+    - name: "Upload test results to Codecov"
+      uses: "codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de" # v5.5.2
+      with:
+        use_oidc: true
+        report_type: "test_results"
+        files: "${{ inputs.test-reports }}"

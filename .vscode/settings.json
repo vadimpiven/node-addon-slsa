@@ -1,0 +1,27 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "oxc.oxc-vscode",
+  "[toml]": {
+    "editor.defaultFormatter": "tamasfe.even-better-toml"
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "redhat.vscode-yaml"
+  },
+  "[markdown]": {
+    "editor.codeActionsOnSave": {
+      "source.fixAll.markdownlint": "explicit"
+    }
+  },
+  "files.associations": {
+    ".env*": "properties"
+  },
+  "files.exclude": {
+    "**/.cache": true
+  },
+  "search.exclude": {
+    "**/.cache": true,
+    "pnpm-lock.yaml": true
+  },
+  "trivy.configPath": "trivy.yaml",
+  "trivy.ignoreFilesInGitIgnore": true
+}

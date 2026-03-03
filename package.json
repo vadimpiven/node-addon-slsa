@@ -35,6 +35,8 @@
     "registry": "https://registry.npmjs.org"
   },
   "scripts": {
+    "preinstall": "npx only-allow pnpm",
+    "prepare": "husky",
     "bump-version": "npm version --no-git-tag-version --allow-same-version",
     "type-check": "pnpm exec tsc --noEmit",
     "build": "vite build && pnpm pack --out package.tar.gz",
@@ -45,10 +47,12 @@
     "ci-test": "pnpm run test"
   },
   "devDependencies": {
+    "@codecov/vite-plugin": "catalog:",
     "@sigstore/bundle": "catalog:",
     "@sigstore/core": "catalog:",
     "@types/node": "catalog:",
     "@vitest/coverage-istanbul": "catalog:",
+    "husky": "catalog:",
     "markdownlint-cli2": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
