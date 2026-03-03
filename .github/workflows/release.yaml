@@ -29,12 +29,12 @@ jobs:
         with:
           version: "v2026.2.23"
           cache: false
-      - name: "Enable corepack"
-        run: "corepack enable pnpm"
+      - name: "Setup"
+        run: "mise run setup"
       - name: "Bump version"
         run: 'pnpm run bump-version "${GITHUB_REF_NAME#v}"'
       - name: "Build"
-        run: "pnpm run ci-build"
+        run: "mise run ci-build"
       - name: "Attest build provenance"
         uses: "actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32" # v4.1.0
         with:
