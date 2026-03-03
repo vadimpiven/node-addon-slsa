@@ -8,6 +8,7 @@ mise.local.lock
 lcov.info
 package.tar.gz
 trivy-results.sarif
+report.junit.xml
 
 .cache/**
 !.cache/

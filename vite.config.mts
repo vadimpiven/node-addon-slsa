@@ -1,5 +1,6 @@
 import { builtinModules } from "node:module";
 import { resolve } from "node:path";
+import { codecovVitePlugin } from "@codecov/vite-plugin";
 import dts from "vite-plugin-dts";
 import { defineConfig } from "vitest/config";
 
@@ -33,7 +34,7 @@ export default defineConfig({
       reporter: ["lcovonly", "text"],
       reportsDirectory: "./coverage",
     },
-    reporters: ["default"],
+    reporters: ["default", ["junit", { outputFile: "report.junit.xml" }]],
     detectAsyncLeaks: false,
     includeSource: ["src/**/*.ts"],
     include: ["tests/**/*.test.ts"],
@@ -42,6 +43,11 @@ export default defineConfig({
     dts({
       staticImport: true,
       entryRoot: "src",
+    }),
+    codecovVitePlugin({
+      enableBundleAnalysis: process.env.CODECOV_TOKEN !== undefined,
+      bundleName: "node-addon-slsa",
+      uploadToken: process.env.CODECOV_TOKEN,
     }),
   ],
 });

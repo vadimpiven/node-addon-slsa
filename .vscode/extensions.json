@@ -1,0 +1,16 @@
+{
+  "recommendations": [
+    "hverlin.mise-vscode",
+    "editorconfig.editorconfig",
+    "streetsidesoftware.code-spell-checker",
+    "davidanson.vscode-markdownlint",
+    "fill-labs.dependi",
+    "christian-kohler.npm-intellisense",
+    "oxc.oxc-vscode",
+    "ryanluker.vscode-coverage-gutters",
+    "tamasfe.even-better-toml",
+    "github.vscode-github-actions",
+    "aquasecurityofficial.trivy-vulnerability-scanner",
+    "redhat.vscode-yaml"
+  ]
+}

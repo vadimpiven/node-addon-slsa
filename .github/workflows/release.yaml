@@ -9,8 +9,29 @@ concurrency:
   group: "${{ github.workflow }}-${{ github.ref }}"
   cancel-in-progress: true
 jobs:
+  init:
+    name: "Init"
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 5
+    permissions:
+      contents: "read" # to fetch code
+    outputs:
+      cache-key: "${{ steps.init.outputs.cache-key }}"
+      env: "${{ steps.init.outputs.env }}"
+      mise-version: "${{ steps.init.outputs.mise-version }}"
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
+        with:
+          ref: "${{ github.ref }}"
+          fetch-depth: 1
+          persist-credentials: false
+      - name: "Init"
+        id: "init"
+        uses: "./.github/actions/init-workflow"
   build:
     name: "Build"
+    needs: "init"
     runs-on: "ubuntu-latest"
     timeout-minutes: 15
     permissions:
@@ -24,13 +45,12 @@ jobs:
           ref: "${{ github.ref }}"
           fetch-depth: 1
           persist-credentials: false
-      - name: "Setup mise"
-        uses: "jdx/mise-action@e79ddf65a11cec7b0e882bedced08d6e976efb2d" # v3.6.2
-        with:
-          version: "v2026.2.23"
-          cache: false
       - name: "Setup"
-        run: "mise run setup"
+        uses: "./.github/actions/setup"
+        with:
+          env: "${{ needs.init.outputs.env }}"
+          cache-key: "${{ needs.init.outputs.cache-key }}"
+          mise-version: "${{ needs.init.outputs.mise-version }}"
       - name: "Bump version"
         run: 'pnpm run bump-version "${GITHUB_REF_NAME#v}"'
       - name: "Build"
@@ -75,3 +95,23 @@ jobs:
         run: 'gh release download "$GITHUB_REF_NAME" --pattern "package.tar.gz"'
       - name: "Publish to npmjs.org"
         run: 'npm publish "package.tar.gz" --access public --provenance'
+  verify-installation:
+    name: "Verify installation"
+    needs: "publish"
+    if: "needs.publish.result == 'success'"
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 5
+    permissions:
+      contents: "read" # to fetch code
+    steps:
+      - name: "Install Node.js"
+        uses: "actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238" # v6.2.0
+        with:
+          node-version: "latest"
+          check-latest: true
+          package-manager-cache: false
+      - name: "Verify installation"
+        run: |
+          cd "$(mktemp -d)"
+          npm init -y
+          npm install "node-addon-slsa@${GITHUB_REF_NAME#v}"

@@ -1,0 +1,16 @@
+{
+  "languages": {
+    "JavaScript": {
+      "prettier": { "allowed": false }
+    },
+    "TypeScript": {
+      "prettier": { "allowed": false }
+    },
+    "JSON": {
+      "prettier": { "allowed": false }
+    },
+    "JSONC": {
+      "prettier": { "allowed": false }
+    }
+  }
+}
