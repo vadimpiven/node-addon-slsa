@@ -29,6 +29,8 @@ jobs:
         with:
           version: "v2026.2.23"
           cache: false
+      - name: "Enable corepack"
+        run: "corepack enable pnpm"
       - name: "Bump version"
         run: 'pnpm run bump-version "${GITHUB_REF_NAME#v}"'
       - name: "Build"
