@@ -4,5 +4,6 @@
 export { runSlsa } from "./cli.ts";
 
 /** Public API. */
-export { SecurityError, isSecurityError } from "./util/security-error.ts";
-export { verifyNpmProvenance, verifyBinaryProvenance } from "./verify.ts";
+export { ProvenanceError, isProvenanceError } from "./util/provenance-error.ts";
+export { verifyPackageProvenance, verifyAddonProvenance } from "./verify.ts";
+export type { PackageProvenance } from "./verify.ts";
