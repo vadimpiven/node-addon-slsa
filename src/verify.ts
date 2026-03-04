@@ -693,6 +693,19 @@ if (import.meta.vitest) {
       ).rejects.toThrow("SECURITY");
     });
 
+    it("verifyAddon rejects wrong hash for verified package", async ({ expect }) => {
+      const provenance = await verifyPackageProvenance({
+        packageName: "semver",
+        version: "7.6.3",
+        repo: "npm/node-semver",
+      });
+      await expect(
+        provenance.verifyAddon({
+          sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+        }),
+      ).rejects.toThrow(ProvenanceError);
+    });
+
     it("rejects for a package without provenance", async ({ expect }) => {
       await expect(
         verifyPackageProvenance({
