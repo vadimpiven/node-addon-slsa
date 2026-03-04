@@ -8,10 +8,12 @@ import { describe, it, vi } from "vitest";
 
 import { wget } from "../src/commands.ts";
 import { tempDir } from "../src/util/fs.ts";
-import { verifyBinaryProvenance } from "../src/verify.ts";
+import type { RunInvocationURI } from "../src/verify.ts";
 import { FAKE_BINARY, writeTestPkg } from "./fixtures.ts";
 
 const { access, readdir, readFile } = fsp;
+
+const mockVerifyAddon = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("node:fs/promises", async (importOriginal) => {
   const orig = await importOriginal<typeof fsp>();
@@ -19,10 +21,12 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 });
 
 vi.mock("../src/verify.ts", () => ({
-  verifyNpmProvenance: vi
-    .fn()
-    .mockResolvedValue("https://github.com/vadimpiven/node_reqwest/actions/runs/123/attempts/1"),
-  verifyBinaryProvenance: vi.fn().mockResolvedValue(undefined),
+  verifyPackageProvenance: vi.fn().mockResolvedValue({
+    runInvocationURI:
+      "https://github.com/vadimpiven/node_reqwest/actions/runs/123/attempts/1" as RunInvocationURI,
+    verifyAddon: (...args: unknown[]) => mockVerifyAddon(...args),
+  }),
+  verifyAddonProvenance: vi.fn().mockResolvedValue(undefined),
 }));
 
 function mockDownload(status: number, body: Buffer | string): MockAgent & AsyncDisposable {
@@ -75,9 +79,9 @@ describe("wget (download pipeline)", () => {
     await expect(wget(tmp.path)).rejects.toThrow();
   });
 
-  it("cleans up temp file when verifyBinaryProvenance rejects", async ({ expect }) => {
+  it("cleans up temp file when verifyAddon rejects", async ({ expect }) => {
     await using _mock = mockDownload(200, gzipSync(FAKE_BINARY));
-    vi.mocked(verifyBinaryProvenance).mockRejectedValueOnce(new Error("provenance failed"));
+    mockVerifyAddon.mockRejectedValueOnce(new Error("provenance failed"));
 
     await using tmp = await tempDir();
     await writeTestPkg(tmp.path, "1.0.0");
@@ -94,7 +98,7 @@ describe("wget (download pipeline)", () => {
 
   it("logs non-ENOENT unlink errors during cleanup", async ({ expect }) => {
     await using _mock = mockDownload(200, gzipSync(FAKE_BINARY));
-    vi.mocked(verifyBinaryProvenance).mockRejectedValueOnce(new Error("provenance failed"));
+    mockVerifyAddon.mockRejectedValueOnce(new Error("provenance failed"));
 
     const eacces = Object.assign(new Error("permission denied"), { code: "EACCES" });
     vi.mocked(fsp.unlink).mockRejectedValueOnce(eacces);

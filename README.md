@@ -164,39 +164,32 @@ On failure, the temp file is removed and installation aborts.
 ### Programmatic API
 
 ```typescript
-import {
-  verifyNpmProvenance,
-  verifyBinaryProvenance,
-  SecurityError,
-  isSecurityError,
-} from "node-addon-slsa";
+import { verifyPackageProvenance, isProvenanceError } from "node-addon-slsa";
 
-// Returns the Run Invocation URI from the Fulcio certificate.
-// Throws SecurityError if provenance verification fails.
-const runURI = await verifyNpmProvenance({
+// Verifies npm package provenance via sigstore.
+// Throws ProvenanceError if verification fails.
+const provenance = await verifyPackageProvenance({
   packageName: "my-native-addon",
   version: "1.0.0",
   repo: "owner/repo",
 });
 
-// Resolves if the attestation matches.
-// Throws SecurityError if verification fails.
-await verifyBinaryProvenance({
-  sha256: sha256Hash,
-  runInvocationURI: runURI,
-  repo: "owner/repo",
-});
+// Verifies addon binary against the same workflow run.
+// Throws ProvenanceError if verification fails.
+await provenance.verifyAddon({ sha256: sha256Hash });
 ```
+
+`verifyAddonProvenance` is also exported for cases where you already have
+a `RunInvocationURI` from another source.
 
 Error handling:
 
-- `SecurityError` — verification failed (tampered artifact, mismatched
+- `ProvenanceError` — verification failed (tampered artifact, mismatched
   provenance). Do not retry.
 - `Error` — transient issue (network timeout, GitHub API rate limit).
   Safe to retry.
 
-Use `isSecurityError(err)` or `instanceof SecurityError` to distinguish
-in catch blocks.
+Use `isProvenanceError(err)` in catch blocks to distinguish the two.
 
 ## Configuration
 

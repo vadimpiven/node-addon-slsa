@@ -13,7 +13,7 @@ import { extractExpectedRepo, readPackageJson } from "./config.ts";
 import { createHashPassthrough, fetchStream } from "./download.ts";
 import { assertWithinDir, isEnoent } from "./util/fs.ts";
 import { evalTemplate } from "./util/template.ts";
-import { verifyBinaryProvenance, verifyNpmProvenance } from "./verify.ts";
+import { verifyPackageProvenance } from "./verify.ts";
 
 function createTemplateVars(version: string): Record<string, string> {
   return { version, platform: process.platform, arch: process.arch };
@@ -22,7 +22,7 @@ function createTemplateVars(version: string): Record<string, string> {
 /**
  * Downloads, verifies, and installs the native binary.
  *
- * @throws {SecurityError} if provenance verification fails.
+ * @throws {ProvenanceError} if provenance verification fails.
  * @throws {Error} if the download or decompression fails.
  */
 export async function wget(packageDir: string): Promise<void> {
@@ -47,7 +47,7 @@ export async function wget(packageDir: string): Promise<void> {
   // Skip download for development version
   if (version === "0.0.0") return;
 
-  const runInvocationURI = await verifyNpmProvenance({
+  const provenance = await verifyPackageProvenance({
     packageName: name,
     version,
     repo: expectedRepo,
@@ -69,11 +69,7 @@ export async function wget(packageDir: string): Promise<void> {
       createWriteStream(tmpPath, { mode: 0o755, flags: "wx" }),
     );
 
-    await verifyBinaryProvenance({
-      sha256: digest(),
-      runInvocationURI,
-      repo: expectedRepo,
-    });
+    await provenance.verifyAddon({ sha256: digest() });
 
     await rename(tmpPath, binaryPath);
   } catch (err) {

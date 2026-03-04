@@ -6,7 +6,7 @@ import { join, resolve, sep } from "node:path";
 
 import dedent from "dedent";
 
-import { SecurityError } from "./security-error.ts";
+import { ProvenanceError } from "./provenance-error.ts";
 
 export function isEnoent(err: unknown): boolean {
   return err instanceof Error && "code" in err && err.code === "ENOENT";
@@ -27,7 +27,7 @@ export async function tempDir(): Promise<{ path: string } & AsyncDisposable> {
  * Asserts that `target` is strictly within `baseDir` to prevent
  * path-traversal attacks through package.json fields.
  *
- * @throws {SecurityError} if the resolved path escapes the base directory.
+ * @throws {ProvenanceError} if the resolved path escapes the base directory.
  */
 export function assertWithinDir({
   baseDir,
@@ -41,7 +41,7 @@ export function assertWithinDir({
   const base = resolve(baseDir);
   const resolved = resolve(target);
   if (!resolved.startsWith(base + sep)) {
-    throw new SecurityError(
+    throw new ProvenanceError(
       dedent`
         ${label} escapes the package directory.
         Base: ${base}
@@ -71,7 +71,7 @@ if (import.meta.vitest) {
           target: join(tmp.path, "dist", "..", "..", "etc", "passwd.node"),
           label: "addon.path",
         }),
-      ).toThrow(SecurityError);
+      ).toThrow(ProvenanceError);
     });
 
     it("allows paths within the base directory", async ({ expect }) => {

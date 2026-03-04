@@ -13,8 +13,13 @@ import type { SerializedBundle } from "@sigstore/bundle";
 import dedent from "dedent";
 
 import { fetchWithTimeout } from "./download.ts";
-import { SecurityError } from "./util/security-error.ts";
+import { ProvenanceError } from "./util/provenance-error.ts";
 import { evalTemplate } from "./util/template.ts";
+
+declare const __runInvocationURIBrand: unique symbol;
+export type RunInvocationURI = string & {
+  readonly [__runInvocationURIBrand]: true;
+};
 
 // -- Zod schemas for external HTTP responses --
 
@@ -121,7 +126,7 @@ function verifyCertificateOIDs(cert: X509Certificate, repo: string): void {
   const issuer = getExtensionValue(cert, OID_ISSUER_V2) ?? getExtensionValue(cert, OID_ISSUER_V1);
 
   if (issuer !== GITHUB_ACTIONS_ISSUER) {
-    throw new SecurityError(
+    throw new ProvenanceError(
       dedent`
         Certificate issuer mismatch.
         Expected: ${GITHUB_ACTIONS_ISSUER}
@@ -134,7 +139,7 @@ function verifyCertificateOIDs(cert: X509Certificate, repo: string): void {
   const repoURI = `https://github.com/${repo}`;
 
   if (sourceRepoURI !== repoURI) {
-    throw new SecurityError(
+    throw new ProvenanceError(
       dedent`
         Source repository mismatch.
         Expected: ${repoURI}
@@ -164,7 +169,7 @@ function extractCertFromBundle(bundle: SerializedBundle): X509Certificate {
   }
 
   if (!certBytes) {
-    throw new SecurityError(
+    throw new ProvenanceError(
       dedent`
         No certificate found in provenance bundle.
         This may indicate an unsupported sigstore bundle format.
@@ -191,7 +196,7 @@ async function fetchNpmAttestations({
   });
   const response = await fetchWithTimeout(url);
   if (response.status === 404) {
-    throw new SecurityError(
+    throw new ProvenanceError(
       dedent`
         No attestation found on npm for ${packageName}@${version}.
         The package may have been published without provenance or tampered with.
@@ -248,7 +253,7 @@ async function fetchGitHubAttestations({
   `;
 
   if (response.status === 404) {
-    throw new SecurityError(noAttestationMsg);
+    throw new ProvenanceError(noAttestationMsg);
   }
   if (!response.ok) {
     throw new Error(
@@ -259,7 +264,7 @@ async function fetchGitHubAttestations({
   const apiResponse = GitHubAttestationsApiSchema.parse(await response.json());
 
   if (apiResponse.attestations.length === 0) {
-    throw new SecurityError(noAttestationMsg);
+    throw new ProvenanceError(noAttestationMsg);
   }
 
   // Resolve all attestations in parallel: use inline bundle if present,
@@ -291,7 +296,7 @@ async function fetchGitHubAttestations({
   }
 
   if (resolved.attestations.length === 0) {
-    throw new SecurityError(noAttestationMsg);
+    throw new ProvenanceError(noAttestationMsg);
   }
 
   return resolved;
@@ -300,12 +305,21 @@ async function fetchGitHubAttestations({
 // -- Public API --
 
 /**
+ * Verified npm package provenance with a continuation method
+ * to verify the associated addon binary.
+ */
+export interface PackageProvenance {
+  readonly runInvocationURI: RunInvocationURI;
+  verifyAddon(options: { sha256: string }): Promise<void>;
+}
+
+/**
  * Verify npm package provenance: fetch attestations, validate the
  * certificate chain against Fulcio CA, verify identity, and check
- * source repo. Returns the Run Invocation URI that identifies the
- * workflow run that built the npm package.
+ * source repo. Returns a {@link PackageProvenance} object with the
+ * Run Invocation URI and a `verifyAddon()` continuation method.
  */
-export async function verifyNpmProvenance({
+export async function verifyPackageProvenance({
   packageName,
   version,
   repo,
@@ -313,7 +327,7 @@ export async function verifyNpmProvenance({
   packageName: string;
   version: string;
   repo: string;
-}): Promise<string> {
+}): Promise<PackageProvenance> {
   const attestations = await fetchNpmAttestations({ packageName, version });
 
   const provenanceAttestation = attestations.attestations.find((attestation) =>
@@ -321,7 +335,7 @@ export async function verifyNpmProvenance({
   );
 
   if (!provenanceAttestation) {
-    throw new SecurityError(
+    throw new ProvenanceError(
       dedent`
         No SLSA provenance attestation found in npm package.
         The package may have been published without provenance or tampered with.
@@ -336,10 +350,13 @@ export async function verifyNpmProvenance({
   const cert = extractCertFromBundle(provenanceAttestation.bundle);
   verifyCertificateOIDs(cert, repo);
 
-  const runInvocationURI = getExtensionValue(cert, OID_RUN_INVOCATION_URI);
+  const runInvocationURI = getExtensionValue(
+    cert,
+    OID_RUN_INVOCATION_URI,
+  ) as RunInvocationURI | null;
 
   if (!runInvocationURI) {
-    throw new SecurityError(
+    throw new ProvenanceError(
       dedent`
         Run Invocation URI not found in npm provenance certificate.
         The certificate may use an unsupported format.
@@ -347,7 +364,11 @@ export async function verifyNpmProvenance({
     );
   }
 
-  return runInvocationURI;
+  return {
+    runInvocationURI,
+    verifyAddon: ({ sha256 }: { sha256: string }) =>
+      verifyAddonProvenance({ sha256, runInvocationURI, repo }),
+  };
 }
 
 /**
@@ -357,13 +378,13 @@ export async function verifyNpmProvenance({
  * SET, signature), and confirm the certificate matches the
  * expected workflow run and source repository.
  */
-export async function verifyBinaryProvenance({
+export async function verifyAddonProvenance({
   sha256,
   runInvocationURI,
   repo,
 }: {
   sha256: string;
-  runInvocationURI: string;
+  runInvocationURI: RunInvocationURI;
   repo: string;
 }): Promise<void> {
   const ghAttestations = await fetchGitHubAttestations({ repo, sha256 });
@@ -378,7 +399,7 @@ export async function verifyBinaryProvenance({
       await Promise.resolve(verifier.verify(attestation.bundle));
       cert = extractCertFromBundle(attestation.bundle);
     } catch (err) {
-      if (err instanceof SecurityError) throw err;
+      if (err instanceof ProvenanceError) throw err;
       // This bundle failed cryptographic verification; try next.
       verifyFailures++;
       continue;
@@ -399,7 +420,7 @@ export async function verifyBinaryProvenance({
           This may indicate a sigstore trust root issue rather than tampering.
         `
       : `${total} attestation(s) found but none matched workflow run ${runInvocationURI}.`;
-  throw new SecurityError(
+  throw new ProvenanceError(
     dedent`
       Binary provenance verification failed.
       ${detail}
@@ -456,7 +477,7 @@ if (import.meta.vitest) {
           value: Buffer.from(evilIssuer),
         }),
       } as unknown as X509Certificate;
-      expect(() => verifyCertificateOIDs(mockCert, "any/repo")).toThrow(SecurityError);
+      expect(() => verifyCertificateOIDs(mockCert, "any/repo")).toThrow(ProvenanceError);
     });
 
     it("rejects certificates with wrong source repo", ({ expect }) => {
@@ -476,7 +497,7 @@ if (import.meta.vitest) {
           return null;
         },
       } as unknown as X509Certificate;
-      expect(() => verifyCertificateOIDs(mockCert, "owner/repo")).toThrow(SecurityError);
+      expect(() => verifyCertificateOIDs(mockCert, "owner/repo")).toThrow(ProvenanceError);
       expect(() => verifyCertificateOIDs(mockCert, "owner/repo")).toThrow(
         /Source repository mismatch/,
       );
@@ -494,7 +515,7 @@ if (import.meta.vitest) {
   }
 
   describe("fetchNpmAttestations", () => {
-    it("propagates server error as regular Error (not SecurityError)", async ({ expect }) => {
+    it("propagates server error as regular Error (not ProvenanceError)", async ({ expect }) => {
       using _fetch = stubFetch(
         async () => new Response(null, { status: 500, statusText: "Server Error" }),
       );
@@ -503,7 +524,7 @@ if (import.meta.vitest) {
       );
       await expect(
         fetchNpmAttestations({ packageName: "pkg", version: "1.0.0" }),
-      ).rejects.not.toThrow(SecurityError);
+      ).rejects.not.toThrow(ProvenanceError);
     });
   });
 
@@ -530,13 +551,13 @@ if (import.meta.vitest) {
       expect(capturedHeaders).not.toHaveProperty("Authorization");
     });
 
-    it("returns SecurityError on 404", async ({ expect }) => {
+    it("returns ProvenanceError on 404", async ({ expect }) => {
       using _fetch = stubFetch(
         async () => new Response(null, { status: 404, statusText: "Not Found" }),
       );
       await expect(
         fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
-      ).rejects.toThrow(SecurityError);
+      ).rejects.toThrow(ProvenanceError);
       await expect(
         fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
       ).rejects.toThrow(/No attestation found/);
@@ -551,7 +572,7 @@ if (import.meta.vitest) {
       ).rejects.toThrow(Error);
       await expect(
         fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
-      ).rejects.not.toThrow(SecurityError);
+      ).rejects.not.toThrow(ProvenanceError);
     });
 
     it("throws rate-limit error on 403 with X-RateLimit-Remaining: 0", async ({ expect }) => {
@@ -568,7 +589,7 @@ if (import.meta.vitest) {
       ).rejects.toThrow(/rate limit exceeded.*exhausted/);
       await expect(
         fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
-      ).rejects.not.toThrow(SecurityError);
+      ).rejects.not.toThrow(ProvenanceError);
     });
 
     it("throws rate-limit error on 429", async ({ expect }) => {
@@ -591,7 +612,7 @@ if (import.meta.vitest) {
       ).rejects.not.toThrow(/rate limit/);
     });
 
-    it("returns SecurityError on empty attestation list", async ({ expect }) => {
+    it("returns ProvenanceError on empty attestation list", async ({ expect }) => {
       using _fetch = stubFetch(
         async () =>
           new Response(JSON.stringify({ attestations: [] }), {
@@ -601,13 +622,13 @@ if (import.meta.vitest) {
       );
       await expect(
         fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
-      ).rejects.toThrow(SecurityError);
+      ).rejects.toThrow(ProvenanceError);
       await expect(
         fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
       ).rejects.toThrow(/No attestation found/);
     });
 
-    it("returns SecurityError when all bundle_url fetches fail", async ({ expect }) => {
+    it("returns ProvenanceError when all bundle_url fetches fail", async ({ expect }) => {
       using _fetch = stubFetch(async (url: string | URL | Request) => {
         const urlString = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
         if (new URL(urlString).hostname === "api.github.com") {
@@ -622,52 +643,72 @@ if (import.meta.vitest) {
       });
       await expect(
         fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
-      ).rejects.toThrow(SecurityError);
+      ).rejects.toThrow(ProvenanceError);
       await expect(
         fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
       ).rejects.toThrow(/No attestation found/);
     });
   });
 
-  describe("verifyNpmProvenance (integration)", () => {
+  describe("verifyPackageProvenance (integration)", () => {
     it("succeeds for unscoped package", async ({ expect }) => {
-      const runURI = await verifyNpmProvenance({
+      const provenance = await verifyPackageProvenance({
         packageName: "semver",
         version: "7.6.3",
         repo: "npm/node-semver",
       });
-      expect(runURI).toMatch(/^https:\/\/github\.com\/npm\/node-semver\/actions\/runs\//);
+      expect(provenance.runInvocationURI).toMatch(
+        /^https:\/\/github\.com\/npm\/node-semver\/actions\/runs\//,
+      );
+      expect(provenance.verifyAddon).toBeTypeOf("function");
     });
 
     it("succeeds for scoped package", async ({ expect }) => {
-      const runURI = await verifyNpmProvenance({
+      const provenance = await verifyPackageProvenance({
         packageName: "@npmcli/run-script",
         version: "9.0.2",
         repo: "npm/run-script",
       });
-      expect(runURI).toMatch(/^https:\/\/github\.com\/npm\/run-script\/actions\/runs\//);
+      expect(provenance.runInvocationURI).toMatch(
+        /^https:\/\/github\.com\/npm\/run-script\/actions\/runs\//,
+      );
     });
 
     it("succeeds for bundle v0.3 format", async ({ expect }) => {
       // undici@7.3.0 uses Sigstore bundle v0.3 with top-level
       // `certificate` instead of `x509CertificateChain`
-      const runURI = await verifyNpmProvenance({
+      const provenance = await verifyPackageProvenance({
         packageName: "undici",
         version: "7.3.0",
         repo: "nodejs/undici",
       });
-      expect(runURI).toMatch(/^https:\/\/github\.com\/nodejs\/undici\/actions\/runs\//);
+      expect(provenance.runInvocationURI).toMatch(
+        /^https:\/\/github\.com\/nodejs\/undici\/actions\/runs\//,
+      );
     });
 
     it("rejects when expected repo does not match", async ({ expect }) => {
       await expect(
-        verifyNpmProvenance({ packageName: "semver", version: "7.6.3", repo: "wrong/repo" }),
+        verifyPackageProvenance({ packageName: "semver", version: "7.6.3", repo: "wrong/repo" }),
       ).rejects.toThrow("SECURITY");
+    });
+
+    it("verifyAddon rejects wrong hash for verified package", async ({ expect }) => {
+      const provenance = await verifyPackageProvenance({
+        packageName: "semver",
+        version: "7.6.3",
+        repo: "npm/node-semver",
+      });
+      await expect(
+        provenance.verifyAddon({
+          sha256: "0000000000000000000000000000000000000000000000000000000000000000",
+        }),
+      ).rejects.toThrow(ProvenanceError);
     });
 
     it("rejects for a package without provenance", async ({ expect }) => {
       await expect(
-        verifyNpmProvenance({
+        verifyPackageProvenance({
           packageName: "express",
           version: "4.21.2",
           repo: "expressjs/express",
@@ -679,12 +720,13 @@ if (import.meta.vitest) {
   // Real cli/cli attestation data (stable, published release)
   const CLI_HASH = "7c6d3b5ac88c897fb3ac0c8a479f4fb8083bd05a758fb8d3275642a93d20570d";
   const CLI_REPO = "cli/cli";
-  const CLI_RUN_URI = "https://github.com/cli/cli/actions/runs/22312430014/attempts/4";
+  const CLI_RUN_URI =
+    "https://github.com/cli/cli/actions/runs/22312430014/attempts/4" as RunInvocationURI;
 
-  describe("verifyBinaryProvenance (integration)", () => {
+  describe("verifyAddonProvenance (integration)", () => {
     it("succeeds with correct hash, repo, and run URI", async ({ expect }) => {
       await expect(
-        verifyBinaryProvenance({
+        verifyAddonProvenance({
           sha256: CLI_HASH,
           runInvocationURI: CLI_RUN_URI,
           repo: CLI_REPO,
@@ -694,23 +736,24 @@ if (import.meta.vitest) {
 
     it("rejects when expected repo does not match", async ({ expect }) => {
       await expect(
-        verifyBinaryProvenance({
+        verifyAddonProvenance({
           sha256: CLI_HASH,
           runInvocationURI: CLI_RUN_URI,
           repo: "wrong/repo",
         }),
-      ).rejects.toThrow(SecurityError);
+      ).rejects.toThrow(ProvenanceError);
     });
 
     it("rejects when run invocation URI does not match", async ({ expect }) => {
-      const wrongRunURI = "https://github.com/cli/cli/actions/runs/1/attempts/1";
+      const wrongRunURI =
+        "https://github.com/cli/cli/actions/runs/1/attempts/1" as RunInvocationURI;
       await expect(
-        verifyBinaryProvenance({
+        verifyAddonProvenance({
           sha256: CLI_HASH,
           runInvocationURI: wrongRunURI,
           repo: CLI_REPO,
         }),
-      ).rejects.toThrow(SecurityError);
+      ).rejects.toThrow(ProvenanceError);
     });
   });
 

@@ -4,7 +4,7 @@ import process from "node:process";
 import { parseArgs } from "node:util";
 
 import { pack, wget } from "./commands.ts";
-import { isSecurityError } from "./util/security-error.ts";
+import { isProvenanceError } from "./util/provenance-error.ts";
 
 const HELP = `Usage: slsa <command> [options]
 
@@ -53,7 +53,7 @@ export async function runSlsa(): Promise<void> {
         return;
     }
   } catch (err: unknown) {
-    if (isSecurityError(err)) {
+    if (isProvenanceError(err)) {
       console.error(err.message);
     } else {
       console.error(err);
