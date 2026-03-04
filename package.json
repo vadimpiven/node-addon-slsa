@@ -1,11 +1,17 @@
 {
   "name": "node-addon-slsa",
   "version": "0.0.0",
-  "description": "Supply-chain provenance verification for npm packages with prebuilt native addons",
+  "description": "Provenance verification for prebuilt native addons with GitHub attestations",
   "keywords": [
     "attestation",
+    "binary",
+    "native-addon",
+    "prebuilt",
     "provenance",
-    "sigstore"
+    "security",
+    "sigstore",
+    "slsa",
+    "supply-chain"
   ],
   "homepage": "https://github.com/vadimpiven/node-addon-slsa",
   "bugs": {
@@ -52,12 +58,15 @@
     "@sigstore/core": "catalog:",
     "@types/node": "catalog:",
     "@vitest/coverage-istanbul": "catalog:",
+    "dedent": "catalog:",
     "husky": "catalog:",
+    "hysnappy": "catalog:",
     "markdownlint-cli2": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
     "sigstore": "catalog:",
     "typescript": "catalog:",
+    "undici": "catalog:",
     "vite": "catalog:",
     "vite-plugin-dts": "catalog:",
     "vitest": "catalog:",

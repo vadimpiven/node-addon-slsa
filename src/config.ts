@@ -3,14 +3,19 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import dedent from "dedent";
 import { z } from "zod/v4";
 
 const AddonConfigSchema = z.object({
-  path: z.string().regex(/^\.\/[^/\\]+\/[^/\\]+\.node$/),
-  url: z.url(),
+  path: z.string().refine((path) => !path.includes("..") && path.endsWith(".node"), {
+    message: "addon.path must be a relative .node file path",
+  }),
+  url: z.url().refine((url) => new URL(url).origin === "https://github.com", {
+    message: "addon.url must point to github.com",
+  }),
 });
 
-const RepositorySchema = z.union([z.url(), z.object({ url: z.url().optional() })]);
+const RepositorySchema = z.union([z.string(), z.object({ url: z.string().optional() })]);
 
 const PackageJsonSchema = z.object({
   name: z.string().regex(/^(@[a-z0-9._-]+\/)?[a-z0-9._-]+$/),
@@ -28,7 +33,25 @@ export type PackageJson = z.infer<typeof PackageJsonSchema>;
  */
 export async function readPackageJson(packageDir: string): Promise<PackageJson> {
   const raw = await readFile(join(packageDir, "package.json"), "utf8");
-  return PackageJsonSchema.parse(JSON.parse(raw));
+  try {
+    return PackageJsonSchema.parse(JSON.parse(raw));
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      const issues = err.issues
+        .map((issue) => {
+          const path = issue.path.length > 0 ? `${issue.path.join(".")}: ` : "";
+          return `  ${path}${issue.message}`;
+        })
+        .join("\n");
+      throw new Error(
+        dedent`
+          invalid package.json:
+          ${issues}
+        `,
+      );
+    }
+    throw err;
+  }
 }
 
 /**
@@ -37,8 +60,8 @@ export async function readPackageJson(packageDir: string): Promise<PackageJson> 
  * Returns null if the format is not recognized.
  */
 export function extractExpectedRepo(repository: Repository): string | null {
-  const repoUrl = typeof repository === "string" ? repository : (repository.url ?? "");
-  const match = repoUrl.match(/github\.com[/:]([^/]+\/[^/]+?)(?:\.git)?$/);
+  const raw = typeof repository === "string" ? repository : (repository.url ?? "");
+  const match = raw.match(/github\.com[/:]+([^/]+\/[^/]+?)(?:\.git)?$/);
   return match?.[1] ?? null;
 }
 
@@ -77,73 +100,89 @@ if (import.meta.vitest) {
 
   describe("readPackageJson", () => {
     it("reads valid package.json", async ({ expect }) => {
-      const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
-      const { tmpdir } = await import("node:os");
+      const { writeFile } = await import("node:fs/promises");
       const { join } = await import("node:path");
+      const { tempDir } = await import("./util/fs.ts");
 
-      const dir = await mkdtemp(join(tmpdir(), "slsa-test-"));
-      try {
-        const pkg = {
-          name: "test-pkg",
-          version: "1.0.0",
-          addon: {
-            path: "./dist/test.node",
-            url: "https://example.com/test-v{version}.node.gz",
-          },
-          repository: {
-            url: "git+https://github.com/owner/repo.git",
-          },
-        };
-        await writeFile(join(dir, "package.json"), JSON.stringify(pkg));
+      await using tmp = await tempDir();
+      const pkg = {
+        name: "test-pkg",
+        version: "1.0.0",
+        addon: {
+          path: "./dist/test.node",
+          url: "https://github.com/owner/repo/releases/download/v{version}/test.node.gz",
+        },
+        repository: {
+          url: "git+https://github.com/owner/repo.git",
+        },
+      };
+      await writeFile(join(tmp.path, "package.json"), JSON.stringify(pkg));
 
-        const result = await readPackageJson(dir);
-        expect(result.name).toBe("test-pkg");
-        expect(result.version).toBe("1.0.0");
-        expect(result.addon.path).toBe("./dist/test.node");
-      } finally {
-        await rm(dir, { recursive: true, force: true });
-      }
+      const result = await readPackageJson(tmp.path);
+      expect(result.name).toBe("test-pkg");
+      expect(result.version).toBe("1.0.0");
+      expect(result.addon.path).toBe("./dist/test.node");
     });
 
     it("throws for missing package.json", async ({ expect }) => {
-      const { mkdtemp, rm } = await import("node:fs/promises");
-      const { tmpdir } = await import("node:os");
-      const { join } = await import("node:path");
+      const { tempDir } = await import("./util/fs.ts");
 
-      const dir = await mkdtemp(join(tmpdir(), "slsa-test-"));
-      try {
-        await expect(readPackageJson(dir)).rejects.toThrow();
-      } finally {
-        await rm(dir, { recursive: true });
-      }
+      await using tmp = await tempDir();
+      await expect(readPackageJson(tmp.path)).rejects.toThrow();
     });
 
     it("throws for missing required fields", async ({ expect }) => {
-      const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
-      const { tmpdir } = await import("node:os");
+      const { writeFile } = await import("node:fs/promises");
       const { join } = await import("node:path");
+      const { tempDir } = await import("./util/fs.ts");
 
-      const dir = await mkdtemp(join(tmpdir(), "slsa-test-"));
-      try {
-        await writeFile(join(dir, "package.json"), JSON.stringify({ name: "test" }));
-        await expect(readPackageJson(dir)).rejects.toThrow();
-      } finally {
-        await rm(dir, { recursive: true });
-      }
+      await using tmp = await tempDir();
+      await writeFile(join(tmp.path, "package.json"), JSON.stringify({ name: "test" }));
+      await expect(readPackageJson(tmp.path)).rejects.toThrow();
+    });
+
+    it("rejects non-github.com addon URL", async ({ expect }) => {
+      const { writeFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const { tempDir } = await import("./util/fs.ts");
+
+      await using tmp = await tempDir();
+      const pkg = {
+        name: "test-pkg",
+        version: "1.0.0",
+        addon: {
+          path: "./dist/test.node",
+          url: "https://example.com/test-v{version}.node.gz",
+        },
+        repository: {
+          url: "git+https://github.com/owner/repo.git",
+        },
+      };
+      await writeFile(join(tmp.path, "package.json"), JSON.stringify(pkg));
+      await expect(readPackageJson(tmp.path)).rejects.toThrow(
+        /addon\.url must point to github\.com/,
+      );
+    });
+
+    it("formats top-level type error without path prefix", async ({ expect }) => {
+      const { writeFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const { tempDir } = await import("./util/fs.ts");
+
+      await using tmp = await tempDir();
+      // Valid JSON but not an object — produces ZodError with empty path
+      await writeFile(join(tmp.path, "package.json"), JSON.stringify("not an object"));
+      await expect(readPackageJson(tmp.path)).rejects.toThrow(/invalid package\.json/);
     });
 
     it("throws for malformed JSON", async ({ expect }) => {
-      const { mkdtemp, rm, writeFile } = await import("node:fs/promises");
-      const { tmpdir } = await import("node:os");
+      const { writeFile } = await import("node:fs/promises");
       const { join } = await import("node:path");
+      const { tempDir } = await import("./util/fs.ts");
 
-      const dir = await mkdtemp(join(tmpdir(), "slsa-test-"));
-      try {
-        await writeFile(join(dir, "package.json"), "not valid json");
-        await expect(readPackageJson(dir)).rejects.toThrow();
-      } finally {
-        await rm(dir, { recursive: true });
-      }
+      await using tmp = await tempDir();
+      await writeFile(join(tmp.path, "package.json"), "not valid json");
+      await expect(readPackageJson(tmp.path)).rejects.toThrow();
     });
   });
 }

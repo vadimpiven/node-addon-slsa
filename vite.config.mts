@@ -33,6 +33,7 @@ export default defineConfig({
       provider: "istanbul",
       reporter: ["lcovonly", "text"],
       reportsDirectory: "./coverage",
+      thresholds: { lines: 80, branches: 80, functions: 80, statements: 80 },
     },
     reporters: ["default", ["junit", { outputFile: "report.junit.xml" }]],
     detectAsyncLeaks: false,

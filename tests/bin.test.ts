@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { gunzip } from "node:zlib";
 import { describe, it } from "vitest";
+
+import { tempDir } from "../src/util/fs.ts";
+import { FAKE_BINARY, writeTestPkg } from "./fixtures.ts";
 
 const gunzipAsync = promisify(gunzip);
 
@@ -29,95 +31,65 @@ function run(
 
 describe("slsa bin", () => {
   it("wget skips verification for development version", async ({ expect }) => {
-    const dir = await mkdtemp(join(tmpdir(), "slsa-bin-"));
-    try {
-      const pkg = {
-        name: "node-reqwest",
-        version: "0.0.0",
-        addon: {
-          path: "./dist/node_reqwest.node",
-          url: "https://example.com/node_reqwest-v{version}-{platform}-{arch}.node.gz",
-        },
-        repository: {
-          url: "git+https://github.com/vadimpiven/node_reqwest.git",
-        },
-      };
-      await writeFile(join(dir, "package.json"), JSON.stringify(pkg));
+    await using tmp = await tempDir();
+    await writeTestPkg(tmp.path, "0.0.0");
 
-      const { code } = await run(["wget"], dir);
-      expect(code).toBe(0);
-    } finally {
-      await rm(dir, { recursive: true });
-    }
+    const { code } = await run(["wget"], tmp.path);
+    expect(code).toBe(0);
   });
 
   it("pack compresses binary and produces valid archive", async ({ expect }) => {
-    const dir = await mkdtemp(join(tmpdir(), "slsa-bin-"));
-    try {
-      const distDir = join(dir, "dist");
-      await mkdir(distDir, { recursive: true });
+    await using tmp = await tempDir();
+    const distDir = join(tmp.path, "dist");
+    await mkdir(distDir, { recursive: true });
 
-      const binaryContent = Buffer.from("fake native addon content for testing");
-      await writeFile(join(distDir, "node_reqwest.node"), binaryContent);
+    await writeFile(join(distDir, "node_reqwest.node"), FAKE_BINARY);
 
-      const pkg = {
-        name: "node-reqwest",
-        version: "1.0.0",
-        addon: {
-          path: "./dist/node_reqwest.node",
-          url: "https://example.com/node_reqwest-v{version}-{platform}-{arch}.node.gz",
-        },
-        repository: {
-          url: "git+https://github.com/vadimpiven/node_reqwest.git",
-        },
-      };
-      await writeFile(join(dir, "package.json"), JSON.stringify(pkg));
+    await writeTestPkg(tmp.path, "1.0.0");
 
-      const { code } = await run(["pack"], dir);
-      expect(code).toBe(0);
+    const { code } = await run(["pack"], tmp.path);
+    expect(code).toBe(0);
 
-      const platform = process.platform;
-      const arch = process.arch;
-      const packedPath = join(distDir, `node_reqwest-v1.0.0-${platform}-${arch}.node.gz`);
-      const compressed = await readFile(packedPath);
-      const decompressed = await gunzipAsync(compressed);
-      expect(decompressed).toEqual(binaryContent);
-    } finally {
-      await rm(dir, { recursive: true });
-    }
+    const platform = process.platform;
+    const arch = process.arch;
+    const packedPath = join(distDir, `node_reqwest-v1.0.0-${platform}-${arch}.node.gz`);
+    const compressed = await readFile(packedPath);
+    const decompressed = await gunzipAsync(compressed);
+    expect(decompressed).toEqual(FAKE_BINARY);
   });
 
   it("--help prints usage and exits 0", async ({ expect }) => {
-    const dir = await mkdtemp(join(tmpdir(), "slsa-bin-"));
-    try {
-      const { code, stdout } = await run(["--help"], dir);
-      expect(code).toBe(0);
-      expect(stdout).toContain("Usage:");
-    } finally {
-      await rm(dir, { recursive: true });
-    }
+    await using tmp = await tempDir();
+    const { code, stdout } = await run(["--help"], tmp.path);
+    expect(code).toBe(0);
+    expect(stdout).toContain("Usage:");
   });
 
   it("no command prints usage and exits 0", async ({ expect }) => {
-    const dir = await mkdtemp(join(tmpdir(), "slsa-bin-"));
-    try {
-      const { code, stdout } = await run([], dir);
-      expect(code).toBe(0);
-      expect(stdout).toContain("Usage:");
-    } finally {
-      await rm(dir, { recursive: true });
-    }
+    await using tmp = await tempDir();
+    const { code, stdout } = await run([], tmp.path);
+    expect(code).toBe(0);
+    expect(stdout).toContain("Usage:");
+  });
+
+  it("-h short flag prints usage and exits 0", async ({ expect }) => {
+    await using tmp = await tempDir();
+    const { code, stdout } = await run(["-h"], tmp.path);
+    expect(code).toBe(0);
+    expect(stdout).toContain("Usage:");
+  });
+
+  it("unknown flag causes error exit", async ({ expect }) => {
+    await using tmp = await tempDir();
+    const { code } = await run(["wget", "--unknown-flag"], tmp.path);
+    expect(code).toBe(1);
   });
 
   it("exits with error for unknown command", async ({ expect }) => {
-    const dir = await mkdtemp(join(tmpdir(), "slsa-bin-"));
-    try {
-      await writeFile(join(dir, "package.json"), "{}");
-      const { code, stderr } = await run(["unknown"], dir);
-      expect(code).toBe(1);
-      expect(stderr).toContain("Unknown command");
-    } finally {
-      await rm(dir, { recursive: true });
-    }
+    await using tmp = await tempDir();
+    await writeFile(join(tmp.path, "package.json"), "{}");
+    const { code, stderr } = await run(["unknown"], tmp.path);
+    expect(code).toBe(1);
+    expect(stderr).toContain("Unknown command");
   });
 });
