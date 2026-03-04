@@ -8,6 +8,7 @@ import { describe, it, vi } from "vitest";
 
 import { wget } from "../src/commands.ts";
 import { tempDir } from "../src/util/fs.ts";
+import type { RunInvocationURI } from "../src/verify.ts";
 import { FAKE_BINARY, writeTestPkg } from "./fixtures.ts";
 
 const { access, readdir, readFile } = fsp;
@@ -22,7 +23,7 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 vi.mock("../src/verify.ts", () => ({
   verifyPackageProvenance: vi.fn().mockResolvedValue({
     runInvocationURI:
-      "https://github.com/vadimpiven/node_reqwest/actions/runs/123/attempts/1",
+      "https://github.com/vadimpiven/node_reqwest/actions/runs/123/attempts/1" as RunInvocationURI,
     verifyAddon: (...args: unknown[]) => mockVerifyAddon(...args),
   }),
   verifyAddonProvenance: vi.fn().mockResolvedValue(undefined),

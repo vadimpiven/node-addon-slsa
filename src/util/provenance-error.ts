@@ -29,7 +29,9 @@ export class ProvenanceError extends Error {
  * security failures from transient errors.
  */
 export function isProvenanceError(err: unknown): err is ProvenanceError {
-  return typeof err === "object" && err !== null && (err as Record<symbol, unknown>)[BRAND] === true;
+  return (
+    typeof err === "object" && err !== null && (err as Record<symbol, unknown>)[BRAND] === true
+  );
 }
 
 if (import.meta.vitest) {

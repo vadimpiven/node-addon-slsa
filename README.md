@@ -180,7 +180,7 @@ await provenance.verifyAddon({ sha256: sha256Hash });
 ```
 
 `verifyAddonProvenance` is also exported for cases where you already have
-a `runInvocationURI` from another source.
+a `RunInvocationURI` from another source.
 
 Error handling:
 

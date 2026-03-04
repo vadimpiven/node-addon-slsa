@@ -16,6 +16,11 @@ import { fetchWithTimeout } from "./download.ts";
 import { ProvenanceError } from "./util/provenance-error.ts";
 import { evalTemplate } from "./util/template.ts";
 
+declare const __runInvocationURIBrand: unique symbol;
+export type RunInvocationURI = string & {
+  readonly [__runInvocationURIBrand]: true;
+};
+
 // -- Zod schemas for external HTTP responses --
 
 /** Validate via official sigstore parser and return typed SerializedBundle. */
@@ -304,7 +309,7 @@ async function fetchGitHubAttestations({
  * to verify the associated addon binary.
  */
 export interface PackageProvenance {
-  readonly runInvocationURI: string;
+  readonly runInvocationURI: RunInvocationURI;
   verifyAddon(options: { sha256: string }): Promise<void>;
 }
 
@@ -345,7 +350,10 @@ export async function verifyPackageProvenance({
   const cert = extractCertFromBundle(provenanceAttestation.bundle);
   verifyCertificateOIDs(cert, repo);
 
-  const runInvocationURI = getExtensionValue(cert, OID_RUN_INVOCATION_URI);
+  const runInvocationURI = getExtensionValue(
+    cert,
+    OID_RUN_INVOCATION_URI,
+  ) as RunInvocationURI | null;
 
   if (!runInvocationURI) {
     throw new ProvenanceError(
@@ -376,7 +384,7 @@ export async function verifyAddonProvenance({
   repo,
 }: {
   sha256: string;
-  runInvocationURI: string;
+  runInvocationURI: RunInvocationURI;
   repo: string;
 }): Promise<void> {
   const ghAttestations = await fetchGitHubAttestations({ repo, sha256 });
@@ -699,7 +707,8 @@ if (import.meta.vitest) {
   // Real cli/cli attestation data (stable, published release)
   const CLI_HASH = "7c6d3b5ac88c897fb3ac0c8a479f4fb8083bd05a758fb8d3275642a93d20570d";
   const CLI_REPO = "cli/cli";
-  const CLI_RUN_URI = "https://github.com/cli/cli/actions/runs/22312430014/attempts/4";
+  const CLI_RUN_URI =
+    "https://github.com/cli/cli/actions/runs/22312430014/attempts/4" as RunInvocationURI;
 
   describe("verifyAddonProvenance (integration)", () => {
     it("succeeds with correct hash, repo, and run URI", async ({ expect }) => {
@@ -723,7 +732,8 @@ if (import.meta.vitest) {
     });
 
     it("rejects when run invocation URI does not match", async ({ expect }) => {
-      const wrongRunURI = "https://github.com/cli/cli/actions/runs/1/attempts/1";
+      const wrongRunURI =
+        "https://github.com/cli/cli/actions/runs/1/attempts/1" as RunInvocationURI;
       await expect(
         verifyAddonProvenance({
           sha256: CLI_HASH,

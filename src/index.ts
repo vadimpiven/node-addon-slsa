@@ -6,4 +6,4 @@ export { runSlsa } from "./cli.ts";
 /** Public API. */
 export { ProvenanceError, isProvenanceError } from "./util/provenance-error.ts";
 export { verifyPackageProvenance, verifyAddonProvenance } from "./verify.ts";
-export type { PackageProvenance } from "./verify.ts";
+export type { PackageProvenance, RunInvocationURI } from "./verify.ts";
