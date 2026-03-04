@@ -38,7 +38,7 @@ export async function wget(packageDir: string): Promise<void> {
 
   const resolvedPkgDir = resolve(packageDir);
   const binaryPath = join(resolvedPkgDir, addon.path);
-  assertWithinDir(resolvedPkgDir, binaryPath, "addon.path");
+  assertWithinDir({ baseDir: resolvedPkgDir, target: binaryPath, label: "addon.path" });
   const addonDir = dirname(binaryPath);
   const downloadUrl = evalTemplate(addon.url, createTemplateVars(version));
 
@@ -47,7 +47,11 @@ export async function wget(packageDir: string): Promise<void> {
   // Skip download for development version
   if (version === "0.0.0") return;
 
-  const runInvocationURI = await verifyNpmProvenance(name, version, expectedRepo);
+  const runInvocationURI = await verifyNpmProvenance({
+    packageName: name,
+    version,
+    repo: expectedRepo,
+  });
 
   // Stream: download → hash compressed bytes → decompress → write temp file.
   // The hash is computed over the compressed bytes because
@@ -65,7 +69,11 @@ export async function wget(packageDir: string): Promise<void> {
       createWriteStream(tmpPath, { mode: 0o755, flags: "wx" }),
     );
 
-    await verifyBinaryProvenance(digest(), runInvocationURI, expectedRepo);
+    await verifyBinaryProvenance({
+      sha256: digest(),
+      runInvocationURI,
+      repo: expectedRepo,
+    });
 
     await rename(tmpPath, binaryPath);
   } catch (err) {
@@ -88,11 +96,11 @@ export async function pack(packageDir: string): Promise<void> {
 
   const resolvedPkgDir = resolve(packageDir);
   const binaryPath = join(resolvedPkgDir, addon.path);
-  assertWithinDir(resolvedPkgDir, binaryPath, "addon.path");
+  assertWithinDir({ baseDir: resolvedPkgDir, target: binaryPath, label: "addon.path" });
   const addonDir = dirname(binaryPath);
   const packedName = basename(evalTemplate(addon.url, createTemplateVars(version)));
   const packedFile = join(addonDir, packedName);
-  assertWithinDir(resolvedPkgDir, packedFile, "packed output");
+  assertWithinDir({ baseDir: resolvedPkgDir, target: packedFile, label: "packed output" });
 
   await pipeline(
     createReadStream(binaryPath),

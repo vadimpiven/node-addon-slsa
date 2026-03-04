@@ -73,7 +73,7 @@ verification may pass for malicious artifacts.
     "pack-addon": "slsa pack"
   },
   "dependencies": {
-    "node-addon-slsa": "0.3.1"
+    "node-addon-slsa": "0.4.0"
   }
 }
 ```
@@ -173,15 +173,19 @@ import {
 
 // Returns the Run Invocation URI from the Fulcio certificate.
 // Throws SecurityError if provenance verification fails.
-const runURI = await verifyNpmProvenance(
-  "my-native-addon",
-  "1.0.0",
-  "owner/repo",
-);
+const runURI = await verifyNpmProvenance({
+  packageName: "my-native-addon",
+  version: "1.0.0",
+  repo: "owner/repo",
+});
 
 // Resolves if the attestation matches.
 // Throws SecurityError if verification fails.
-await verifyBinaryProvenance(sha256Hash, runURI, "owner/repo");
+await verifyBinaryProvenance({
+  sha256: sha256Hash,
+  runInvocationURI: runURI,
+  repo: "owner/repo",
+});
 ```
 
 Error handling:
