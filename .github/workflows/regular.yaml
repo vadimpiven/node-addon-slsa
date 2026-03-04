@@ -61,6 +61,7 @@ jobs:
       - name: "Build and test"
         run: "mise run --force ci-test"
       - name: "Upload reports"
+        if: "!cancelled()"
         uses: "./.github/actions/upload-reports"
         with:
           test-coverage: "${{ needs.init.outputs.test-coverage }}"

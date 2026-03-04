@@ -4,12 +4,12 @@ coverage:
       default:
         target: 80%
         threshold: 1%
-        informational: true
+        informational: false
     patch:
       default:
         target: auto
         threshold: 5%
-        informational: true
+        informational: false
 ignore:
   - "**/scripts/**/*"
   - "**/tests/**/*"

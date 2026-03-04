@@ -320,7 +320,8 @@ export async function verifyNpmProvenance(
   }
 
   const verifier = await getVerifier();
-  verifier.verify(provenanceAttestation.bundle);
+  // Wrap: verify() may throw synchronously in some sigstore versions
+  await Promise.resolve(verifier.verify(provenanceAttestation.bundle));
 
   const cert = extractCertFromBundle(provenanceAttestation.bundle);
   verifyCertificateOIDs(cert, expectedRepo);
