@@ -73,7 +73,7 @@ verification may pass for malicious artifacts.
     "pack-addon": "slsa pack"
   },
   "dependencies": {
-    "node-addon-slsa": "0.4.0"
+    "node-addon-slsa": "0.5.0"
   }
 }
 ```
