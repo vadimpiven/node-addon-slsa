@@ -29,7 +29,15 @@ export async function tempDir(): Promise<{ path: string } & AsyncDisposable> {
  *
  * @throws {SecurityError} if the resolved path escapes the base directory.
  */
-export function assertWithinDir(baseDir: string, target: string, label: string): void {
+export function assertWithinDir({
+  baseDir,
+  target,
+  label,
+}: {
+  baseDir: string;
+  target: string;
+  label: string;
+}): void {
   const base = resolve(baseDir);
   const resolved = resolve(target);
   if (!resolved.startsWith(base + sep)) {
@@ -58,18 +66,22 @@ if (import.meta.vitest) {
     it("blocks path traversal attacks", async ({ expect }) => {
       await using tmp = await tempDir();
       expect(() =>
-        assertWithinDir(
-          tmp.path,
-          join(tmp.path, "dist", "..", "..", "etc", "passwd.node"),
-          "addon.path",
-        ),
+        assertWithinDir({
+          baseDir: tmp.path,
+          target: join(tmp.path, "dist", "..", "..", "etc", "passwd.node"),
+          label: "addon.path",
+        }),
       ).toThrow(SecurityError);
     });
 
     it("allows paths within the base directory", async ({ expect }) => {
       await using tmp = await tempDir();
       expect(() =>
-        assertWithinDir(tmp.path, join(tmp.path, "dist", "file.node"), "addon.path"),
+        assertWithinDir({
+          baseDir: tmp.path,
+          target: join(tmp.path, "dist", "file.node"),
+          label: "addon.path",
+        }),
       ).not.toThrow();
     });
   });

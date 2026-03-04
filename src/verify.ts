@@ -117,7 +117,7 @@ function getExtensionValue(cert: X509Certificate, oid: string): string | null {
  * double-check both issuer and source repo manually for
  * defense-in-depth against sigstore library bugs.
  */
-function verifyCertificateOIDs(cert: X509Certificate, expectedRepo: string): void {
+function verifyCertificateOIDs(cert: X509Certificate, repo: string): void {
   const issuer = getExtensionValue(cert, OID_ISSUER_V2) ?? getExtensionValue(cert, OID_ISSUER_V1);
 
   if (issuer !== GITHUB_ACTIONS_ISSUER) {
@@ -131,13 +131,13 @@ function verifyCertificateOIDs(cert: X509Certificate, expectedRepo: string): voi
   }
 
   const sourceRepoURI = getExtensionValue(cert, OID_SOURCE_REPO_URI);
-  const expectedRepoURI = `https://github.com/${expectedRepo}`;
+  const repoURI = `https://github.com/${repo}`;
 
-  if (sourceRepoURI !== expectedRepoURI) {
+  if (sourceRepoURI !== repoURI) {
     throw new SecurityError(
       dedent`
         Source repository mismatch.
-        Expected: ${expectedRepoURI}
+        Expected: ${repoURI}
         Got: ${sourceRepoURI}
       `,
     );
@@ -178,10 +178,13 @@ function extractCertFromBundle(bundle: SerializedBundle): X509Certificate {
 /**
  * Fetch npm package attestations from registry.
  */
-async function fetchNpmAttestations(
-  packageName: string,
-  version: string,
-): Promise<NpmAttestations> {
+async function fetchNpmAttestations({
+  packageName,
+  version,
+}: {
+  packageName: string;
+  version: string;
+}): Promise<NpmAttestations> {
   const url = evalTemplate(NPM_ATTESTATIONS_URL, {
     name: encodeURIComponent(packageName),
     version: encodeURIComponent(version),
@@ -209,13 +212,16 @@ async function fetchNpmAttestations(
  *
  * Public repos do not require authentication.
  */
-async function fetchGitHubAttestations(
-  expectedRepo: string,
-  sha256Hash: string,
-): Promise<GitHubAttestations> {
+async function fetchGitHubAttestations({
+  repo,
+  sha256,
+}: {
+  repo: string;
+  sha256: string;
+}): Promise<GitHubAttestations> {
   const url = evalTemplate(GITHUB_ATTESTATIONS_URL, {
-    repo: expectedRepo,
-    hash: sha256Hash,
+    repo,
+    hash: sha256,
   });
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
@@ -237,7 +243,7 @@ async function fetchGitHubAttestations(
   }
 
   const noAttestationMsg = dedent`
-    No attestation found on GitHub for artifact hash ${sha256Hash}.
+    No attestation found on GitHub for artifact hash ${sha256}.
     The artifact may have been tampered with.
   `;
 
@@ -299,12 +305,16 @@ async function fetchGitHubAttestations(
  * source repo. Returns the Run Invocation URI that identifies the
  * workflow run that built the npm package.
  */
-export async function verifyNpmProvenance(
-  packageName: string,
-  version: string,
-  expectedRepo: string,
-): Promise<string> {
-  const attestations = await fetchNpmAttestations(packageName, version);
+export async function verifyNpmProvenance({
+  packageName,
+  version,
+  repo,
+}: {
+  packageName: string;
+  version: string;
+  repo: string;
+}): Promise<string> {
+  const attestations = await fetchNpmAttestations({ packageName, version });
 
   const provenanceAttestation = attestations.attestations.find((attestation) =>
     attestation.predicateType.startsWith(SLSA_PROVENANCE_PREFIX),
@@ -324,7 +334,7 @@ export async function verifyNpmProvenance(
   await Promise.resolve(verifier.verify(provenanceAttestation.bundle));
 
   const cert = extractCertFromBundle(provenanceAttestation.bundle);
-  verifyCertificateOIDs(cert, expectedRepo);
+  verifyCertificateOIDs(cert, repo);
 
   const runInvocationURI = getExtensionValue(cert, OID_RUN_INVOCATION_URI);
 
@@ -347,12 +357,16 @@ export async function verifyNpmProvenance(
  * SET, signature), and confirm the certificate matches the
  * expected workflow run and source repository.
  */
-export async function verifyBinaryProvenance(
-  artifactHash: string,
-  expectedRunInvocationURI: string,
-  expectedRepo: string,
-): Promise<void> {
-  const ghAttestations = await fetchGitHubAttestations(expectedRepo, artifactHash);
+export async function verifyBinaryProvenance({
+  sha256,
+  runInvocationURI,
+  repo,
+}: {
+  sha256: string;
+  runInvocationURI: string;
+  repo: string;
+}): Promise<void> {
+  const ghAttestations = await fetchGitHubAttestations({ repo, sha256 });
 
   const verifier = await getVerifier();
 
@@ -370,9 +384,9 @@ export async function verifyBinaryProvenance(
       continue;
     }
 
-    const runURI = getExtensionValue(cert, OID_RUN_INVOCATION_URI);
-    if (runURI === expectedRunInvocationURI) {
-      verifyCertificateOIDs(cert, expectedRepo);
+    const certRunURI = getExtensionValue(cert, OID_RUN_INVOCATION_URI);
+    if (certRunURI === runInvocationURI) {
+      verifyCertificateOIDs(cert, repo);
       return;
     }
   }
@@ -384,7 +398,7 @@ export async function verifyBinaryProvenance(
           All ${total} attestation(s) failed cryptographic verification.
           This may indicate a sigstore trust root issue rather than tampering.
         `
-      : `${total} attestation(s) found but none matched workflow run ${expectedRunInvocationURI}.`;
+      : `${total} attestation(s) found but none matched workflow run ${runInvocationURI}.`;
   throw new SecurityError(
     dedent`
       Binary provenance verification failed.
@@ -484,8 +498,12 @@ if (import.meta.vitest) {
       using _fetch = stubFetch(
         async () => new Response(null, { status: 500, statusText: "Server Error" }),
       );
-      await expect(fetchNpmAttestations("pkg", "1.0.0")).rejects.toThrow(Error);
-      await expect(fetchNpmAttestations("pkg", "1.0.0")).rejects.not.toThrow(SecurityError);
+      await expect(fetchNpmAttestations({ packageName: "pkg", version: "1.0.0" })).rejects.toThrow(
+        Error,
+      );
+      await expect(
+        fetchNpmAttestations({ packageName: "pkg", version: "1.0.0" }),
+      ).rejects.not.toThrow(SecurityError);
     });
   });
 
@@ -497,7 +515,7 @@ if (import.meta.vitest) {
         return new Response(JSON.stringify({ attestations: [] }), { status: 200 });
       });
       using _env = stubEnvVar("GITHUB_TOKEN", "ghp_test123");
-      await fetchGitHubAttestations("owner/repo", "abc123").catch(() => {});
+      await fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }).catch(() => {});
       expect(capturedHeaders).toHaveProperty("Authorization", "Bearer ghp_test123");
     });
 
@@ -508,7 +526,7 @@ if (import.meta.vitest) {
         return new Response(JSON.stringify({ attestations: [] }), { status: 200 });
       });
       using _env = stubEnvVar("GITHUB_TOKEN", "");
-      await fetchGitHubAttestations("owner/repo", "abc123").catch(() => {});
+      await fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }).catch(() => {});
       expect(capturedHeaders).not.toHaveProperty("Authorization");
     });
 
@@ -516,20 +534,24 @@ if (import.meta.vitest) {
       using _fetch = stubFetch(
         async () => new Response(null, { status: 404, statusText: "Not Found" }),
       );
-      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(SecurityError);
-      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(
-        /No attestation found/,
-      );
+      await expect(
+        fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
+      ).rejects.toThrow(SecurityError);
+      await expect(
+        fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
+      ).rejects.toThrow(/No attestation found/);
     });
 
     it("propagates server error as regular Error", async ({ expect }) => {
       using _fetch = stubFetch(
         async () => new Response(null, { status: 500, statusText: "Server Error" }),
       );
-      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(Error);
-      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.not.toThrow(
-        SecurityError,
-      );
+      await expect(
+        fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
+      ).rejects.toThrow(Error);
+      await expect(
+        fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
+      ).rejects.not.toThrow(SecurityError);
     });
 
     it("throws rate-limit error on 403 with X-RateLimit-Remaining: 0", async ({ expect }) => {
@@ -541,30 +563,32 @@ if (import.meta.vitest) {
           }),
       );
       using _env = stubEnvVar("GITHUB_TOKEN", "ghp_test");
-      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(
-        /rate limit exceeded.*exhausted/,
-      );
-      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.not.toThrow(
-        SecurityError,
-      );
+      await expect(
+        fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
+      ).rejects.toThrow(/rate limit exceeded.*exhausted/);
+      await expect(
+        fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
+      ).rejects.not.toThrow(SecurityError);
     });
 
     it("throws rate-limit error on 429", async ({ expect }) => {
       using _fetch = stubFetch(async () => new Response(null, { status: 429 }));
       using _env = stubEnvVar("GITHUB_TOKEN", "");
-      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(
-        /rate limit exceeded.*GITHUB_TOKEN/,
-      );
+      await expect(
+        fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
+      ).rejects.toThrow(/rate limit exceeded.*GITHUB_TOKEN/);
     });
 
     it("falls through to generic error on 403 without rate-limit header", async ({ expect }) => {
       using _fetch = stubFetch(
         async () => new Response(null, { status: 403, statusText: "Forbidden" }),
       );
-      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(/403/);
-      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.not.toThrow(
-        /rate limit/,
-      );
+      await expect(
+        fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
+      ).rejects.toThrow(/403/);
+      await expect(
+        fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
+      ).rejects.not.toThrow(/rate limit/);
     });
 
     it("returns SecurityError on empty attestation list", async ({ expect }) => {
@@ -575,10 +599,12 @@ if (import.meta.vitest) {
             headers: { "Content-Type": "application/json" },
           }),
       );
-      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(SecurityError);
-      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(
-        /No attestation found/,
-      );
+      await expect(
+        fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
+      ).rejects.toThrow(SecurityError);
+      await expect(
+        fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
+      ).rejects.toThrow(/No attestation found/);
     });
 
     it("returns SecurityError when all bundle_url fetches fail", async ({ expect }) => {
@@ -594,39 +620,59 @@ if (import.meta.vitest) {
         }
         return new Response(null, { status: 500, statusText: "Server Error" });
       });
-      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(SecurityError);
-      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(
-        /No attestation found/,
-      );
+      await expect(
+        fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
+      ).rejects.toThrow(SecurityError);
+      await expect(
+        fetchGitHubAttestations({ repo: "owner/repo", sha256: "abc123" }),
+      ).rejects.toThrow(/No attestation found/);
     });
   });
 
   describe("verifyNpmProvenance (integration)", () => {
     it("succeeds for unscoped package", async ({ expect }) => {
-      const runURI = await verifyNpmProvenance("semver", "7.6.3", "npm/node-semver");
+      const runURI = await verifyNpmProvenance({
+        packageName: "semver",
+        version: "7.6.3",
+        repo: "npm/node-semver",
+      });
       expect(runURI).toMatch(/^https:\/\/github\.com\/npm\/node-semver\/actions\/runs\//);
     });
 
     it("succeeds for scoped package", async ({ expect }) => {
-      const runURI = await verifyNpmProvenance("@npmcli/run-script", "9.0.2", "npm/run-script");
+      const runURI = await verifyNpmProvenance({
+        packageName: "@npmcli/run-script",
+        version: "9.0.2",
+        repo: "npm/run-script",
+      });
       expect(runURI).toMatch(/^https:\/\/github\.com\/npm\/run-script\/actions\/runs\//);
     });
 
     it("succeeds for bundle v0.3 format", async ({ expect }) => {
       // undici@7.3.0 uses Sigstore bundle v0.3 with top-level
       // `certificate` instead of `x509CertificateChain`
-      const runURI = await verifyNpmProvenance("undici", "7.3.0", "nodejs/undici");
+      const runURI = await verifyNpmProvenance({
+        packageName: "undici",
+        version: "7.3.0",
+        repo: "nodejs/undici",
+      });
       expect(runURI).toMatch(/^https:\/\/github\.com\/nodejs\/undici\/actions\/runs\//);
     });
 
     it("rejects when expected repo does not match", async ({ expect }) => {
-      await expect(verifyNpmProvenance("semver", "7.6.3", "wrong/repo")).rejects.toThrow(
-        "SECURITY",
-      );
+      await expect(
+        verifyNpmProvenance({ packageName: "semver", version: "7.6.3", repo: "wrong/repo" }),
+      ).rejects.toThrow("SECURITY");
     });
 
     it("rejects for a package without provenance", async ({ expect }) => {
-      await expect(verifyNpmProvenance("express", "4.21.2", "expressjs/express")).rejects.toThrow();
+      await expect(
+        verifyNpmProvenance({
+          packageName: "express",
+          version: "4.21.2",
+          repo: "expressjs/express",
+        }),
+      ).rejects.toThrow();
     });
   });
 
@@ -638,21 +684,33 @@ if (import.meta.vitest) {
   describe("verifyBinaryProvenance (integration)", () => {
     it("succeeds with correct hash, repo, and run URI", async ({ expect }) => {
       await expect(
-        verifyBinaryProvenance(CLI_HASH, CLI_RUN_URI, CLI_REPO),
+        verifyBinaryProvenance({
+          sha256: CLI_HASH,
+          runInvocationURI: CLI_RUN_URI,
+          repo: CLI_REPO,
+        }),
       ).resolves.toBeUndefined();
     });
 
     it("rejects when expected repo does not match", async ({ expect }) => {
-      await expect(verifyBinaryProvenance(CLI_HASH, CLI_RUN_URI, "wrong/repo")).rejects.toThrow(
-        SecurityError,
-      );
+      await expect(
+        verifyBinaryProvenance({
+          sha256: CLI_HASH,
+          runInvocationURI: CLI_RUN_URI,
+          repo: "wrong/repo",
+        }),
+      ).rejects.toThrow(SecurityError);
     });
 
     it("rejects when run invocation URI does not match", async ({ expect }) => {
       const wrongRunURI = "https://github.com/cli/cli/actions/runs/1/attempts/1";
-      await expect(verifyBinaryProvenance(CLI_HASH, wrongRunURI, CLI_REPO)).rejects.toThrow(
-        SecurityError,
-      );
+      await expect(
+        verifyBinaryProvenance({
+          sha256: CLI_HASH,
+          runInvocationURI: wrongRunURI,
+          repo: CLI_REPO,
+        }),
+      ).rejects.toThrow(SecurityError);
     });
   });
 
