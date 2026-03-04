@@ -584,7 +584,7 @@ if (import.meta.vitest) {
     it("returns SecurityError when all bundle_url fetches fail", async ({ expect }) => {
       using _fetch = stubFetch(async (url: string | URL | Request) => {
         const urlString = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
-        if (urlString.includes("api.github.com")) {
+        if (new URL(urlString).hostname === "api.github.com") {
           return new Response(
             JSON.stringify({
               attestations: [{ bundle: null, bundle_url: "https://blob.example.com/b" }],
