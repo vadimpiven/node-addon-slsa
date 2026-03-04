@@ -7,10 +7,10 @@ import dedent from "dedent";
 import { z } from "zod/v4";
 
 const AddonConfigSchema = z.object({
-  path: z.string().refine((p) => !p.includes("..") && p.endsWith(".node"), {
+  path: z.string().refine((path) => !path.includes("..") && path.endsWith(".node"), {
     message: "addon.path must be a relative .node file path",
   }),
-  url: z.url().refine((u) => new URL(u).origin === "https://github.com", {
+  url: z.url().refine((url) => new URL(url).origin === "https://github.com", {
     message: "addon.url must point to github.com",
   }),
 });
@@ -38,14 +38,14 @@ export async function readPackageJson(packageDir: string): Promise<PackageJson> 
   } catch (err) {
     if (err instanceof z.ZodError) {
       const issues = err.issues
-        .map((i) => {
-          const path = i.path.length > 0 ? `${i.path.join(".")}: ` : "";
-          return `  ${path}${i.message}`;
+        .map((issue) => {
+          const path = issue.path.length > 0 ? `${issue.path.join(".")}: ` : "";
+          return `  ${path}${issue.message}`;
         })
         .join("\n");
       throw new Error(
         dedent`
-          Invalid package.json:
+          invalid package.json:
           ${issues}
         `,
       );
@@ -162,6 +162,17 @@ if (import.meta.vitest) {
       await expect(readPackageJson(tmp.path)).rejects.toThrow(
         /addon\.url must point to github\.com/,
       );
+    });
+
+    it("formats top-level type error without path prefix", async ({ expect }) => {
+      const { writeFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const { tempDir } = await import("./util/fs.ts");
+
+      await using tmp = await tempDir();
+      // Valid JSON but not an object — produces ZodError with empty path
+      await writeFile(join(tmp.path, "package.json"), JSON.stringify("not an object"));
+      await expect(readPackageJson(tmp.path)).rejects.toThrow(/invalid package\.json/);
     });
 
     it("throws for malformed JSON", async ({ expect }) => {

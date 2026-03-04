@@ -8,17 +8,46 @@
 
 # node-addon-slsa
 
-Supply-chain provenance verification for npm packages with prebuilt native addons.
-Ensures that both the npm package and its prebuilt binary were produced by the same
-GitHub Actions workflow run, using [sigstore] and the [GitHub Attestations API][gh-attestations].
-Installation aborts with a `SECURITY` error if any verification step fails.
+Verifies that an npm package and its prebuilt native addon binary were produced
+by the _same_ GitHub Actions workflow run. Uses [sigstore] for npm provenance
+and the [GitHub Attestations API][gh-attestations] for binary verification.
+Aborts `npm install` with a `SECURITY` error if any check fails.
 
 [sigstore]: https://www.sigstore.dev/
-[gh-attestations]: https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations
+[gh-attestations]: https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations
 
-## End-to-end example
+## Threat model
 
-### 1. Configure your package
+This tool trusts two infrastructure providers: **GitHub Actions** (build
+environment and attestation authority) and the **sigstore public-good
+instance** (Fulcio CA, Rekor transparency log). If either is compromised,
+verification may pass for malicious artifacts.
+
+### Protected
+
+| Threat                        | Mitigation                                       |
+| ----------------------------- | ------------------------------------------------ |
+| Tampered npm package          | sigstore provenance verification                 |
+| Tampered GitHub release       | GitHub Attestations API + sigstore               |
+| Mismatched artifacts          | Same workflow run check via URI                  |
+| Man-in-the-middle on download | SHA-256 hash verified against signed attestation |
+| Path traversal via addon.path | Resolved path must stay within package directory |
+
+### Not protected
+
+- **Compromised CI workflow** — if the workflow itself is malicious, all
+  attestations will be valid for malicious code. This tool verifies
+  _provenance_, not _intent_.
+- **Compromised maintainer account** — an attacker with write access to the
+  repository can modify the workflow and produce legitimately attested builds.
+- **Dependency confusion** — the tool verifies a single package, not its
+  transitive dependency tree.
+- **Version `0.0.0`** — all verification is skipped, by design, for local
+  development and CI testing. Never publish version `0.0.0` to npm.
+
+## Setup
+
+### 1. Configure `package.json`
 
 ```json
 {
@@ -44,38 +73,39 @@ Installation aborts with a `SECURITY` error if any verification step fails.
     "pack-addon": "slsa pack"
   },
   "dependencies": {
-    "node-addon-slsa": "^1.0.0"
+    "node-addon-slsa": "0.3.0"
   }
 }
 ```
 
-- **`exports`** — the `"./package.json"` entry is required
-  so your code can `import pkg from "./package.json"` to
-  read `addon.path` at runtime; without it, Node.js strict
-  ESM exports resolution blocks access
-- **`addon.path`** — where the native binary is installed,
-  relative to the package root
-- **`addon.url`** — download URL template;
-  supports `{version}`, `{platform}`, `{arch}` placeholders
-- **`postinstall`** — runs `slsa wget` on `npm install`:
-  downloads the binary, verifies provenance, installs it
-- **`pack-addon`** — runs `slsa pack` in CI:
-  gzip-compresses the binary before uploading to a GitHub
-  release
+- **`addon.path`** — where the native binary is installed, relative to the
+  package root
+- **`addon.url`** — download URL template; supports `{version}`,
+  `{platform}`, `{arch}` placeholders
+- **`postinstall`** — runs `slsa wget` on `npm install`: downloads the
+  binary, verifies provenance, installs it
+- **`pack-addon`** — runs `slsa pack` in CI: gzip-compresses the binary
+  before uploading to a release
+- **`exports["./package.json"]`** — required for loading the addon at
+  runtime (see [Loading the addon](#loading-the-addon))
 
-### 2. Build and publish in CI
+### 2. CI setup
 
 ```yaml
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  build-addon:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
     permissions:
+      contents: write # release upload
       id-token: write # OIDC token for sigstore
-      contents: write # gh release upload
-      attestations: write
+      attestations: write # build provenance
     steps:
       - uses: actions/checkout@v6
-      - run: npm run build
+      # ... set up toolchain, build native addon ...
       - name: Compress binary for release
         run: npx slsa pack
       - name: Attest binary provenance
@@ -83,31 +113,97 @@ jobs:
         with:
           subject-path: dist/my_addon-v*.node.gz
       - name: Upload binary to release
-        run: gh release upload "$TAG" dist/my_addon-v*.node.gz
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/my_addon-v*.node.gz
 
   publish:
-    needs: build
+    needs: build-addon
     runs-on: ubuntu-latest
     permissions:
-      id-token: write # npm provenance
+      contents: read # to fetch code
+      id-token: write # npm provenance via OIDC
     steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
       - run: npm publish --provenance --access public
 ```
 
-### 3. On `npm install`
+Each matrix runner produces a platform-specific binary (e.g.
+`my_addon-v1.0.0-linux-x64.node.gz`). The `{platform}` and `{arch}`
+placeholders in `addon.url` resolve to `process.platform` and
+`process.arch` at install time, so each user downloads the correct
+binary for their OS.
 
-The `slsa wget` postinstall hook runs automatically:
+## How verification works
+
+`slsa wget` runs on `npm install`:
 
 1. Verifies npm package provenance via sigstore
-2. Extracts the GitHub Actions Run Invocation URI from the Fulcio certificate
-3. Downloads the compressed binary from the GitHub release
-4. Verifies the binary's attestation matches the same workflow run
-5. Decompresses and installs the binary
+2. Extracts the Run Invocation URI from the Fulcio certificate
+3. Downloads the compressed binary from the GitHub release, computing a
+   SHA-256 hash of the compressed bytes and decompressing into a temp file
+4. Verifies the binary's GitHub attestation matches the same workflow run
+5. Moves the verified binary to its final location
 
-### 4. Load the native addon
+On failure, the temp file is removed and installation aborts.
 
-Use the `addon.path` from your `package.json` to locate
-the downloaded binary:
+## API reference
+
+### CLI
+
+| Command / Option         | Purpose                                         |
+| ------------------------ | ----------------------------------------------- |
+| `slsa pack`              | Gzip-compress the native binary for release     |
+| `slsa wget`              | Download, verify, and install the native binary |
+| `slsa --help`, `slsa -h` | Show usage information                          |
+
+### Programmatic API
+
+```typescript
+import {
+  verifyNpmProvenance,
+  verifyBinaryProvenance,
+  SecurityError,
+  isSecurityError,
+} from "node-addon-slsa";
+
+// Returns the Run Invocation URI from the Fulcio certificate.
+// Throws SecurityError if provenance verification fails.
+const runURI = await verifyNpmProvenance(
+  "my-native-addon",
+  "1.0.0",
+  "owner/repo",
+);
+
+// Resolves if the attestation matches.
+// Throws SecurityError if verification fails.
+await verifyBinaryProvenance(sha256Hash, runURI, "owner/repo");
+```
+
+Error handling:
+
+- `SecurityError` — verification failed (tampered artifact, mismatched
+  provenance). Do not retry.
+- `Error` — transient issue (network timeout, GitHub API rate limit).
+  Safe to retry.
+
+Use `isSecurityError(err)` or `instanceof SecurityError` to distinguish
+in catch blocks.
+
+## Configuration
+
+### `repository` field
+
+The `repository` field (or `repository.url`) determines the expected GitHub
+repository for attestation verification. Both CLI commands read it from
+`package.json` in the working directory. Only `github.com` URLs are
+supported (HTTPS, SSH, with or without `.git` suffix).
+
+### Loading the addon
 
 ```typescript
 import { createRequire } from "node:module";
@@ -121,50 +217,25 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const addon = require(join(root, packageJson.addon.path));
 ```
 
-This is why the `"./package.json"` export is required —
-it allows the JSON import to resolve under strict ESM exports.
+The `"./package.json"` export in your `exports` map is required for this
+JSON import to resolve under strict ESM exports.
 
-## Details
+### Authentication
 
-### `repository` field
+Public repositories work without authentication.
+Unauthenticated requests are limited to 60/hour by GitHub. Set
+`GITHUB_TOKEN` to increase:
 
-The `repository` field (or `repository.url`) determines the
-expected GitHub repository for attestation verification.
-Both CLI commands read it from `package.json` in the working directory.
+```sh
+export GITHUB_TOKEN="$(gh auth token)"
+```
 
-### CLI
+## Requirements
 
-| Command / Option         | Purpose                                         |
-| ------------------------ | ----------------------------------------------- |
-| `slsa pack`              | Gzip-compress the native binary for release     |
-| `slsa wget`              | Download, verify, and install the native binary |
-| `slsa --help`, `slsa -h` | Show usage information                          |
-
-### Verification chain
-
-The sigstore verification validates the full Fulcio CA chain,
-transparency log inclusion proof, Signed Entry Timestamp
-(SET), and Signed Certificate Timestamps (SCTs). The binary
-verification then confirms the GitHub attestation was signed
-in the same workflow run as the npm package, linking both
-artifacts to a single auditable build.
-
-| Threat                  | Mitigation                         |
-| ----------------------- | ---------------------------------- |
-| Tampered npm package    | sigstore provenance verification   |
-| Tampered GitHub release | GitHub Attestations API + sigstore |
-| Mismatched artifacts    | Same workflow run check via URI    |
-
-### Development mode
-
-Version `0.0.0` skips all verification, allowing local
-development and CI testing without published attestations.
-
-### Requirements
-
-- Node.js `^20.19.0 || >=22.12.0` for ESM support
+- Node.js `^20.19.0 || >=22.12.0`
 - npm package published with [`--provenance`][npm-provenance]
-- Binary attested with [`actions/attest-build-provenance`][attest-action]
+- Binary attested with
+  [`actions/attest-build-provenance`][attest-action]
 
 [npm-provenance]: https://docs.npmjs.com/generating-provenance-statements
 [attest-action]: https://github.com/actions/attest-build-provenance

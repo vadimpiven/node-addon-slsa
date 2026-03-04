@@ -2,7 +2,6 @@
 
 import { createHash } from "node:crypto";
 import { Readable, Transform } from "node:stream";
-import { ReadableStream } from "node:stream/web";
 
 export const FETCH_TIMEOUT_MS = 30_000;
 
@@ -19,10 +18,10 @@ export async function fetchWithTimeout(url: string, init?: RequestInit): Promise
 export async function fetchStream(url: string): Promise<Readable> {
   const response = await fetchWithTimeout(url);
   if (!response.ok) {
-    throw new Error(`Failed to download: ${response.status} ${response.statusText}`);
+    throw new Error(`download failed: ${url}: ${response.status} ${response.statusText}`);
   }
   if (!response.body) {
-    throw new Error("Response body is empty");
+    throw new Error(`download failed: ${url}: response body is empty`);
   }
   return Readable.fromWeb(response.body);
 }
@@ -82,9 +81,9 @@ if (import.meta.vitest) {
     it("delivers response body as a Readable stream", async ({ expect }) => {
       const data = Buffer.from("response body bytes");
       const body = new ReadableStream({
-        start(c) {
-          c.enqueue(data);
-          c.close();
+        start(controller) {
+          controller.enqueue(data);
+          controller.close();
         },
       });
       using _fetch = stubFetch(async () => new Response(body, { status: 200 }));

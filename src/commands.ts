@@ -20,14 +20,20 @@ function createTemplateVars(version: string): Record<string, string> {
 }
 
 /**
- * Download, verify, and install the native binary.
+ * Downloads, verifies, and installs the native binary.
+ *
+ * @throws {SecurityError} if provenance verification fails.
+ * @throws {Error} if the download or decompression fails.
  */
 export async function wget(packageDir: string): Promise<void> {
   const { name, version, addon, repository } = await readPackageJson(packageDir);
 
   const expectedRepo = extractExpectedRepo(repository);
   if (!expectedRepo) {
-    throw new Error("Could not determine expected repository from package.json");
+    throw new Error(
+      "could not determine expected repository from package.json:" +
+        ' set repository to a github.com URL (e.g. "https://github.com/owner/repo")',
+    );
   }
 
   const resolvedPkgDir = resolve(packageDir);
@@ -56,7 +62,7 @@ export async function wget(packageDir: string): Promise<void> {
       await fetchStream(downloadUrl),
       hashStream,
       createGunzip(),
-      createWriteStream(tmpPath, { mode: 0o700, flags: "wx" }),
+      createWriteStream(tmpPath, { mode: 0o755, flags: "wx" }),
     );
 
     await verifyBinaryProvenance(digest(), runInvocationURI, expectedRepo);
@@ -75,7 +81,7 @@ export async function wget(packageDir: string): Promise<void> {
 }
 
 /**
- * Gzip compress the native binary for distribution.
+ * Gzip-compresses the native binary for distribution.
  */
 export async function pack(packageDir: string): Promise<void> {
   const { version, addon } = await readPackageJson(packageDir);
@@ -112,6 +118,25 @@ if (import.meta.vitest) {
       // dist/ created but no binary downloaded
       await expect(access(join(tmp.path, "dist"))).resolves.toBeUndefined();
       await expect(access(join(tmp.path, "dist", "node_reqwest.node"))).rejects.toThrow();
+    });
+
+    it("throws when repository is not on GitHub", async ({ expect }) => {
+      const { writeFile } = await import("node:fs/promises");
+      const { tempDir } = await import("./util/fs.ts");
+
+      await using tmp = await tempDir();
+      const pkg = {
+        name: "test-pkg",
+        version: "1.0.0",
+        addon: {
+          path: "./dist/test.node",
+          url: "https://github.com/owner/repo/releases/download/v{version}/test.node.gz",
+        },
+        repository: "https://gitlab.com/owner/repo",
+      };
+      await writeFile(join(tmp.path, "package.json"), JSON.stringify(pkg));
+
+      await expect(wget(tmp.path)).rejects.toThrow("could not determine expected repository");
     });
   });
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-import { access, readdir, readFile } from "node:fs/promises";
+import * as fsp from "node:fs/promises";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { MockAgent, setGlobalDispatcher, getGlobalDispatcher } from "undici";
@@ -10,6 +10,13 @@ import { wget } from "../src/commands.ts";
 import { tempDir } from "../src/util/fs.ts";
 import { verifyBinaryProvenance } from "../src/verify.ts";
 import { FAKE_BINARY, writeTestPkg } from "./fixtures.ts";
+
+const { access, readdir, readFile } = fsp;
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const orig = await importOriginal<typeof fsp>();
+  return { ...orig, unlink: vi.fn(orig.unlink) };
+});
 
 vi.mock("../src/verify.ts", () => ({
   verifyNpmProvenance: vi
@@ -83,5 +90,23 @@ describe("wget (download pipeline)", () => {
     // No temp files should remain in dist/
     const files = await readdir(join(tmp.path, "dist"));
     expect(files.filter((f) => f.startsWith(".tmp-"))).toHaveLength(0);
+  });
+
+  it("logs non-ENOENT unlink errors during cleanup", async ({ expect }) => {
+    await using _mock = mockDownload(200, gzipSync(FAKE_BINARY));
+    vi.mocked(verifyBinaryProvenance).mockRejectedValueOnce(new Error("provenance failed"));
+
+    const eacces = Object.assign(new Error("permission denied"), { code: "EACCES" });
+    vi.mocked(fsp.unlink).mockRejectedValueOnce(eacces);
+
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await using tmp = await tempDir();
+    await writeTestPkg(tmp.path, "1.0.0");
+
+    await expect(wget(tmp.path)).rejects.toThrow("provenance failed");
+
+    expect(spy).toHaveBeenCalledWith("Failed to clean up temp file:", eacces);
+    spy.mockRestore();
   });
 });

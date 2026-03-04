@@ -10,6 +10,7 @@ catalog:
   "@sigstore/core": 3.1.0
   "@types/node": 25.3.3
   "@vitest/coverage-istanbul": 4.1.0-beta.5
+  hysnappy: 1.1.1
   husky: 9.1.7
   markdownlint-cli2: 0.21.0
   oxfmt: 0.36.0

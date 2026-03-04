@@ -13,11 +13,7 @@ export function isEnoent(err: unknown): boolean {
 }
 
 /**
- * Assert that `target` is strictly within `baseDir` to prevent
- * path-traversal attacks through package.json fields.
- */
-/**
- * Create a temporary directory that is automatically removed on dispose.
+ * Creates a temporary directory that is automatically removed on dispose.
  */
 export async function tempDir(): Promise<{ path: string } & AsyncDisposable> {
   const path = await mkdtemp(join(tmpdir(), "slsa-test-"));
@@ -27,6 +23,12 @@ export async function tempDir(): Promise<{ path: string } & AsyncDisposable> {
   };
 }
 
+/**
+ * Asserts that `target` is strictly within `baseDir` to prevent
+ * path-traversal attacks through package.json fields.
+ *
+ * @throws {SecurityError} if the resolved path escapes the base directory.
+ */
 export function assertWithinDir(baseDir: string, target: string, label: string): void {
   const base = resolve(baseDir);
   const resolved = resolve(target);

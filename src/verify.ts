@@ -4,6 +4,7 @@ import process from "node:process";
 
 import { bundleFromJSON, bundleToJSON } from "@sigstore/bundle";
 import { X509Certificate } from "@sigstore/core";
+import { snappyUncompress } from "hysnappy";
 import { createVerifier } from "sigstore";
 import { z } from "zod/v4";
 
@@ -31,15 +32,22 @@ const NpmAttestationsSchema = z.object({
 
 type NpmAttestations = z.infer<typeof NpmAttestationsSchema>;
 
-const GitHubAttestationsSchema = z.object({
+/** Raw GitHub API response — bundle may be inline or referenced via URL. */
+const GitHubAttestationsApiSchema = z.object({
   attestations: z.array(
-    z.object({
-      bundle: BundleSchema,
-    }),
+    z
+      .object({
+        bundle: z.looseObject({}).nullable(),
+        bundle_url: z.url().optional(),
+      })
+      .refine((attestation) => attestation.bundle != null || attestation.bundle_url != null, {
+        message: "attestation has neither bundle nor bundle_url",
+      }),
   ),
 });
 
-type GitHubAttestations = z.infer<typeof GitHubAttestationsSchema>;
+/** Internal type after resolving bundle_url → SerializedBundle. */
+type GitHubAttestations = { attestations: { bundle: SerializedBundle }[] };
 
 // Sigstore Fulcio OID extensions
 // https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md
@@ -60,6 +68,30 @@ let _verifier: Awaited<ReturnType<typeof createVerifier>> | undefined;
 async function getVerifier(): ReturnType<typeof createVerifier> {
   _verifier ??= await createVerifier({ certificateIssuer: GITHUB_ACTIONS_ISSUER });
   return _verifier;
+}
+
+/**
+ * Reads the uncompressed length from the start of a Snappy-compressed block.
+ *
+ * Snappy prepends the uncompressed length as a little-endian base-128 varint
+ * (same encoding as protobuf). Each byte stores 7 data bits in [6:0] and a
+ * continuation flag in bit 7. At most 5 bytes (35 bits) are consumed.
+ *
+ * hysnappy requires this length upfront for WASM memory pre-allocation.
+ *
+ * @see https://github.com/google/snappy/blob/main/format_description.txt
+ * @see https://en.wikipedia.org/wiki/LEB128
+ */
+function readSnappyUncompressedLength(data: Uint8Array): number {
+  let result = 0;
+  let shift = 0;
+  for (let i = 0; i < Math.min(data.length, 5); i++) {
+    const byte = data[i]!;
+    result |= (byte & 0x7f) << shift; // accumulate 7 data bits
+    if ((byte & 0x80) === 0) return result; // no continuation flag → done
+    shift += 7;
+  }
+  throw new Error("failed to decompress attestation bundle: invalid snappy header");
 }
 
 /**
@@ -135,7 +167,7 @@ function extractCertFromBundle(bundle: SerializedBundle): X509Certificate {
     throw new SecurityError(
       dedent`
         No certificate found in provenance bundle.
-        Provenance verification cannot proceed.
+        This may indicate an unsupported sigstore bundle format.
       `,
     );
   }
@@ -164,7 +196,7 @@ async function fetchNpmAttestations(
     );
   }
   if (!response.ok) {
-    throw new Error(`Failed to fetch npm attestations: ${response.status} ${response.statusText}`);
+    throw new Error(`failed to fetch npm attestations: ${response.status} ${response.statusText}`);
   }
   return NpmAttestationsSchema.parse(await response.json());
 }
@@ -191,9 +223,18 @@ async function fetchGitHubAttestations(
   };
   const token = process.env["GITHUB_TOKEN"];
   if (token) {
-    headers["Authorization"] = `token ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
   }
   const response = await fetchWithTimeout(url, { headers });
+
+  // Rate-limit: 403 with exhausted quota, or 429
+  if (
+    (response.status === 403 && response.headers.get("X-RateLimit-Remaining") === "0") ||
+    response.status === 429
+  ) {
+    const hint = token ? "rate limit exhausted" : "set GITHUB_TOKEN to increase rate limits";
+    throw new Error(`GitHub API rate limit exceeded (${hint})`);
+  }
 
   const noAttestationMsg = dedent`
     No attestation found on GitHub for artifact hash ${sha256Hash}.
@@ -205,17 +246,49 @@ async function fetchGitHubAttestations(
   }
   if (!response.ok) {
     throw new Error(
-      `Failed to fetch GitHub attestations: ${response.status} ${response.statusText}`,
+      `failed to fetch GitHub attestations: ${response.status} ${response.statusText}`,
     );
   }
 
-  const parsed = GitHubAttestationsSchema.parse(await response.json());
+  const apiResponse = GitHubAttestationsApiSchema.parse(await response.json());
 
-  if (parsed.attestations.length === 0) {
+  if (apiResponse.attestations.length === 0) {
     throw new SecurityError(noAttestationMsg);
   }
 
-  return parsed;
+  // Resolve all attestations in parallel: use inline bundle if present,
+  // otherwise fetch from bundle_url (Snappy-compressed protobuf-JSON).
+  const resolveBundle = async (
+    attestation: (typeof apiResponse.attestations)[number],
+  ): Promise<SerializedBundle> => {
+    if (attestation.bundle) return BundleSchema.parse(attestation.bundle);
+    const response = await fetchWithTimeout(attestation.bundle_url!);
+    if (!response.ok) {
+      throw new Error(
+        `failed to fetch attestation bundle from ${attestation.bundle_url}:` +
+          ` ${response.status} ${response.statusText}`,
+      );
+    }
+    const compressed = new Uint8Array(await response.arrayBuffer());
+    const uncompressedLen = readSnappyUncompressedLength(compressed);
+    const decompressed = snappyUncompress(compressed, uncompressedLen);
+    const json = new TextDecoder().decode(decompressed);
+    return BundleSchema.parse(JSON.parse(json));
+  };
+
+  const results = await Promise.allSettled(apiResponse.attestations.map(resolveBundle));
+  const resolved: GitHubAttestations = { attestations: [] };
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      resolved.attestations.push({ bundle: result.value });
+    }
+  }
+
+  if (resolved.attestations.length === 0) {
+    throw new SecurityError(noAttestationMsg);
+  }
+
+  return resolved;
 }
 
 // -- Public API --
@@ -233,8 +306,8 @@ export async function verifyNpmProvenance(
 ): Promise<string> {
   const attestations = await fetchNpmAttestations(packageName, version);
 
-  const provenanceAttestation = attestations.attestations.find((a) =>
-    a.predicateType.startsWith(SLSA_PROVENANCE_PREFIX),
+  const provenanceAttestation = attestations.attestations.find((attestation) =>
+    attestation.predicateType.startsWith(SLSA_PROVENANCE_PREFIX),
   );
 
   if (!provenanceAttestation) {
@@ -258,7 +331,7 @@ export async function verifyNpmProvenance(
     throw new SecurityError(
       dedent`
         Run Invocation URI not found in npm provenance certificate.
-        Provenance verification cannot proceed.
+        The certificate may use an unsupported format.
       `,
     );
   }
@@ -424,7 +497,7 @@ if (import.meta.vitest) {
       });
       using _env = stubEnvVar("GITHUB_TOKEN", "ghp_test123");
       await fetchGitHubAttestations("owner/repo", "abc123").catch(() => {});
-      expect(capturedHeaders).toHaveProperty("Authorization", "token ghp_test123");
+      expect(capturedHeaders).toHaveProperty("Authorization", "Bearer ghp_test123");
     });
 
     it("omits Authorization header when GITHUB_TOKEN is not set", async ({ expect }) => {
@@ -458,6 +531,41 @@ if (import.meta.vitest) {
       );
     });
 
+    it("throws rate-limit error on 403 with X-RateLimit-Remaining: 0", async ({ expect }) => {
+      using _fetch = stubFetch(
+        async () =>
+          new Response(null, {
+            status: 403,
+            headers: { "X-RateLimit-Remaining": "0" },
+          }),
+      );
+      using _env = stubEnvVar("GITHUB_TOKEN", "ghp_test");
+      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(
+        /rate limit exceeded.*exhausted/,
+      );
+      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.not.toThrow(
+        SecurityError,
+      );
+    });
+
+    it("throws rate-limit error on 429", async ({ expect }) => {
+      using _fetch = stubFetch(async () => new Response(null, { status: 429 }));
+      using _env = stubEnvVar("GITHUB_TOKEN", "");
+      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(
+        /rate limit exceeded.*GITHUB_TOKEN/,
+      );
+    });
+
+    it("falls through to generic error on 403 without rate-limit header", async ({ expect }) => {
+      using _fetch = stubFetch(
+        async () => new Response(null, { status: 403, statusText: "Forbidden" }),
+      );
+      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(/403/);
+      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.not.toThrow(
+        /rate limit/,
+      );
+    });
+
     it("returns SecurityError on empty attestation list", async ({ expect }) => {
       using _fetch = stubFetch(
         async () =>
@@ -466,6 +574,25 @@ if (import.meta.vitest) {
             headers: { "Content-Type": "application/json" },
           }),
       );
+      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(SecurityError);
+      await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(
+        /No attestation found/,
+      );
+    });
+
+    it("returns SecurityError when all bundle_url fetches fail", async ({ expect }) => {
+      using _fetch = stubFetch(async (url: string | URL | Request) => {
+        const urlString = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+        if (urlString.includes("api.github.com")) {
+          return new Response(
+            JSON.stringify({
+              attestations: [{ bundle: null, bundle_url: "https://blob.example.com/b" }],
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(null, { status: 500, statusText: "Server Error" });
+      });
       await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(SecurityError);
       await expect(fetchGitHubAttestations("owner/repo", "abc123")).rejects.toThrow(
         /No attestation found/,
@@ -499,6 +626,50 @@ if (import.meta.vitest) {
 
     it("rejects for a package without provenance", async ({ expect }) => {
       await expect(verifyNpmProvenance("express", "4.21.2", "expressjs/express")).rejects.toThrow();
+    });
+  });
+
+  // Real cli/cli attestation data (stable, published release)
+  const CLI_HASH = "7c6d3b5ac88c897fb3ac0c8a479f4fb8083bd05a758fb8d3275642a93d20570d";
+  const CLI_REPO = "cli/cli";
+  const CLI_RUN_URI = "https://github.com/cli/cli/actions/runs/22312430014/attempts/4";
+
+  describe("verifyBinaryProvenance (integration)", () => {
+    it("succeeds with correct hash, repo, and run URI", async ({ expect }) => {
+      await expect(
+        verifyBinaryProvenance(CLI_HASH, CLI_RUN_URI, CLI_REPO),
+      ).resolves.toBeUndefined();
+    });
+
+    it("rejects when expected repo does not match", async ({ expect }) => {
+      await expect(verifyBinaryProvenance(CLI_HASH, CLI_RUN_URI, "wrong/repo")).rejects.toThrow(
+        SecurityError,
+      );
+    });
+
+    it("rejects when run invocation URI does not match", async ({ expect }) => {
+      const wrongRunURI = "https://github.com/cli/cli/actions/runs/1/attempts/1";
+      await expect(verifyBinaryProvenance(CLI_HASH, wrongRunURI, CLI_REPO)).rejects.toThrow(
+        SecurityError,
+      );
+    });
+  });
+
+  describe("readSnappyUncompressedLength", () => {
+    it("parses single-byte varint", ({ expect }) => {
+      expect(readSnappyUncompressedLength(new Uint8Array([0x0a]))).toBe(10);
+    });
+
+    it("parses multi-byte varint", ({ expect }) => {
+      // 300 = 0b100101100 → varint bytes: 0xAC 0x02
+      expect(readSnappyUncompressedLength(new Uint8Array([0xac, 0x02]))).toBe(300);
+    });
+
+    it("throws on truncated varint", ({ expect }) => {
+      // 5 continuation bytes with no termination
+      expect(() =>
+        readSnappyUncompressedLength(new Uint8Array([0x80, 0x80, 0x80, 0x80, 0x80])),
+      ).toThrow("invalid snappy header");
     });
   });
 }

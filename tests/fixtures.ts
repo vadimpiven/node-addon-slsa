@@ -11,7 +11,9 @@ export function testPkg(version: string) {
     version,
     addon: {
       path: "./dist/node_reqwest.node",
-      url: "https://github.com/vadimpiven/node_reqwest/releases/download/v{version}/node_reqwest-v{version}-{platform}-{arch}.node.gz",
+      url:
+        "https://github.com/vadimpiven/node_reqwest/releases/download/" +
+        "v{version}/node_reqwest-v{version}-{platform}-{arch}.node.gz",
     },
     repository: {
       url: "git+https://github.com/vadimpiven/node_reqwest.git",

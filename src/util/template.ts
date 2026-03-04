@@ -11,7 +11,7 @@ export function evalTemplate<T extends Record<string, string>>(template: string,
   }
   const unresolved = result.match(/\{[a-zA-Z_]\w*\}/g);
   if (unresolved) {
-    throw new Error(`Unresolved template placeholders: ${unresolved.join(", ")}`);
+    throw new Error(`unresolved template placeholders: ${unresolved.join(", ")}`);
   }
   return result;
 }
@@ -40,7 +40,7 @@ if (import.meta.vitest) {
 
     it("throws on unresolved placeholders", ({ expect }) => {
       expect(() => evalTemplate("{version}-{libc}", { version: "1.0.0" })).toThrow(
-        /Unresolved template placeholders.*\{libc\}/,
+        /unresolved template placeholders.*\{libc\}/,
       );
     });
 
