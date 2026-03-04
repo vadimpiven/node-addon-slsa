@@ -95,14 +95,13 @@ jobs:
         run: 'gh release download "$GITHUB_REF_NAME" --pattern "package.tar.gz"'
       - name: "Publish to npmjs.org"
         run: 'npm publish "package.tar.gz" --access public --provenance'
-  verify-installation:
-    name: "Verify installation"
+  smoke-test:
+    name: "Smoke test"
     needs: "publish"
     if: "needs.publish.result == 'success'"
     runs-on: "ubuntu-latest"
-    timeout-minutes: 5
-    permissions:
-      contents: "read" # to fetch code
+    timeout-minutes: 10
+    permissions: {}
     steps:
       - name: "Install Node.js"
         uses: "actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238" # v6.2.0
@@ -110,8 +109,22 @@ jobs:
           node-version: "latest"
           check-latest: true
           package-manager-cache: false
-      - name: "Verify installation"
+      - name: "Wait for npm registry"
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for i in {1..10}; do
+            if npm view "node-addon-slsa@${version}" version >/dev/null; then
+              echo "Version ${version} available on attempt ${i}"
+              exit 0
+            fi
+            echo "Attempt ${i}: not yet available, waiting 15s..."
+            sleep 15
+          done
+          echo "Version ${version} not available after 10 attempts"
+          exit 1
+      - name: "Smoke test"
         run: |
           cd "$(mktemp -d)"
           npm init -y
           npm install "node-addon-slsa@${GITHUB_REF_NAME#v}"
+          ./node_modules/.bin/slsa --help | grep "Usage:"
