@@ -6,8 +6,7 @@ import { join, resolve, sep } from "node:path";
 
 import dedent from "dedent";
 
-import { ProvenanceError } from "./provenance-error.ts";
-
+/** Check whether an error is a Node.js `ENOENT` (file not found) error. */
 export function isEnoent(err: unknown): boolean {
   return err instanceof Error && "code" in err && err.code === "ENOENT";
 }
@@ -27,7 +26,7 @@ export async function tempDir(): Promise<{ path: string } & AsyncDisposable> {
  * Asserts that `target` is strictly within `baseDir` to prevent
  * path-traversal attacks through package.json fields.
  *
- * @throws {ProvenanceError} if the resolved path escapes the base directory.
+ * @throws {Error} if the resolved path escapes the base directory.
  */
 export function assertWithinDir({
   baseDir,
@@ -41,11 +40,13 @@ export function assertWithinDir({
   const base = resolve(baseDir);
   const resolved = resolve(target);
   if (!resolved.startsWith(base + sep)) {
-    throw new ProvenanceError(
+    throw new Error(
       dedent`
-        ${label} escapes the package directory.
+        ${label} escapes the package directory — possible path traversal.
         Base: ${base}
         Resolved: ${resolved}
+        Check the "${label}" field in package.json.
+        If you did not author this package, report this to the maintainer.
       `,
     );
   }
@@ -71,7 +72,7 @@ if (import.meta.vitest) {
           target: join(tmp.path, "dist", "..", "..", "etc", "passwd.node"),
           label: "addon.path",
         }),
-      ).toThrow(ProvenanceError);
+      ).toThrow("escapes the package directory — possible path traversal");
     });
 
     it("allows paths within the base directory", async ({ expect }) => {

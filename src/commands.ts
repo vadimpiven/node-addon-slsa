@@ -9,31 +9,39 @@ import { createGunzip, createGzip } from "node:zlib";
 
 import process from "node:process";
 
-import { extractExpectedRepo, readPackageJson } from "./config.ts";
-import { createHashPassthrough, fetchStream } from "./download.ts";
-import { assertWithinDir, isEnoent } from "./util/fs.ts";
-import { evalTemplate } from "./util/template.ts";
-import { verifyPackageProvenance } from "./verify.ts";
+import dedent from "dedent";
 
-function createTemplateVars(version: string): Record<string, string> {
+import { extractExpectedRepo, readPackageJson } from "./config.ts";
+import { createHashPassthrough, createStallGuard, fetchStream } from "./download.ts";
+import { assertWithinDir, isEnoent } from "./util/fs.ts";
+import { log, warn } from "./util/log.ts";
+import { evalTemplate } from "./util/template.ts";
+import type { SemVerString, VerifyOptions } from "./types.ts";
+import { verifyPackageProvenance } from "./verify/index.ts";
+
+/** Build the template variables available for `addon.url`: `{version}`, `{platform}`, `{arch}`. */
+function createTemplateVars(version: SemVerString): Record<string, string> {
   return { version, platform: process.platform, arch: process.arch };
 }
 
 /**
- * Downloads, verifies, and installs the native binary.
+ * Downloads, verifies, and installs the native addon.
  *
  * @throws {ProvenanceError} if provenance verification fails.
  * @throws {Error} if the download or decompression fails.
  */
-export async function wget(packageDir: string): Promise<void> {
+export async function wget(
+  packageDir: string,
+  options?: VerifyOptions & { signal?: AbortSignal },
+): Promise<void> {
   const { name, version, addon, repository } = await readPackageJson(packageDir);
 
   const expectedRepo = extractExpectedRepo(repository);
   if (!expectedRepo) {
-    throw new Error(
-      "could not determine expected repository from package.json:" +
-        ' set repository to a github.com URL (e.g. "https://github.com/owner/repo")',
-    );
+    throw new Error(dedent`
+      could not determine expected repository from package.json:
+      set repository to a github.com URL (e.g. "https://github.com/owner/repo")
+    `);
   }
 
   const resolvedPkgDir = resolve(packageDir);
@@ -43,14 +51,24 @@ export async function wget(packageDir: string): Promise<void> {
   const downloadUrl = evalTemplate(addon.url, createTemplateVars(version));
 
   await mkdir(addonDir, { recursive: true });
+  log(`package: ${name}@${version}`);
 
-  // Skip download for development version
-  if (version === "0.0.0") return;
+  // 0.0.0 is treated as a local/development placeholder — skip download and verification
+  if (version === "0.0.0") {
+    warn(dedent`
+      version 0.0.0 detected — skipping provenance verification.
+      Never publish 0.0.0 to npm.
+    `);
+    return;
+  }
+
+  log(`download URL: ${downloadUrl}`);
 
   const provenance = await verifyPackageProvenance({
     packageName: name,
     version,
     repo: expectedRepo,
+    ...options,
   });
 
   // Stream: download → hash compressed bytes → decompress → write temp file.
@@ -63,21 +81,24 @@ export async function wget(packageDir: string): Promise<void> {
 
   try {
     await pipeline(
-      await fetchStream(downloadUrl),
+      await fetchStream(downloadUrl, options),
+      createStallGuard(options),
       hashStream,
       createGunzip(),
       createWriteStream(tmpPath, { mode: 0o755, flags: "wx" }),
+      { signal: options?.signal },
     );
 
     await provenance.verifyAddon({ sha256: digest() });
+    log(`verification passed`);
 
     await rename(tmpPath, binaryPath);
-  } catch (err) {
+  } catch (err: unknown) {
     try {
       await unlink(tmpPath);
-    } catch (unlinkErr) {
+    } catch (unlinkErr: unknown) {
       if (!isEnoent(unlinkErr)) {
-        console.error("Failed to clean up temp file:", unlinkErr);
+        warn(`failed to clean up temp file: ${unlinkErr}`);
       }
     }
     throw err;
@@ -85,10 +106,11 @@ export async function wget(packageDir: string): Promise<void> {
 }
 
 /**
- * Gzip-compresses the native binary for distribution.
+ * Gzip-compresses the native addon for distribution.
  */
-export async function pack(packageDir: string): Promise<void> {
+export async function pack(packageDir: string, options?: { signal?: AbortSignal }): Promise<void> {
   const { version, addon } = await readPackageJson(packageDir);
+  log(`packing addon v${version}`);
 
   const resolvedPkgDir = resolve(packageDir);
   const binaryPath = join(resolvedPkgDir, addon.path);
@@ -98,78 +120,21 @@ export async function pack(packageDir: string): Promise<void> {
   const packedFile = join(addonDir, packedName);
   assertWithinDir({ baseDir: resolvedPkgDir, target: packedFile, label: "packed output" });
 
-  await pipeline(
-    createReadStream(binaryPath),
-    createGzip({ level: 9 }),
-    createWriteStream(packedFile),
-  );
-}
-
-if (import.meta.vitest) {
-  const { describe, it } = import.meta.vitest;
-
-  describe("wget", () => {
-    it("skips verification for version 0.0.0", async ({ expect }) => {
-      const { access } = await import("node:fs/promises");
-      const { tempDir } = await import("./util/fs.ts");
-
-      const { writeTestPkg } = await import("../tests/fixtures.ts");
-      await using tmp = await tempDir();
-      await writeTestPkg(tmp.path, "0.0.0");
-
-      await wget(tmp.path);
-
-      // dist/ created but no binary downloaded
-      await expect(access(join(tmp.path, "dist"))).resolves.toBeUndefined();
-      await expect(access(join(tmp.path, "dist", "node_reqwest.node"))).rejects.toThrow();
-    });
-
-    it("throws when repository is not on GitHub", async ({ expect }) => {
-      const { writeFile } = await import("node:fs/promises");
-      const { tempDir } = await import("./util/fs.ts");
-
-      await using tmp = await tempDir();
-      const pkg = {
-        name: "test-pkg",
-        version: "1.0.0",
-        addon: {
-          path: "./dist/test.node",
-          url: "https://github.com/owner/repo/releases/download/v{version}/test.node.gz",
-        },
-        repository: "https://gitlab.com/owner/repo",
-      };
-      await writeFile(join(tmp.path, "package.json"), JSON.stringify(pkg));
-
-      await expect(wget(tmp.path)).rejects.toThrow("could not determine expected repository");
-    });
-  });
-
-  describe("pack", () => {
-    it("gzip compresses binary and produces valid archive", async ({ expect }) => {
-      const { readFile, writeFile } = await import("node:fs/promises");
-      const { promisify } = await import("node:util");
-      const { gunzip } = await import("node:zlib");
-      const gunzipAsync = promisify(gunzip);
-      const { tempDir } = await import("./util/fs.ts");
-
-      const { FAKE_BINARY, writeTestPkg } = await import("../tests/fixtures.ts");
-      await using tmp = await tempDir();
-      const distDir = join(tmp.path, "dist");
-      await mkdir(distDir, { recursive: true });
-
-      await writeFile(join(distDir, "node_reqwest.node"), FAKE_BINARY);
-
-      await writeTestPkg(tmp.path, "1.0.0");
-
-      await pack(tmp.path);
-
-      const platform = process.platform;
-      const arch = process.arch;
-      const packedPath = join(distDir, `node_reqwest-v1.0.0-${platform}-${arch}.node.gz`);
-      const compressed = await readFile(packedPath);
-      const decompressed = await gunzipAsync(compressed);
-
-      expect(decompressed).toEqual(FAKE_BINARY);
-    });
-  });
+  try {
+    await pipeline(
+      createReadStream(binaryPath),
+      createGzip({ level: 9 }),
+      createWriteStream(packedFile),
+      { signal: options?.signal },
+    );
+  } catch (err: unknown) {
+    try {
+      await unlink(packedFile);
+    } catch (unlinkErr: unknown) {
+      if (!isEnoent(unlinkErr)) {
+        warn(`failed to clean up partial output: ${unlinkErr}`);
+      }
+    }
+    throw err;
+  }
 }

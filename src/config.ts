@@ -6,27 +6,38 @@ import { join } from "node:path";
 import dedent from "dedent";
 import { z } from "zod/v4";
 
+import { githubRepo, SEMVER_RE } from "./types.ts";
+import type { GitHubRepo, SemVerString } from "./types.ts";
+
+const NPM_PACKAGE_NAME_RE = /^(@[a-z0-9._-]+\/)?[a-z0-9._-]+$/;
+const SemVerStringSchema = z
+  .string()
+  .regex(SEMVER_RE)
+  .transform((v) => v as SemVerString);
+
+// z.url() accepts template placeholders like {version} because
+// curly braces are tolerated in URL paths by Node.js URL parser.
+// Origin check works because placeholders are in the path, not the host.
 const AddonConfigSchema = z.object({
-  path: z.string().refine((path) => !path.includes("..") && path.endsWith(".node"), {
-    message: "addon.path must be a relative .node file path",
+  path: z.string().refine((path) => !path.split(/[/\\]/).includes("..") && path.endsWith(".node"), {
+    message: `addon.path must be a relative .node file path`,
   }),
   url: z.url().refine((url) => new URL(url).origin === "https://github.com", {
-    message: "addon.url must point to github.com",
+    message: `addon.url must point to github.com`,
   }),
 });
 
 const RepositorySchema = z.union([z.string(), z.object({ url: z.string().optional() })]);
 
 const PackageJsonSchema = z.object({
-  name: z.string().regex(/^(@[a-z0-9._-]+\/)?[a-z0-9._-]+$/),
-  version: z.string().regex(/^\d+\.\d+\.\d+(-[\w.]+)?(\+[\w.]+)?$/),
+  name: z.string().regex(NPM_PACKAGE_NAME_RE),
+  version: SemVerStringSchema,
   addon: AddonConfigSchema,
   repository: RepositorySchema,
 });
 
-export type AddonConfig = z.infer<typeof AddonConfigSchema>;
-export type Repository = z.infer<typeof RepositorySchema>;
-export type PackageJson = z.infer<typeof PackageJsonSchema>;
+type Repository = z.infer<typeof RepositorySchema>;
+type PackageJson = z.infer<typeof PackageJsonSchema>;
 
 /**
  * Read and parse package.json from the given directory.
@@ -45,9 +56,10 @@ export async function readPackageJson(packageDir: string): Promise<PackageJson> 
         .join("\n");
       throw new Error(
         dedent`
-          invalid package.json:
+          invalid ${join(packageDir, "package.json")}:
           ${issues}
         `,
+        { cause: err },
       );
     }
     throw err;
@@ -59,10 +71,15 @@ export async function readPackageJson(packageDir: string): Promise<PackageJson> 
  * Supports HTTPS URLs, SSH URLs, and optional `.git` suffix.
  * Returns null if the format is not recognized.
  */
-export function extractExpectedRepo(repository: Repository): string | null {
+export function extractExpectedRepo(repository: Repository): GitHubRepo | null {
   const raw = typeof repository === "string" ? repository : (repository.url ?? "");
-  const match = raw.match(/github\.com[/:]+([^/]+\/[^/]+?)(?:\.git)?$/);
-  return match?.[1] ?? null;
+  const match = raw.match(/(?:^|[/@])github\.com[/:]+([^/]+\/[^/]+?)(?:\.git)?$/);
+  if (!match?.[1]) return null;
+  try {
+    return githubRepo(match[1]);
+  } catch {
+    return null;
+  }
 }
 
 if (import.meta.vitest) {
@@ -172,7 +189,7 @@ if (import.meta.vitest) {
       await using tmp = await tempDir();
       // Valid JSON but not an object — produces ZodError with empty path
       await writeFile(join(tmp.path, "package.json"), JSON.stringify("not an object"));
-      await expect(readPackageJson(tmp.path)).rejects.toThrow(/invalid package\.json/);
+      await expect(readPackageJson(tmp.path)).rejects.toThrow(/invalid .*package\.json/);
     });
 
     it("throws for malformed JSON", async ({ expect }) => {
