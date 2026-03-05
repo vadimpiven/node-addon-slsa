@@ -13,13 +13,12 @@ const BRAND = Symbol.for("node-addon-slsa.ProvenanceError");
 export class ProvenanceError extends Error {
   readonly [BRAND] = true as const;
 
-  constructor(message: string) {
-    super(
-      dedent`
-        SECURITY: ${message}
-        ${SECURITY_ADVICE}
-      `,
-    );
+  constructor(message: string, options?: { cause?: unknown }) {
+    const msg = dedent`
+      SECURITY: ${message}
+      ${SECURITY_ADVICE}
+    `;
+    super(msg, options);
     this.name = "ProvenanceError";
   }
 }
@@ -36,6 +35,32 @@ export function isProvenanceError(err: unknown): err is ProvenanceError {
 
 if (import.meta.vitest) {
   const { describe, it } = import.meta.vitest;
+
+  describe("ProvenanceError", () => {
+    it("sets name to ProvenanceError", ({ expect }) => {
+      const err = new ProvenanceError("msg");
+      expect(err.name).toBe("ProvenanceError");
+    });
+
+    it("prepends SECURITY: and appends advice", ({ expect }) => {
+      const err = new ProvenanceError("compromise detected");
+      expect(err.message).toContain("SECURITY: compromise detected");
+      expect(err.message).toContain("Do not use this package version");
+    });
+  });
+
+  describe("ProvenanceError cause chaining", () => {
+    it("preserves cause when provided", ({ expect }) => {
+      const cause = new Error("original");
+      const err = new ProvenanceError("test", { cause });
+      expect(err.cause).toBe(cause);
+    });
+
+    it("has undefined cause when omitted", ({ expect }) => {
+      const err = new ProvenanceError("test");
+      expect(err.cause).toBeUndefined();
+    });
+  });
 
   describe("isProvenanceError", () => {
     it("distinguishes ProvenanceError from other errors", ({ expect }) => {

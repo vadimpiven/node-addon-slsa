@@ -73,12 +73,12 @@ verification may pass for malicious artifacts.
     "pack-addon": "slsa pack"
   },
   "dependencies": {
-    "node-addon-slsa": "0.5.0"
+    "node-addon-slsa": "0.6.0"
   }
 }
 ```
 
-- **`addon.path`** — where the native binary is installed, relative to the
+- **`addon.path`** — where the native addon is installed, relative to the
   package root
 - **`addon.url`** — download URL template; supports `{version}`,
   `{platform}`, `{arch}` placeholders
@@ -155,34 +155,74 @@ On failure, the temp file is removed and installation aborts.
 
 ### CLI
 
-| Command / Option         | Purpose                                         |
-| ------------------------ | ----------------------------------------------- |
-| `slsa pack`              | Gzip-compress the native binary for release     |
-| `slsa wget`              | Download, verify, and install the native binary |
-| `slsa --help`, `slsa -h` | Show usage information                          |
+| Command / Option | Purpose                                        |
+| ---------------- | ---------------------------------------------- |
+| `slsa pack`      | Gzip-compress the native addon for release     |
+| `slsa wget`      | Download, verify, and install the native addon |
+| `--help`, `-h`   | Show usage information                         |
+
+### Environment variables
+
+| Variable       | Purpose                                           |
+| -------------- | ------------------------------------------------- |
+| `SLSA_DEBUG=1` | Debug logging to stderr                           |
+| `GITHUB_TOKEN` | GitHub API authentication (increases rate limits) |
 
 ### Programmatic API
 
-```typescript
-import { verifyPackageProvenance, isProvenanceError } from "node-addon-slsa";
+#### Types
 
-// Verifies npm package provenance via sigstore.
-// Throws ProvenanceError if verification fails.
-const provenance = await verifyPackageProvenance({
+| Type               | Constructor                 | Purpose                                  |
+| ------------------ | --------------------------- | ---------------------------------------- |
+| `GitHubRepo`       | `githubRepo(value)`         | GitHub `owner/repo` slug                 |
+| `SemVerString`     | `semVerString(value)`       | Strict semver (no `v` prefix)            |
+| `Sha256Hex`        | `sha256Hex(value)`          | Lowercase hex-encoded SHA-256 (64 chars) |
+| `RunInvocationURI` | `runInvocationURI(value)`   | GitHub Actions run invocation URL        |
+
+Constructors validate at runtime and throw `TypeError` on invalid input.
+
+#### Functions
+
+```typescript
+import {
+  verifyPackageProvenance,
+  verifyAddonProvenance,
+  isProvenanceError,
+  sha256Hex,
+  semVerString,
+  githubRepo,
+} from "node-addon-slsa";
+import type { PackageProvenance, RunInvocationURI, VerifyOptions } from "node-addon-slsa";
+
+// Verify npm package provenance via sigstore.
+// Returns { runInvocationURI, verifyAddon() }.
+const provenance: PackageProvenance = await verifyPackageProvenance({
   packageName: "my-native-addon",
-  version: "1.0.0",
-  repo: "owner/repo",
+  version: semVerString("1.0.0"),
+  repo: githubRepo("owner/repo"),
 });
 
-// Verifies addon binary against the same workflow run.
-// Throws ProvenanceError if verification fails.
-await provenance.verifyAddon({ sha256: sha256Hash });
+// With custom timeouts (e.g. behind a slow proxy):
+const provenance2 = await verifyPackageProvenance({
+  packageName: "my-native-addon",
+  version: semVerString("1.0.0"),
+  repo: githubRepo("owner/repo"),
+  timeoutMs: 60_000,
+  retryCount: 5,
+});
+
+// Verify the addon binary was produced by the same workflow run.
+await provenance.verifyAddon({ sha256: sha256Hex(hexHash) });
+
+// Standalone binary verification when you already have a URI.
+await verifyAddonProvenance({
+  sha256: sha256Hex(hexHash),
+  runInvocationURI,
+  repo: githubRepo("owner/repo"),
+});
 ```
 
-`verifyAddonProvenance` is also exported for cases where you already have
-a `RunInvocationURI` from another source.
-
-Error handling:
+#### Error handling
 
 - `ProvenanceError` — verification failed (tampered artifact, mismatched
   provenance). Do not retry.
@@ -190,6 +230,9 @@ Error handling:
   Safe to retry.
 
 Use `isProvenanceError(err)` in catch blocks to distinguish the two.
+
+Non-security errors include a `Set SLSA_DEBUG=1 for detailed diagnostics`
+hint. When reporting issues, include the debug output.
 
 ## Configuration
 
