@@ -7,7 +7,7 @@ import dedent from "dedent";
 
 import type { SerializedBundle } from "@sigstore/bundle";
 
-import { fetchWithTimeout, readJsonBounded } from "../download.ts";
+import { fetchWithRetry } from "../download.ts";
 import type { GitHubRepo, SemVerString, Sha256Hex } from "../types.ts";
 import { log } from "../util/log.ts";
 import { ProvenanceError } from "../util/provenance-error.ts";
@@ -30,6 +30,7 @@ async function mapSettled<T, R>(
 ): Promise<PromiseSettledResult<R>[]> {
   const results: PromiseSettledResult<R>[] = Array.from({ length: items.length });
   const queue = items.map((_, i) => i);
+
   const worker = async () => {
     let i: number | undefined;
     while ((i = queue.shift()) != null) {
@@ -40,6 +41,7 @@ async function mapSettled<T, R>(
       }
     }
   };
+
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
   return results;
 }
@@ -100,8 +102,9 @@ export async function fetchNpmAttestations(
     name: encodeURIComponent(packageName),
     version: encodeURIComponent(version),
   });
-  log(`npm attestations: ${url}`);
-  const response = await fetchWithTimeout(url, undefined, config);
+
+  const response = await fetchWithRetry(url, config);
+
   if (response.status === 404) {
     await response.body?.cancel();
     throw new ProvenanceError(
@@ -111,6 +114,7 @@ export async function fetchNpmAttestations(
       `,
     );
   }
+
   if (!response.ok) {
     await response.body?.cancel();
     throw new Error(dedent`
@@ -118,7 +122,102 @@ export async function fetchNpmAttestations(
       Check your network connection and verify that ${packageName}@${version} exists on npm.
     `);
   }
+
   return NpmAttestationsSchema.parse(await readJsonBounded(response, config.maxJsonResponseBytes));
+}
+
+/**
+ * Resolve a single attestation: return inline bundle if present,
+ * otherwise fetch from bundle_url (Snappy-compressed protobuf-JSON).
+ */
+async function resolveBundle(
+  attestation: { bundle?: SerializedBundle | null | undefined; bundle_url?: string | undefined },
+  config: ResolvedConfig,
+): Promise<SerializedBundle> {
+  if (attestation.bundle) return attestation.bundle;
+
+  const { maxBundleBytes } = config;
+
+  const response = await fetchWithRetry(attestation.bundle_url!, config);
+  if (!response.ok) {
+    await response.body?.cancel();
+    throw new Error(dedent`
+      failed to fetch attestation bundle from ${attestation.bundle_url}:
+      ${response.status} ${response.statusText}
+    `);
+  }
+
+  const clHeader = response.headers.get("Content-Length");
+  if (clHeader != null) {
+    const contentLength = Number(clHeader);
+    if (contentLength > maxBundleBytes) {
+      await response.body?.cancel();
+      throw new Error(dedent`
+        attestation bundle too large:
+        ${contentLength} bytes exceeds ${maxBundleBytes} byte limit
+      `);
+    }
+  }
+
+  const compressed = new Uint8Array(await response.arrayBuffer());
+  if (compressed.byteLength > maxBundleBytes) {
+    throw new Error(dedent`
+      attestation bundle too large:
+      ${compressed.byteLength} bytes exceeds ${maxBundleBytes} byte limit
+    `);
+  }
+
+  const uncompressedLen = readSnappyUncompressedLength(compressed, maxBundleBytes);
+  const decompressed = snappyUncompress(compressed, uncompressedLen);
+
+  const json = new TextDecoder().decode(decompressed);
+  return BundleSchema.parse(JSON.parse(json));
+}
+
+/**
+ * Throw a descriptive error for non-OK GitHub API responses.
+ * Always cancels the response body before throwing.
+ */
+async function throwGitHubApiError(
+  response: Response,
+  sha256: Sha256Hex,
+  token: string | undefined,
+): Promise<never> {
+  await response.body?.cancel();
+
+  const noAttestationMsg = dedent`
+    No provenance attestation found on GitHub for artifact hash ${sha256}.
+    The artifact may have been tampered with.
+  `;
+
+  if (
+    (response.status === 403 && response.headers.get("X-RateLimit-Remaining") === "0") ||
+    response.status === 429
+  ) {
+    const hint = token
+      ? `rate limit exhausted — wait and retry`
+      : `set GITHUB_TOKEN to increase rate limits`;
+    throw new Error(`GitHub API rate limit exceeded: ${hint}`);
+  }
+
+  if (response.status === 404) {
+    const msg = token
+      ? noAttestationMsg
+      : dedent`
+          ${noAttestationMsg}
+          If this is a private repository, set GITHUB_TOKEN for authenticated access.
+        `;
+    throw new ProvenanceError(msg);
+  }
+
+  if (response.status === 401) {
+    throw new Error(`GitHub API authentication failed — check that GITHUB_TOKEN is valid`);
+  }
+
+  throw new Error(dedent`
+    failed to fetch GitHub attestations: ${response.status} ${response.statusText}.
+    If this persists, verify the repository field in package.json and try again.
+  `);
 }
 
 /**
@@ -136,108 +235,35 @@ export async function fetchGitHubAttestations(
   { repo, sha256 }: { repo: GitHubRepo; sha256: Sha256Hex },
   config: ResolvedConfig,
 ): Promise<GitHubAttestations> {
-  const url = evalTemplate(GITHUB_ATTESTATIONS_URL, {
-    repo,
-    hash: sha256,
-  });
-  log(`GitHub attestations: ${url}`);
+  const url = evalTemplate(GITHUB_ATTESTATIONS_URL, { repo, hash: sha256 });
+  const token = process.env["GITHUB_TOKEN"];
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
+    ...(token && { Authorization: `Bearer ${token}` }),
   };
-  const token = process.env["GITHUB_TOKEN"];
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-  const response = await fetchWithTimeout(url, { headers }, config);
 
-  // Rate-limit: 403 with exhausted quota, or 429
-  if (
-    (response.status === 403 && response.headers.get("X-RateLimit-Remaining") === "0") ||
-    response.status === 429
-  ) {
-    await response.body?.cancel();
-    const hint = token
-      ? `rate limit exhausted — wait and retry`
-      : `set GITHUB_TOKEN to increase rate limits`;
-    throw new Error(`GitHub API rate limit exceeded: ${hint}`);
-  }
-
-  const noAttestationMsg = dedent`
-    No provenance attestation found on GitHub for artifact hash ${sha256}.
-    The artifact may have been tampered with.
-  `;
-
-  if (response.status === 404) {
-    await response.body?.cancel();
-    const msg = token
-      ? noAttestationMsg
-      : dedent`
-          ${noAttestationMsg}
-          If this is a private repository, set GITHUB_TOKEN for authenticated access.
-        `;
-    throw new ProvenanceError(msg);
-  }
-  if (response.status === 401) {
-    await response.body?.cancel();
-    throw new Error(`GitHub API authentication failed — check that GITHUB_TOKEN is valid`);
-  }
-  if (!response.ok) {
-    await response.body?.cancel();
-    throw new Error(dedent`
-      failed to fetch GitHub attestations: ${response.status} ${response.statusText}.
-      If this persists, verify the repository field in package.json and try again.
-    `);
-  }
+  const response = await fetchWithRetry(url, { ...config, headers });
+  if (!response.ok) await throwGitHubApiError(response, sha256, token);
 
   const apiResponse = GitHubAttestationsApiSchema.parse(
     await readJsonBounded(response, config.maxJsonResponseBytes),
   );
 
   if (apiResponse.attestations.length === 0) {
-    throw new ProvenanceError(noAttestationMsg);
+    throw new ProvenanceError(dedent`
+      No provenance attestation found on GitHub for artifact hash ${sha256}.
+      The artifact may have been tampered with.
+    `);
   }
 
-  // Resolve all attestations in parallel: use inline bundle if present,
-  // otherwise fetch from bundle_url (Snappy-compressed protobuf-JSON).
-  const { maxBundleBytes, resolveConcurrency } = config;
-  const resolveBundle = async (
-    attestation: (typeof apiResponse.attestations)[number],
-  ): Promise<SerializedBundle> => {
-    if (attestation.bundle) return attestation.bundle;
-    const response = await fetchWithTimeout(attestation.bundle_url!, undefined, config);
-    if (!response.ok) {
-      await response.body?.cancel();
-      throw new Error(dedent`
-        failed to fetch attestation bundle from ${attestation.bundle_url}:
-        ${response.status} ${response.statusText}
-      `);
-    }
-    const clHeader = response.headers.get("Content-Length");
-    if (clHeader != null) {
-      const contentLength = Number(clHeader);
-      if (contentLength > maxBundleBytes) {
-        await response.body?.cancel();
-        throw new Error(dedent`
-          attestation bundle too large:
-          ${contentLength} bytes exceeds ${maxBundleBytes} byte limit
-        `);
-      }
-    }
-    const compressed = new Uint8Array(await response.arrayBuffer());
-    if (compressed.byteLength > maxBundleBytes) {
-      throw new Error(dedent`
-        attestation bundle too large:
-        ${compressed.byteLength} bytes exceeds ${maxBundleBytes} byte limit
-      `);
-    }
-    const uncompressedLen = readSnappyUncompressedLength(compressed, maxBundleBytes);
-    const decompressed = snappyUncompress(compressed, uncompressedLen);
-    const json = new TextDecoder().decode(decompressed);
-    return BundleSchema.parse(JSON.parse(json));
-  };
+  const { resolveConcurrency } = config;
+  const results = await mapSettled(
+    apiResponse.attestations,
+    (a) => resolveBundle(a, config),
+    resolveConcurrency,
+  );
 
-  const results = await mapSettled(apiResponse.attestations, resolveBundle, resolveConcurrency);
   const resolved: GitHubAttestations = { attestations: [] };
   for (const result of results) {
     if (result.status === "fulfilled") {
@@ -248,11 +274,50 @@ export async function fetchGitHubAttestations(
   }
 
   if (resolved.attestations.length === 0) {
-    throw new ProvenanceError(noAttestationMsg);
+    throw new ProvenanceError(dedent`
+      No provenance attestation found on GitHub for artifact hash ${sha256}.
+      The artifact may have been tampered with.
+    `);
   }
 
   log(`resolved ${resolved.attestations.length} attestation bundle(s)`);
   return resolved;
+}
+
+/**
+ * Read a Response body as JSON with an upper bound on total bytes.
+ * Aborts mid-stream if the limit is exceeded to prevent memory exhaustion.
+ * Returns `unknown` — callers should validate with Zod.
+ */
+async function readJsonBounded(response: Response, maxBytes: number): Promise<unknown> {
+  if (!response.body) {
+    return JSON.parse(await response.text());
+  }
+
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  for await (const chunk of response.body) {
+    totalBytes += chunk.byteLength;
+    if (totalBytes > maxBytes) {
+      throw new Error(`JSON response too large: exceeded ${maxBytes} byte limit`);
+    }
+    chunks.push(chunk);
+  }
+
+  let bytes: Uint8Array;
+  if (chunks.length === 1) {
+    bytes = chunks[0]!;
+  } else {
+    bytes = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+  }
+
+  return JSON.parse(new TextDecoder().decode(bytes));
 }
 
 if (import.meta.vitest) {
@@ -266,6 +331,13 @@ if (import.meta.vitest) {
     it("parses multi-byte varint", ({ expect }) => {
       // 300 = 0b100101100 → varint bytes: 0xAC 0x02
       expect(readSnappyUncompressedLength(new Uint8Array([0xac, 0x02]))).toBe(300);
+    });
+
+    it("throws when uncompressed length exceeds maxBytes", ({ expect }) => {
+      // varint 0x0a encodes 10; pass maxBytes=5 to trigger the size guard
+      expect(() => readSnappyUncompressedLength(new Uint8Array([0x0a]), 5)).toThrow(
+        /attestation bundle too large/,
+      );
     });
 
     it("throws on truncated varint", ({ expect }) => {
@@ -309,6 +381,30 @@ if (import.meta.vitest) {
       expect(results[0]!.status).toBe("fulfilled");
       expect(results[1]!.status).toBe("rejected");
       expect(results[2]!.status).toBe("fulfilled");
+    });
+  });
+
+  describe("readJsonBounded", () => {
+    it("parses valid JSON within bounds", async ({ expect }) => {
+      const json = JSON.stringify({ key: "value" });
+      const response = new Response(json);
+      const result = await readJsonBounded(response, 1024);
+      expect(result).toEqual({ key: "value" });
+    });
+
+    it("throws when response exceeds maxBytes", async ({ expect }) => {
+      const json = JSON.stringify({ data: "x".repeat(100) });
+      const response = new Response(json);
+      await expect(readJsonBounded(response, 10)).rejects.toThrow(/too large.*exceeded.*10 byte/);
+    });
+
+    it("falls back to response.text() when body is null", async ({ expect }) => {
+      const response = {
+        body: null,
+        text: async () => '{"ok":true}',
+      } as unknown as Response;
+      const result = await readJsonBounded(response, 1024);
+      expect(result).toEqual({ ok: true });
     });
   });
 }

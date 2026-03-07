@@ -5,12 +5,8 @@ import { Readable, Writable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { afterEach, describe, it, vi } from "vitest";
 
-import {
-  createHashPassthrough,
-  fetchStream,
-  fetchWithTimeout,
-  readJsonBounded,
-} from "../src/download.ts";
+import { fetchWithRetry } from "../src/download.ts";
+import { createHashPassthrough } from "../src/util/hash.ts";
 import { stubFetch } from "./helpers.ts";
 
 afterEach(() => {
@@ -40,7 +36,7 @@ describe("createHashPassthrough", () => {
   });
 });
 
-describe("fetchWithTimeout (retry)", () => {
+describe("fetchWithRetry (retry)", () => {
   it("retries on network error and succeeds on 2nd attempt", async ({ expect }) => {
     vi.useFakeTimers();
     let calls = 0;
@@ -49,7 +45,7 @@ describe("fetchWithTimeout (retry)", () => {
       if (calls === 1) throw new Error("network error");
       return new Response(null, { status: 200 });
     });
-    const promise = fetchWithTimeout("https://example.com/retry");
+    const promise = fetchWithRetry("https://example.com/retry");
     await vi.advanceTimersByTimeAsync(1000);
     const res = await promise;
     expect(res.status).toBe(200);
@@ -64,7 +60,7 @@ describe("fetchWithTimeout (retry)", () => {
       if (calls === 1) return new Response(null, { status: 503 });
       return new Response(null, { status: 200 });
     });
-    const promise = fetchWithTimeout("https://example.com/retry");
+    const promise = fetchWithRetry("https://example.com/retry");
     await vi.advanceTimersByTimeAsync(1000);
     const res = await promise;
     expect(res.status).toBe(200);
@@ -77,7 +73,7 @@ describe("fetchWithTimeout (retry)", () => {
       calls++;
       return new Response(null, { status: 404, statusText: "Not Found" });
     });
-    const res = await fetchWithTimeout("https://example.com/missing");
+    const res = await fetchWithRetry("https://example.com/missing");
     expect(res.status).toBe(404);
     expect(calls).toBe(1);
   });
@@ -88,7 +84,7 @@ describe("fetchWithTimeout (retry)", () => {
       calls++;
       throw new Error("network error");
     });
-    await expect(fetchWithTimeout("https://example.com/fail")).rejects.toThrow("network error");
+    await expect(fetchWithRetry("https://example.com/fail")).rejects.toThrow("network error");
     expect(calls).toBe(3);
   });
 
@@ -98,7 +94,7 @@ describe("fetchWithTimeout (retry)", () => {
       calls++;
       return new Response(null, { status: 502 });
     });
-    const res = await fetchWithTimeout("https://example.com/fail");
+    const res = await fetchWithRetry("https://example.com/fail");
     expect(res.status).toBe(502);
     expect(calls).toBe(3);
   });
@@ -110,65 +106,48 @@ describe("fetchWithTimeout (retry)", () => {
       throw new Error("network error");
     });
     await expect(
-      fetchWithTimeout("https://example.com/fail", undefined, {
+      fetchWithRetry("https://example.com/fail", {
         retryCount: 0,
       }),
     ).rejects.toThrow("network error");
     expect(calls).toBe(1);
   });
-});
 
-describe("fetchStream", () => {
-  it("delivers response body as a Readable stream", async ({ expect }) => {
-    const data = Buffer.from("response body bytes");
-    const body = new ReadableStream({
-      start(controller) {
-        controller.enqueue(data);
-        controller.close();
-      },
+  it("rejects immediately with a pre-aborted signal", async ({ expect }) => {
+    let calls = 0;
+    using _fetch = stubFetch(async () => {
+      calls++;
+      return new Response(null, { status: 200 });
     });
-    using _fetch = stubFetch(async () => new Response(body, { status: 200 }));
-    const readable = await fetchStream("https://example.com/file");
-    const chunks: Buffer[] = [];
-    for await (const chunk of readable) chunks.push(Buffer.from(chunk));
-    expect(Buffer.concat(chunks)).toEqual(data);
+    const ac = new AbortController();
+    ac.abort();
+    await expect(
+      fetchWithRetry("https://example.com/abort", {
+        signal: ac.signal,
+        retryCount: 2,
+      }),
+    ).rejects.toThrow();
+    expect(calls).toBe(0);
   });
 
-  it("rejects non-ok HTTP responses with status details", async ({ expect }) => {
-    using _fetch = stubFetch(
-      async () => new Response(null, { status: 404, statusText: "Not Found" }),
-    );
-    await expect(fetchStream("https://example.com/missing")).rejects.toThrow(/404.*Not Found/);
-  });
-
-  it("rejects response with missing body", async ({ expect }) => {
-    using _fetch = stubFetch(
-      async () => ({ ok: true, body: null, status: 200, statusText: "OK" }) as Response,
-    );
-    await expect(fetchStream("https://example.com/empty")).rejects.toThrow("body is empty");
+  it("does not retry when parent signal aborts during fetch", async ({ expect }) => {
+    vi.useFakeTimers();
+    const ac = new AbortController();
+    let calls = 0;
+    using _fetch = stubFetch(async (_url, init?: RequestInit) => {
+      calls++;
+      ac.abort();
+      init?.signal?.throwIfAborted();
+      return new Response(null, { status: 200 });
+    });
+    await expect(
+      fetchWithRetry("https://example.com/abort", {
+        signal: ac.signal,
+        retryCount: 2,
+      }),
+    ).rejects.toThrow();
+    expect(calls).toBe(1);
   });
 });
 
-describe("readJsonBounded", () => {
-  it("parses valid JSON within bounds", async ({ expect }) => {
-    const json = JSON.stringify({ key: "value" });
-    const response = new Response(json);
-    const result = await readJsonBounded(response, 1024);
-    expect(result).toEqual({ key: "value" });
-  });
 
-  it("throws when response exceeds maxBytes", async ({ expect }) => {
-    const json = JSON.stringify({ data: "x".repeat(100) });
-    const response = new Response(json);
-    await expect(readJsonBounded(response, 10)).rejects.toThrow(/too large.*exceeded.*10 byte/);
-  });
-
-  it("falls back to response.text() when body is null", async ({ expect }) => {
-    const response = {
-      body: null,
-      text: async () => '{"ok":true}',
-    } as unknown as Response;
-    const result = await readJsonBounded(response, 1024);
-    expect(result).toEqual({ ok: true });
-  });
-});

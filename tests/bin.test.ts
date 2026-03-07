@@ -111,7 +111,7 @@ describe("slsa bin", () => {
 
     const { code, stderr } = await run(["wget"], tmp.path, { SLSA_DEBUG: "1" });
     expect(code).toBe(0);
-    expect(stderr).toContain("[slsa] package: node-reqwest@0.0.0");
+    expect(stderr).toContain("[slsa] version 0.0.0 detected");
   });
 
   it("debug output is suppressed by default", async ({ expect }) => {
@@ -148,6 +148,6 @@ describe("slsa bin", () => {
     await writeFile(join(tmp.path, "package.json"), "{}");
     const { code, stderr } = await run(["unknown"], tmp.path);
     expect(code).toBe(1);
-    expect(stderr).toContain("Unknown command");
+    expect(stderr).toContain("Usage:");
   });
 });

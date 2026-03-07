@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 
 import dedent from "dedent";
+
+import { warn } from "./log.ts";
 
 /** Check whether an error is a Node.js `ENOENT` (file not found) error. */
 export function isEnoent(err: unknown): boolean {
@@ -52,6 +54,19 @@ export function assertWithinDir({
   }
 }
 
+/**
+ * Remove a file, ignoring `ENOENT`. Logs a warning on other errors.
+ */
+export async function safeUnlink(path: string, label: string): Promise<void> {
+  try {
+    await unlink(path);
+  } catch (err: unknown) {
+    if (!isEnoent(err)) {
+      warn(`failed to clean up ${label}: ${err}`);
+    }
+  }
+}
+
 if (import.meta.vitest) {
   const { describe, it } = import.meta.vitest;
 
@@ -84,6 +99,21 @@ if (import.meta.vitest) {
           label: "addon.path",
         }),
       ).not.toThrow();
+    });
+  });
+
+  describe("safeUnlink", () => {
+    it("removes an existing file", async ({ expect }) => {
+      const { writeFile, stat } = await import("node:fs/promises");
+      await using tmp = await tempDir();
+      const file = join(tmp.path, "test.txt");
+      await writeFile(file, "data");
+      await safeUnlink(file, "test");
+      await expect(stat(file)).rejects.toThrow();
+    });
+
+    it("ignores ENOENT silently", async ({ expect }) => {
+      await expect(safeUnlink("/nonexistent/file.txt", "test")).resolves.toBeUndefined();
     });
   });
 }

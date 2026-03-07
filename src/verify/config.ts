@@ -6,7 +6,7 @@ import {
   DEFAULT_STALL_TIMEOUT_MS,
   DEFAULT_TIMEOUT_MS,
 } from "../download.ts";
-import type { VerifyOptions } from "../types.ts";
+import type { BundleVerifier, VerifyOptions } from "../types.ts";
 import { MAX_BUNDLE_BYTES, MAX_JSON_RESPONSE_BYTES, RESOLVE_CONCURRENCY } from "./constants.ts";
 
 /** Fully resolved internal config — not exported from the package. */
@@ -19,6 +19,7 @@ export interface ResolvedConfig {
   readonly retryCount: number;
   readonly retryBaseMs: number;
   readonly signal: AbortSignal | undefined;
+  readonly verifier: BundleVerifier | undefined;
 }
 
 /** Merge per-call VerifyOptions with module-level defaults. */
@@ -32,5 +33,6 @@ export function resolveConfig(options?: VerifyOptions): ResolvedConfig {
     retryCount: options?.retryCount ?? DEFAULT_RETRY_COUNT,
     retryBaseMs: options?.retryBaseMs ?? DEFAULT_RETRY_BASE_MS,
     signal: options?.signal,
+    verifier: options?.verifier,
   };
 }

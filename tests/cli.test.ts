@@ -15,7 +15,7 @@ describe("runSlsaInner", () => {
   it("returns exitCode 0 for --help", async ({ expect }) => {
     const origArgv = process.argv;
     process.argv = ["node", "slsa", "--help"];
-    const spy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
       const { exitCode } = await runSlsaInner();
       expect(exitCode).toBe(0);
@@ -29,7 +29,7 @@ describe("runSlsaInner", () => {
   it("returns exitCode 0 when no command given", async ({ expect }) => {
     const origArgv = process.argv;
     process.argv = ["node", "slsa"];
-    const spy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     try {
       const { exitCode } = await runSlsaInner();
       expect(exitCode).toBe(0);
@@ -47,7 +47,7 @@ describe("runSlsaInner", () => {
     try {
       const { exitCode } = await runSlsaInner();
       expect(exitCode).toBe(1);
-      expect(spy).toHaveBeenCalledWith(expect.stringContaining("Unknown command"));
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining("Usage:"));
     } finally {
       process.argv = origArgv;
       spy.mockRestore();

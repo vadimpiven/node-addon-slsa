@@ -2,8 +2,9 @@
 
 import { randomBytes } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, rename, unlink } from "node:fs/promises";
+import { mkdir, rename } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
+import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createGunzip, createGzip } from "node:zlib";
 
@@ -11,12 +12,13 @@ import process from "node:process";
 
 import dedent from "dedent";
 
-import { extractExpectedRepo, readPackageJson } from "./config.ts";
-import { createHashPassthrough, createStallGuard, fetchStream } from "./download.ts";
-import { assertWithinDir, isEnoent } from "./util/fs.ts";
+import { extractExpectedRepo, readPackageJson } from "./package.ts";
+import { fetchWithRetry } from "./download.ts";
+import { assertWithinDir, safeUnlink } from "./util/fs.ts";
 import { log, warn } from "./util/log.ts";
 import { evalTemplate } from "./util/template.ts";
 import type { SemVerString, VerifyOptions } from "./types.ts";
+import { createHashPassthrough } from "./util/hash.ts";
 import { verifyPackageProvenance } from "./verify/index.ts";
 
 /** Build the template variables available for `addon.url`: `{version}`, `{platform}`, `{arch}`. */
@@ -36,6 +38,15 @@ export async function wget(
 ): Promise<void> {
   const { name, version, addon, repository } = await readPackageJson(packageDir);
 
+  // 0.0.0 is treated as a local/development placeholder — skip download and verification
+  if (version === "0.0.0") {
+    warn(dedent`
+      version 0.0.0 detected — skipping provenance verification.
+      Never publish 0.0.0 to npm registry.
+    `);
+    return;
+  }
+
   const expectedRepo = extractExpectedRepo(repository);
   if (!expectedRepo) {
     throw new Error(dedent`
@@ -44,32 +55,21 @@ export async function wget(
     `);
   }
 
-  const resolvedPkgDir = resolve(packageDir);
-  const binaryPath = join(resolvedPkgDir, addon.path);
-  assertWithinDir({ baseDir: resolvedPkgDir, target: binaryPath, label: "addon.path" });
-  const addonDir = dirname(binaryPath);
-  const downloadUrl = evalTemplate(addon.url, createTemplateVars(version));
-
-  await mkdir(addonDir, { recursive: true });
-  log(`package: ${name}@${version}`);
-
-  // 0.0.0 is treated as a local/development placeholder — skip download and verification
-  if (version === "0.0.0") {
-    warn(dedent`
-      version 0.0.0 detected — skipping provenance verification.
-      Never publish 0.0.0 to npm.
-    `);
-    return;
-  }
-
-  log(`download URL: ${downloadUrl}`);
-
   const provenance = await verifyPackageProvenance({
     packageName: name,
     version,
     repo: expectedRepo,
     ...options,
   });
+
+  const resolvedPkgDir = resolve(packageDir);
+  const binaryPath = join(resolvedPkgDir, addon.path);
+  assertWithinDir({ baseDir: resolvedPkgDir, target: binaryPath, label: "addon.path" });
+
+  const downloadUrl = evalTemplate(addon.url, createTemplateVars(version));
+  const addonDir = dirname(binaryPath);
+  await mkdir(addonDir, { recursive: true });
+  log(`package: ${name}@${version}`);
 
   // Stream: download → hash compressed bytes → decompress → write temp file.
   // The hash is computed over the compressed bytes because
@@ -81,8 +81,15 @@ export async function wget(
 
   try {
     await pipeline(
-      await fetchStream(downloadUrl, options),
-      createStallGuard(options),
+      await fetchWithRetry(downloadUrl, options).then((r) => {
+        if (!r.ok) {
+          throw new Error(`download failed: ${downloadUrl}: ${r.status} ${r.statusText}`);
+        }
+        if (!r.body) {
+          throw new Error(`download failed: ${downloadUrl}: response body is empty`);
+        }
+        return Readable.fromWeb(r.body);
+      }),
       hashStream,
       createGunzip(),
       createWriteStream(tmpPath, { mode: 0o755, flags: "wx" }),
@@ -94,13 +101,7 @@ export async function wget(
 
     await rename(tmpPath, binaryPath);
   } catch (err: unknown) {
-    try {
-      await unlink(tmpPath);
-    } catch (unlinkErr: unknown) {
-      if (!isEnoent(unlinkErr)) {
-        warn(`failed to clean up temp file: ${unlinkErr}`);
-      }
-    }
+    await safeUnlink(tmpPath, "temp file");
     throw err;
   }
 }
@@ -115,6 +116,7 @@ export async function pack(packageDir: string, options?: { signal?: AbortSignal 
   const resolvedPkgDir = resolve(packageDir);
   const binaryPath = join(resolvedPkgDir, addon.path);
   assertWithinDir({ baseDir: resolvedPkgDir, target: binaryPath, label: "addon.path" });
+
   const addonDir = dirname(binaryPath);
   const packedName = basename(evalTemplate(addon.url, createTemplateVars(version)));
   const packedFile = join(addonDir, packedName);
@@ -128,13 +130,7 @@ export async function pack(packageDir: string, options?: { signal?: AbortSignal 
       { signal: options?.signal },
     );
   } catch (err: unknown) {
-    try {
-      await unlink(packedFile);
-    } catch (unlinkErr: unknown) {
-      if (!isEnoent(unlinkErr)) {
-        warn(`failed to clean up partial output: ${unlinkErr}`);
-      }
-    }
+    await safeUnlink(packedFile, "partial output");
     throw err;
   }
 }

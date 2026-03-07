@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+import type { createVerifier } from "sigstore";
+
+/** Sigstore bundle verifier created by `createVerifier()` from the `sigstore` package. */
+export type BundleVerifier = Awaited<ReturnType<typeof createVerifier>>;
+
 /** GitHub `owner/repo` slug. */
 export type GitHubRepo = `${string}/${string}`;
 
@@ -20,21 +25,15 @@ export type RunInvocationURI = string & {
   readonly [__runInvocationURIBrand]: true;
 };
 
-// ── Regex constants ──────────────────────────────────────────────
-
-const SHA256_RE = /^[a-f0-9]{64}$/;
 /** Shared with config.ts for Zod schema composition. */
 export const SEMVER_RE = /^\d+\.\d+\.\d+(-[\w.]+)?(\+[\w.]+)?$/;
-const GITHUB_REPO_RE = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/;
-const RUN_INVOCATION_URI_RE =
-  /^https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+\/actions\/runs\/\d+\/attempts\/\d+$/;
 
 /**
  * Validate and brand a lowercase hex-encoded SHA-256 digest.
  * @throws {TypeError} if the input is not exactly 64 hex characters.
  */
 export function sha256Hex(value: string): Sha256Hex {
-  if (!SHA256_RE.test(value)) {
+  if (!/^[a-f0-9]{64}$/.test(value)) {
     throw new TypeError(`invalid SHA-256 hex digest: ${value}`);
   }
   return value as Sha256Hex;
@@ -56,7 +55,7 @@ export function semVerString(value: string): SemVerString {
  * @throws {TypeError} if the input is not in `owner/repo` format.
  */
 export function githubRepo(value: string): GitHubRepo {
-  if (!GITHUB_REPO_RE.test(value)) {
+  if (!/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(value)) {
     throw new TypeError(`invalid GitHub repo: ${value}`);
   }
   return value as GitHubRepo;
@@ -67,19 +66,14 @@ export function githubRepo(value: string): GitHubRepo {
  * @throws {TypeError} if the input does not match the expected URL format.
  */
 export function runInvocationURI(value: string): RunInvocationURI {
-  if (!RUN_INVOCATION_URI_RE.test(value)) {
+  if (!/^https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+\/actions\/runs\/\d+\/attempts\/\d+$/.test(value)) {
     throw new TypeError(`invalid run invocation URI: ${value}`);
   }
   return value as RunInvocationURI;
 }
 
-// ── Per-call transport options ───────────────────────────────────
-
-/**
- * Optional per-call transport overrides.
- * All fields have sensible defaults — pass only what you need.
- */
-export interface VerifyOptions {
+/** Options for {@link fetchWithRetry}. */
+export interface FetchOptions {
   /** Per-request timeout in ms. @default 30_000 */
   readonly timeoutMs?: number | undefined;
   /** Stall timeout: abort if no data for this long. @default 30_000 */
@@ -88,14 +82,25 @@ export interface VerifyOptions {
   readonly retryCount?: number | undefined;
   /** Base delay for exponential backoff in ms. @default 500 */
   readonly retryBaseMs?: number | undefined;
+  /** AbortSignal for cooperative cancellation. */
+  readonly signal?: AbortSignal | undefined;
+  /** Custom HTTP headers for fetch requests. */
+  readonly headers?: Record<string, string> | undefined;
+}
+
+/**
+ * Optional per-call transport overrides.
+ * All fields have sensible defaults — pass only what you need.
+ */
+export interface VerifyOptions extends FetchOptions {
   /** Upper bound for attestation bundle size in bytes. @default 52_428_800 (50 MB) */
   readonly maxBundleBytes?: number | undefined;
   /** Upper bound for JSON API response size in bytes. @default 52_428_800 (50 MB) */
   readonly maxJsonResponseBytes?: number | undefined;
   /** Max concurrent bundle_url fetches. @default 5 */
   readonly resolveConcurrency?: number | undefined;
-  /** AbortSignal for cooperative cancellation. */
-  readonly signal?: AbortSignal | undefined;
+  /** Pre-created sigstore verifier. Created automatically if not provided. */
+  readonly verifier?: BundleVerifier | undefined;
 }
 
 if (import.meta.vitest) {

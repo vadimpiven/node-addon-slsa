@@ -114,7 +114,37 @@ if (import.meta.vitest) {
     });
   });
 
+  describe("getExtensionValue (null)", () => {
+    it("returns null when extension OID is absent", ({ expect }) => {
+      const mockCert = {
+        extension: () => null,
+      } as unknown as X509Certificate;
+      expect(getExtensionValue(mockCert, "1.2.3.4")).toBeNull();
+    });
+  });
+
   describe("verifyCertificateOIDs", () => {
+    it("falls back to V1 issuer OID when V2 is absent", ({ expect }) => {
+      const expectedRepo = "owner/repo";
+      const mockCert = {
+        extension: (oid: string) => {
+          if (oid === OID_ISSUER_V2) return null;
+          if (oid === OID_ISSUER_V1)
+            return {
+              valueObj: {},
+              value: Buffer.from(GITHUB_ACTIONS_ISSUER),
+            };
+          if (oid === OID_SOURCE_REPO_URI)
+            return {
+              valueObj: { subs: [{ value: Buffer.from(`https://github.com/${expectedRepo}`) }] },
+              value: Buffer.from(`https://github.com/${expectedRepo}`),
+            };
+          return null;
+        },
+      } as unknown as X509Certificate;
+      expect(() => verifyCertificateOIDs(mockCert, expectedRepo)).not.toThrow();
+    });
+
     it("accepts correct issuer and source repo", ({ expect }) => {
       const expectedRepo = "owner/repo";
       const mockCert = {

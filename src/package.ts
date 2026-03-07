@@ -9,7 +9,6 @@ import { z } from "zod/v4";
 import { githubRepo, SEMVER_RE } from "./types.ts";
 import type { GitHubRepo, SemVerString } from "./types.ts";
 
-const NPM_PACKAGE_NAME_RE = /^(@[a-z0-9._-]+\/)?[a-z0-9._-]+$/;
 const SemVerStringSchema = z
   .string()
   .regex(SEMVER_RE)
@@ -30,7 +29,7 @@ const AddonConfigSchema = z.object({
 const RepositorySchema = z.union([z.string(), z.object({ url: z.string().optional() })]);
 
 const PackageJsonSchema = z.object({
-  name: z.string().regex(NPM_PACKAGE_NAME_RE),
+  name: z.string().min(1),
   version: SemVerStringSchema,
   addon: AddonConfigSchema,
   repository: RepositorySchema,

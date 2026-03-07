@@ -12,6 +12,8 @@ export { sha256Hex, semVerString, githubRepo, runInvocationURI } from "./types.t
 /** Types. */
 export type { PackageProvenance } from "./verify/index.ts";
 export type {
+  BundleVerifier,
+  FetchOptions,
   GitHubRepo,
   RunInvocationURI,
   SemVerString,

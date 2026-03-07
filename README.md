@@ -163,21 +163,21 @@ On failure, the temp file is removed and installation aborts.
 
 ### Environment variables
 
-| Variable       | Purpose                                           |
-| -------------- | ------------------------------------------------- |
-| `SLSA_DEBUG=1` | Debug logging to stderr                           |
-| `GITHUB_TOKEN` | GitHub API authentication (increases rate limits) |
+| Variable       | Purpose                                                             |
+| -------------- | ------------------------------------------------------------------- |
+| `GITHUB_TOKEN` | GitHub API auth (required for private repos, increases rate limits) |
+| `SLSA_DEBUG=1` | Debug logging to stderr                                             |
 
 ### Programmatic API
 
 #### Types
 
-| Type               | Constructor                 | Purpose                                  |
-| ------------------ | --------------------------- | ---------------------------------------- |
-| `GitHubRepo`       | `githubRepo(value)`         | GitHub `owner/repo` slug                 |
-| `SemVerString`     | `semVerString(value)`       | Strict semver (no `v` prefix)            |
-| `Sha256Hex`        | `sha256Hex(value)`          | Lowercase hex-encoded SHA-256 (64 chars) |
-| `RunInvocationURI` | `runInvocationURI(value)`   | GitHub Actions run invocation URL        |
+| Type               | Constructor               | Purpose                                  |
+| ------------------ | ------------------------- | ---------------------------------------- |
+| `GitHubRepo`       | `githubRepo(value)`       | GitHub `owner/repo` slug                 |
+| `SemVerString`     | `semVerString(value)`     | Strict semver (no `v` prefix)            |
+| `Sha256Hex`        | `sha256Hex(value)`        | Lowercase hex-encoded SHA-256 (64 chars) |
+| `RunInvocationURI` | `runInvocationURI(value)` | GitHub Actions run invocation URL        |
 
 Constructors validate at runtime and throw `TypeError` on invalid input.
 
@@ -192,7 +192,11 @@ import {
   semVerString,
   githubRepo,
 } from "node-addon-slsa";
-import type { PackageProvenance, RunInvocationURI, VerifyOptions } from "node-addon-slsa";
+import type {
+  PackageProvenance,
+  RunInvocationURI,
+  VerifyOptions,
+} from "node-addon-slsa";
 
 // Verify npm package provenance via sigstore.
 // Returns { runInvocationURI, verifyAddon() }.
@@ -262,9 +266,8 @@ JSON import to resolve under strict ESM exports.
 
 ### Authentication
 
-Public repositories work without authentication.
-Unauthenticated requests are limited to 60/hour by GitHub. Set
-`GITHUB_TOKEN` to increase:
+Public repositories work without authentication. Private repositories **require** `GITHUB_TOKEN`.
+Unauthenticated requests are limited to 60/hour by GitHub. Set `GITHUB_TOKEN` to increase:
 
 ```sh
 export GITHUB_TOKEN="$(gh auth token)"

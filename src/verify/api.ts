@@ -46,30 +46,10 @@ export async function verifyPackageProvenance(
     repo: GitHubRepo;
   } & VerifyOptions,
 ): Promise<PackageProvenance> {
-  const {
-    packageName,
-    version,
-    repo,
-    timeoutMs,
-    stallTimeoutMs,
-    retryCount,
-    retryBaseMs,
-    maxBundleBytes,
-    maxJsonResponseBytes,
-    resolveConcurrency,
-    signal,
-  } = options;
-  const verifyOpts: VerifyOptions = {
-    timeoutMs,
-    stallTimeoutMs,
-    retryCount,
-    retryBaseMs,
-    maxBundleBytes,
-    maxJsonResponseBytes,
-    resolveConcurrency,
-    signal,
-  };
-  const config = resolveConfig(verifyOpts);
+  const { packageName, version, repo } = options;
+  const verifier =
+    options.verifier ?? (await createVerifier({ certificateIssuer: GITHUB_ACTIONS_ISSUER }));
+  const config = resolveConfig({ ...options, verifier });
 
   log(`verifying npm package provenance`);
   const attestations = await fetchNpmAttestations({ packageName, version }, config);
@@ -87,7 +67,6 @@ export async function verifyPackageProvenance(
     );
   }
 
-  const verifier = await createVerifier({ certificateIssuer: GITHUB_ACTIONS_ISSUER });
   // Wrap: verify() may throw synchronously in some sigstore versions
   await Promise.resolve(verifier.verify(provenanceAttestation.bundle));
 
@@ -121,7 +100,7 @@ export async function verifyPackageProvenance(
   return {
     runInvocationURI: runURI,
     verifyAddon: ({ sha256 }: { sha256: Sha256Hex }) =>
-      verifyAddonProvenance({ sha256, runInvocationURI: runURI, repo, ...verifyOpts }),
+      verifyAddonProvenance({ ...options, sha256, runInvocationURI: runURI, verifier }),
   };
 }
 
@@ -145,7 +124,8 @@ export async function verifyAddonProvenance(
   log(`verifying addon provenance`);
   const ghAttestations = await fetchGitHubAttestations({ repo, sha256 }, config);
 
-  const verifier = await createVerifier({ certificateIssuer: GITHUB_ACTIONS_ISSUER });
+  const verifier =
+    config.verifier ?? (await createVerifier({ certificateIssuer: GITHUB_ACTIONS_ISSUER }));
 
   let verifyFailures = 0;
   for (const attestation of ghAttestations.attestations) {
@@ -163,8 +143,7 @@ export async function verifyAddonProvenance(
 
     const certRunURI = getExtensionValue(cert, OID_RUN_INVOCATION_URI);
     if (certRunURI === runInvocationURI) {
-      verifyCertificateOIDs(cert, repo);
-      return;
+      return verifyCertificateOIDs(cert, repo);
     }
   }
 

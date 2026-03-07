@@ -77,10 +77,6 @@ describe("wget", () => {
 
     expect(spy).toHaveBeenCalledWith(expect.stringContaining("0.0.0"));
     spy.mockRestore();
-
-    // dist/ created but no binary downloaded
-    await expect(access(join(tmp.path, "dist"))).resolves.toBeUndefined();
-    await expect(access(join(tmp.path, "dist", "node_reqwest.node"))).rejects.toThrow();
   });
 
   it("throws when repository is not on GitHub", async ({ expect }) => {

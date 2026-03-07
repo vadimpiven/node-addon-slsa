@@ -12,14 +12,15 @@ const DEBUG_HINT = `Set SLSA_DEBUG=1 for detailed diagnostics.`;
 const HELP = `Usage: slsa <command> [options]
 
 Commands:
-  wget   Download, verify, and install the native addon
-  pack   Gzip-compress the native addon for release
+  wget          Download, verify, and install the native addon
+  pack          Gzip-compress the native addon for release
 
 Options:
-  -h, --help     Show this help message
+  -h, --help    Show this help message
 
 Environment:
-  SLSA_DEBUG=1   Debug logging to stderr
+  GITHUB_TOKEN  GitHub API auth (required for private repos, increases rate limits)
+  SLSA_DEBUG=1  Debug logging to stderr
 `;
 
 /**
@@ -48,7 +49,7 @@ export async function runSlsaInner(options?: {
   const command = positionals[0];
 
   if (values.help || !command) {
-    process.stdout.write(HELP);
+    console.log(HELP);
     return { exitCode: 0 };
   }
 
@@ -64,15 +65,18 @@ export async function runSlsaInner(options?: {
         await wget(packageDir, signal ? { signal } : undefined);
         break;
       default:
-        console.error(`Unknown command: ${command}. Use "pack" or "wget".`);
+        console.error(HELP);
         return { exitCode: 1 };
     }
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error(message);
-    if (err instanceof Error && !isProvenanceError(err)) {
-      if (err.stack) log(err.stack);
-      console.error(DEBUG_HINT);
+    if (err instanceof Error) {
+      console.error(err.message);
+      if (!isProvenanceError(err)) {
+        if (err.stack) log(err.stack);
+        console.error(DEBUG_HINT);
+      }
+    } else {
+      console.error(String(err));
     }
     return { exitCode: 1 };
   }
