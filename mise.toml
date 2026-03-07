@@ -56,14 +56,14 @@ sources = ["pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json"]
 [tasks."check:oxlint"]
 description = "Check JS/TS with oxlint"
 hide = true
-depends = ["setup"]
+wait_for = ["setup"]
 run = "pnpm exec oxlint . --deny-warnings"
 sources = ["{src,tests,bin}/**/*.{ts,js,mts,mjs}"]
 
 [tasks."fix:oxlint"]
 description = "Fix JS/TS with oxlint"
 hide = true
-depends = ["setup"]
+wait_for = ["setup"]
 run = "pnpm exec oxlint . --fix"
 sources = ["{src,tests,bin}/**/*.{ts,js,mts,mjs}"]
 
@@ -71,7 +71,7 @@ sources = ["{src,tests,bin}/**/*.{ts,js,mts,mjs}"]
 [tasks."check:oxfmt"]
 description = "Check JS/TS/JSON with oxfmt"
 hide = true
-depends = ["setup"]
+wait_for = ["setup"]
 run = "pnpm exec oxfmt --check ."
 sources = [
   "*.{json,jsonc}",
@@ -82,7 +82,7 @@ sources = [
 [tasks."fix:oxfmt"]
 description = "Format JS/TS/JSON with oxfmt"
 hide = true
-depends = ["setup"]
+wait_for = ["setup"]
 run = "pnpm exec oxfmt --write ."
 sources = [
   "*.{json,jsonc}",
@@ -107,14 +107,14 @@ sources = ["*.toml"]
 [tasks."check:markdownlint"]
 description = "Check Markdown files"
 hide = true
-depends = ["setup"]
+wait_for = ["setup"]
 run = "pnpm exec markdownlint-cli2"
 sources = ["*.md", ".markdownlint-cli2.jsonc"]
 
 [tasks."fix:markdownlint"]
 description = "Fix Markdown files"
 hide = true
-depends = ["setup"]
+wait_for = ["setup"]
 run = "pnpm exec markdownlint-cli2 --fix"
 sources = ["*.md", ".markdownlint-cli2.jsonc"]
 
@@ -192,7 +192,7 @@ run = [{ task = "check:actionlint" }]
 [tasks."check:trivy-fs"]
 description = "Security scan filesystem with trivy"
 hide = true
-depends = ["setup"]
+wait_for = ["setup"]
 run = "trivy fs . --format table --ignore-unfixed"
 sources = ["*.{toml,lock,json,yaml,yml}"]
 
@@ -206,6 +206,7 @@ run = [{ task = "check:trivy-fs" }]
 description = "Verify code quality"
 alias = "c"
 depends = [
+  "setup",
   "check:oxlint",
   "check:oxfmt",
   "check:taplo",
@@ -222,6 +223,7 @@ depends = [
 description = "Auto-fix code issues"
 alias = "f"
 depends = [
+  "setup",
   "fix:oxlint",
   "fix:oxfmt",
   "fix:taplo",

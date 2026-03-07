@@ -13,8 +13,10 @@ export default defineConfig({
   },
   build: {
     lib: {
-      entry: resolve("src/index.ts"),
-      fileName: "index",
+      entry: {
+        index: resolve("src/index.ts"),
+        cli: resolve("src/cli.ts"),
+      },
       formats: ["es"],
     },
     outDir: "dist",
@@ -36,7 +38,7 @@ export default defineConfig({
       thresholds: { lines: 80, branches: 80, functions: 80, statements: 80 },
     },
     reporters: ["default", ["junit", { outputFile: "report.junit.xml" }]],
-    detectAsyncLeaks: false,
+    detectAsyncLeaks: true,
     includeSource: ["src/**/*.ts"],
     include: ["tests/**/*.test.ts"],
   },

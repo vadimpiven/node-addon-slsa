@@ -1,9 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-/** @internal CLI entry point, consumed by `bin/slsa.mjs`. */
-export { runSlsa } from "./cli.ts";
-
-/** Public API. */
+/** Error handling. */
 export { ProvenanceError, isProvenanceError } from "./util/provenance-error.ts";
-export { verifyPackageProvenance, verifyAddonProvenance } from "./verify.ts";
-export type { PackageProvenance, RunInvocationURI } from "./verify.ts";
+
+/** Verification. */
+export { verifyPackageProvenance, verifyAddonProvenance } from "./verify/index.ts";
+
+/** Type constructors. */
+export { sha256Hex, semVerString, githubRepo, runInvocationURI } from "./types.ts";
+
+/** Types. */
+export type { PackageProvenance } from "./verify/index.ts";
+export type {
+  BundleVerifier,
+  FetchOptions,
+  GitHubRepo,
+  RunInvocationURI,
+  SemVerString,
+  Sha256Hex,
+  VerifyOptions,
+} from "./types.ts";

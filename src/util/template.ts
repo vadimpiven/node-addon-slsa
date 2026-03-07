@@ -11,7 +11,12 @@ export function evalTemplate<T extends Record<string, string>>(template: string,
   }
   const unresolved = result.match(/\{[a-zA-Z_]\w*\}/g);
   if (unresolved) {
-    throw new Error(`unresolved template placeholders: ${unresolved.join(", ")}`);
+    const available = Object.keys(vars)
+      .map((k) => `{${k}}`)
+      .join(", ");
+    throw new Error(
+      `unresolved template placeholders: ${unresolved.join(", ")}. Available: ${available}`,
+    );
   }
   return result;
 }
