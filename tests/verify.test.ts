@@ -9,6 +9,7 @@ import { fetchGitHubAttestations, fetchNpmAttestations } from "../src/verify/att
 import { stubFetch } from "./helpers.ts";
 
 const defaultConfig = resolveConfig();
+const tinyBundleConfig = resolveConfig({ maxBundleBytes: 10, retryCount: 0 });
 
 vi.setConfig({ testTimeout: 30_000 });
 
@@ -186,5 +187,45 @@ describe("fetchGitHubAttestations", () => {
     await expect(
       fetchGitHubAttestations({ repo: "owner/repo", sha256: FAKE_HASH }, defaultConfig),
     ).rejects.toThrow(/No provenance attestation found/);
+  });
+
+  it("throws when Content-Length exceeds maxBundleBytes", async ({ expect }) => {
+    using _fetch = stubFetch(async (url: string | URL | Request) => {
+      const urlString = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+      if (new URL(urlString).hostname === "api.github.com") {
+        return new Response(
+          JSON.stringify({
+            attestations: [{ bundle: null, bundle_url: "https://blob.example.com/big" }],
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response("x", {
+        status: 200,
+        headers: { "Content-Length": "999999" },
+      });
+    });
+    await expect(
+      fetchGitHubAttestations({ repo: "owner/repo", sha256: FAKE_HASH }, tinyBundleConfig),
+    ).rejects.toThrow(ProvenanceError);
+  });
+
+  it("throws when actual response body exceeds maxBundleBytes", async ({ expect }) => {
+    using _fetch = stubFetch(async (url: string | URL | Request) => {
+      const urlString = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+      if (new URL(urlString).hostname === "api.github.com") {
+        return new Response(
+          JSON.stringify({
+            attestations: [{ bundle: null, bundle_url: "https://blob.example.com/big" }],
+          }),
+          { status: 200 },
+        );
+      }
+      // No Content-Length header, but body exceeds maxBundleBytes (10)
+      return new Response("x".repeat(100), { status: 200 });
+    });
+    await expect(
+      fetchGitHubAttestations({ repo: "owner/repo", sha256: FAKE_HASH }, tinyBundleConfig),
+    ).rejects.toThrow(ProvenanceError);
   });
 });

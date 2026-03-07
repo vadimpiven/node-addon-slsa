@@ -176,6 +176,24 @@ if (import.meta.vitest) {
       expect(() => verifyCertificateOIDs(mockCert, "any/repo")).toThrow(ProvenanceError);
     });
 
+    it("rejects certificates with missing source repo URI", ({ expect }) => {
+      const mockCert = {
+        extension: (oid: string) => {
+          if (oid === OID_ISSUER_V2)
+            return {
+              valueObj: { subs: [{ value: Buffer.from(GITHUB_ACTIONS_ISSUER) }] },
+              value: Buffer.from(GITHUB_ACTIONS_ISSUER),
+            };
+          // OID_SOURCE_REPO_URI returns null
+          return null;
+        },
+      } as unknown as X509Certificate;
+      expect(() => verifyCertificateOIDs(mockCert, "owner/repo")).toThrow(ProvenanceError);
+      expect(() => verifyCertificateOIDs(mockCert, "owner/repo")).toThrow(
+        /Source repository mismatch/,
+      );
+    });
+
     it("rejects certificates with wrong source repo", ({ expect }) => {
       const wrongRepo = "https://github.com/evil/repo";
       const mockCert = {

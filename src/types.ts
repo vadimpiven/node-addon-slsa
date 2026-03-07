@@ -66,7 +66,11 @@ export function githubRepo(value: string): GitHubRepo {
  * @throws {TypeError} if the input does not match the expected URL format.
  */
 export function runInvocationURI(value: string): RunInvocationURI {
-  if (!/^https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+\/actions\/runs\/\d+\/attempts\/\d+$/.test(value)) {
+  if (
+    !/^https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+\/actions\/runs\/\d+\/attempts\/\d+$/.test(
+      value,
+    )
+  ) {
     throw new TypeError(`invalid run invocation URI: ${value}`);
   }
   return value as RunInvocationURI;

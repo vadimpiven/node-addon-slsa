@@ -112,6 +112,11 @@ if (import.meta.vitest) {
     it("returns null for missing url in object", ({ expect }) => {
       expect(extractExpectedRepo({})).toBeNull();
     });
+
+    it("returns null when extracted slug has characters rejected by githubRepo", ({ expect }) => {
+      // The URL regex extracts "owner/repo%20name", but githubRepo() rejects '%'
+      expect(extractExpectedRepo("git@github.com:owner/repo%20name.git")).toBeNull();
+    });
   });
 
   describe("readPackageJson", () => {

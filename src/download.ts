@@ -53,10 +53,7 @@ function createStallGuard(stallTimeoutMs: number): TransformStream<Uint8Array, U
  * When the response has a body, it is piped through a stall guard that
  * errors if no data arrives within `stallTimeoutMs`.
  */
-export async function fetchWithRetry(
-  url: string,
-  options?: FetchOptions,
-): Promise<Response> {
+export async function fetchWithRetry(url: string, options?: FetchOptions): Promise<Response> {
   const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const retryCount = options?.retryCount ?? DEFAULT_RETRY_COUNT;
   const retryBaseMs = options?.retryBaseMs ?? DEFAULT_RETRY_BASE_MS;
@@ -117,7 +114,7 @@ if (import.meta.vitest) {
   describe("createStallGuard", () => {
     it("errors when no data arrives within stall timeout", async ({ expect }) => {
       const guard = createStallGuard(50);
-      const input = new ReadableStream({ start() { } }); // never pushes data
+      const input = new ReadableStream({ start() {} }); // never pushes data
       const guarded = input.pipeThrough(guard);
       const reader = guarded.getReader();
       await expect(reader.read()).rejects.toThrow(/download stalled/);
