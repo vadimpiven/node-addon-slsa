@@ -50,6 +50,7 @@ jobs:
         with:
           env: "${{ needs.init.outputs.env }}"
           cache-key: "${{ needs.init.outputs.cache-key }}"
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
           mise-version: "${{ needs.init.outputs.mise-version }}"
       - name: "Bump version"
         run: 'pnpm run bump-version "${GITHUB_REF_NAME#v}"'

@@ -7,6 +7,9 @@ inputs:
   cache-key:
     description: "Cache key prefix"
     required: true
+  github-token:
+    description: "GitHub token for authenticated API requests"
+    required: true
   mise-version:
     description: "Mise version to use"
     required: true
@@ -16,9 +19,13 @@ runs:
     - name: "Create .env file"
       shell: "bash"
       env:
+        GITHUB_TOKEN: "${{ inputs.github-token }}"
         ENV: "${{ inputs.env }}"
       run: |
-        printf "%s" "$ENV" | jq -er 'to_entries[] | "\(.key)=\(.value)"' > .env
+        {
+          printf "GITHUB_TOKEN=%s\n" "$GITHUB_TOKEN"
+          printf "%s" "$ENV" | jq -er 'to_entries[] | "\(.key)=\(.value)"'
+        } > .env
     - name: "Restore caches"
       uses: "actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306" # v5.0.3
       with:
