@@ -46,7 +46,7 @@ run = [
   "corepack enable pnpm",
   "pnpm install --frozen-lockfile --prefer-offline",
 ]
-sources = ["pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json"]
+sources = ["pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json", "package/package.json"]
 
 # ============================================================================
 # LINT & CHECK/FIX TASKS - Verify and fix code quality and security
@@ -57,25 +57,25 @@ sources = ["pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json"]
 description = "Check JS/TS with oxlint"
 hide = true
 wait_for = ["setup"]
-run = "pnpm exec oxlint . --deny-warnings"
-sources = ["{src,tests,bin}/**/*.{ts,js,mts,mjs}"]
+run = "pnpm -w exec oxlint . --deny-warnings"
+sources = ["package/{src,tests,bin}/**/*.{ts,js,mts,mjs}"]
 
 [tasks."fix:oxlint"]
 description = "Fix JS/TS with oxlint"
 hide = true
 wait_for = ["setup"]
-run = "pnpm exec oxlint . --fix"
-sources = ["{src,tests,bin}/**/*.{ts,js,mts,mjs}"]
+run = "pnpm -w exec oxlint . --fix"
+sources = ["package/{src,tests,bin}/**/*.{ts,js,mts,mjs}"]
 
 # --- oxfmt (JS/TS/JSON) ---
 [tasks."check:oxfmt"]
 description = "Check JS/TS/JSON with oxfmt"
 hide = true
 wait_for = ["setup"]
-run = "pnpm exec oxfmt --check ."
+run = "pnpm -w exec oxfmt --check ."
 sources = [
   "*.{json,jsonc}",
-  "{src,tests,bin}/**/*.{ts,js,mts,mjs,json,jsonc}",
+  "package/{src,tests,bin}/**/*.{ts,js,mts,mjs,json,jsonc}",
   ".oxfmtrc.json",
 ]
 
@@ -83,10 +83,10 @@ sources = [
 description = "Format JS/TS/JSON with oxfmt"
 hide = true
 wait_for = ["setup"]
-run = "pnpm exec oxfmt --write ."
+run = "pnpm -w exec oxfmt --write ."
 sources = [
   "*.{json,jsonc}",
-  "{src,tests,bin}/**/*.{ts,js,mts,mjs,json,jsonc}",
+  "package/{src,tests,bin}/**/*.{ts,js,mts,mjs,json,jsonc}",
   ".oxfmtrc.json",
 ]
 
@@ -108,15 +108,15 @@ sources = ["*.toml"]
 description = "Check Markdown files"
 hide = true
 wait_for = ["setup"]
-run = "pnpm exec markdownlint-cli2"
-sources = ["*.md", ".markdownlint-cli2.jsonc"]
+run = "pnpm -w exec markdownlint-cli2 ."
+sources = ["*.md", "package/*.md", ".markdownlint-cli2.jsonc"]
 
 [tasks."fix:markdownlint"]
 description = "Fix Markdown files"
 hide = true
 wait_for = ["setup"]
-run = "pnpm exec markdownlint-cli2 --fix"
-sources = ["*.md", ".markdownlint-cli2.jsonc"]
+run = "pnpm -w exec markdownlint-cli2 --fix ."
+sources = ["*.md", "package/*.md", ".markdownlint-cli2.jsonc"]
 
 # --- yamlfmt (YAML) ---
 [tasks."check:yamlfmt"]
@@ -139,7 +139,7 @@ run = "typos ."
 run_windows = "exit 0"
 sources = [
   "*.{md,toml,json,yaml,yml}",
-  "{.github,src,tests,bin}/**/*.{ts,js,mts,mjs,md,toml,json,yaml,yml}",
+  "{.github,package/src,package/tests,package/bin}/**/*.{ts,js,mts,mjs,md,toml,json,yaml,yml}",
 ]
 
 [tasks."fix:typos"]
@@ -149,7 +149,7 @@ run = "typos . -w"
 run_windows = "exit 0"
 sources = [
   "*.{md,toml,json,yaml,yml}",
-  "{.github,src,tests,bin}/**/*.{ts,js,mts,mjs,md,toml,json,yaml,yml}",
+  "{.github,package/src,package/tests,package/bin}/**/*.{ts,js,mts,mjs,md,toml,json,yaml,yml}",
 ]
 
 # --- gitleaks (secret detection) ---
@@ -251,22 +251,22 @@ sources = ["mise.toml"]
 description = "Compile the package"
 alias = "b"
 depends = ["setup"]
-run = "pnpm run build"
+run = 'pnpm -F "{package}" --if-present run build'
 
 [tasks.test]
 description = "Run all tests"
 alias = "t"
 depends = ["fix"]
-run = "pnpm run test"
+run = 'pnpm -F "{package}" --if-present run test'
 
 [tasks."ci-build"]
 description = "Build for CI"
 hide = true
 depends = ["setup"]
-run = "pnpm run ci-build"
+run = 'pnpm -F "{package}" --if-present run ci-build'
 
 [tasks."ci-test"]
 description = "Run CI tests"
 hide = true
 depends = ["check"]
-run = "pnpm run ci-test"
+run = 'pnpm -F "{package}" --if-present run ci-test'

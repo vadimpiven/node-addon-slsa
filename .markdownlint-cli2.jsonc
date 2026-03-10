@@ -20,6 +20,6 @@
       "style": "backtick",
     },
   },
-  "globs": ["*.md"],
+  "globs": ["*.md", "package/*.md"],
   "gitignore": ".gitignore",
 }
