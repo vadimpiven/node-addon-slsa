@@ -14,10 +14,10 @@ outputs:
       }
   test-coverage:
     description: "Glob for coverage reports"
-    value: "coverage/lcov.info"
+    value: "package/coverage/lcov.info"
   test-reports:
     description: "Glob for test reports"
-    value: "report.junit.xml"
+    value: "package/report.junit.xml"
   mise-version:
     description: "Mise version"
     value: "${{ steps.parse.outputs.mise-version }}"

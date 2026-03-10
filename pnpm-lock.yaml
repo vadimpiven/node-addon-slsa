@@ -68,6 +68,21 @@ importers:
 
   .:
     devDependencies:
+      husky:
+        specifier: 'catalog:'
+        version: 9.1.7
+      markdownlint-cli2:
+        specifier: 'catalog:'
+        version: 0.21.0
+      oxfmt:
+        specifier: 'catalog:'
+        version: 0.36.0
+      oxlint:
+        specifier: 'catalog:'
+        version: 1.50.0
+
+  package:
+    devDependencies:
       '@codecov/vite-plugin':
         specifier: 'catalog:'
         version: 1.9.1(vite@8.0.0-beta.16(@types/node@25.3.3))
@@ -86,21 +101,9 @@ importers:
       dedent:
         specifier: 'catalog:'
         version: 1.7.2
-      husky:
-        specifier: 'catalog:'
-        version: 9.1.7
       hysnappy:
         specifier: 'catalog:'
         version: 1.1.1
-      markdownlint-cli2:
-        specifier: 'catalog:'
-        version: 0.21.0
-      oxfmt:
-        specifier: 'catalog:'
-        version: 0.36.0
-      oxlint:
-        specifier: 'catalog:'
-        version: 1.50.0
       sigstore:
         specifier: 'catalog:'
         version: 4.1.0

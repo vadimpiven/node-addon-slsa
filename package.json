@@ -1,76 +1,17 @@
 {
-  "name": "node-addon-slsa",
-  "version": "0.0.0",
-  "description": "Provenance verification for prebuilt native addons with GitHub attestations",
-  "keywords": [
-    "attestation",
-    "binary",
-    "native-addon",
-    "prebuilt",
-    "provenance",
-    "security",
-    "sigstore",
-    "slsa",
-    "supply-chain"
-  ],
-  "homepage": "https://github.com/vadimpiven/node-addon-slsa",
-  "bugs": {
-    "url": "https://github.com/vadimpiven/node-addon-slsa/issues"
-  },
-  "license": "Apache-2.0 OR MIT",
-  "author": "Vadim Piven <vadim@piven.tech> (https://piven.tech)",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/vadimpiven/node-addon-slsa.git"
-  },
-  "bin": {
-    "slsa": "./bin/slsa.mjs"
-  },
-  "files": [
-    "dist/**/*",
-    "bin/**/*"
-  ],
+  "name": "workspace",
+  "private": true,
   "type": "module",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
-  },
-  "publishConfig": {
-    "registry": "https://registry.npmjs.org"
-  },
   "scripts": {
     "preinstall": "npx only-allow pnpm",
     "prepare": "husky",
-    "bump-version": "npm version --no-git-tag-version --allow-same-version",
-    "type-check": "pnpm exec tsc --noEmit",
-    "build": "vite build && pnpm pack --out package.tar.gz",
-    "test:vitest": "pnpm exec vitest run --coverage",
-    "pretest": "pnpm run build",
-    "test": "pnpm run type-check && pnpm run test:vitest",
-    "ci-build": "pnpm run build",
-    "ci-test": "pnpm run test"
+    "test": "pnpm --recursive --if-present run test"
   },
   "devDependencies": {
-    "@codecov/vite-plugin": "catalog:",
-    "@sigstore/bundle": "catalog:",
-    "@sigstore/core": "catalog:",
-    "@types/node": "catalog:",
-    "@vitest/coverage-istanbul": "catalog:",
-    "dedent": "catalog:",
     "husky": "catalog:",
-    "hysnappy": "catalog:",
     "markdownlint-cli2": "catalog:",
     "oxfmt": "catalog:",
-    "oxlint": "catalog:",
-    "sigstore": "catalog:",
-    "typescript": "catalog:",
-    "undici": "catalog:",
-    "vite": "catalog:",
-    "vite-plugin-dts": "catalog:",
-    "vitest": "catalog:",
-    "zod": "catalog:"
+    "oxlint": "catalog:"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0",
