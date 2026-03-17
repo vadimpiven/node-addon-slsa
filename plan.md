@@ -13,10 +13,11 @@ with sidebar navigation, full-text search, and source links.
 
 ## What changes
 
-### 1. Add `typedoc` devDependency to `package/package.json`
+### 1. Add `typedoc` and theme devDependencies to `package/package.json`
 
-Pin exact version in `pnpm-workspace.yaml` catalog. Reference as
-`"typedoc": "catalog:"` in `package/package.json`.
+Pin exact versions in `pnpm-workspace.yaml` catalog. Reference as
+`"typedoc": "catalog:"` and `"typedoc-theme-oxide": "catalog:"` in
+`package/package.json`.
 
 ### 2. Create `package/typedoc.json`
 
@@ -25,6 +26,8 @@ Pin exact version in `pnpm-workspace.yaml` catalog. Reference as
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": ["./src/index.ts"],
   "out": "docs",
+  "plugin": ["typedoc-theme-oxide"],
+  "theme": "oxide",
   "name": "node-addon-slsa",
   "includeVersion": true,
   "excludeInternal": true,
@@ -45,8 +48,8 @@ Key decisions:
   landing page of the generated site.
 - **`sourceLinkTemplate`** — "Defined in" links point to GitHub at
   the correct revision.
-- **Output to `package/docs/`** — add `docs/` to
-  `package/.gitignore` [TBD: or root `.gitignore`].
+- **Output to `package/docs/`** — add `docs/` to root
+  `.gitignore` (matches existing `dist/`, `coverage/` pattern).
 
 ### 3. Add `docs` script to `package/package.json`
 
@@ -57,25 +60,35 @@ Key decisions:
 TypeDoc auto-discovers `typedoc.json` in the working directory and
 `tsconfig.json` for compiler options. No flags needed.
 
-### 4. Add `docs` task to `mise.toml`
+### 4. Add docs generation and deployment to `.github/workflows/release.yaml`
 
-```toml
-[tasks.docs]
-description = "Generate API documentation"
-alias = "d"
-depends = ["setup"]
-run = 'pnpm -F "{package}" --if-present run docs'
+Two changes: generate docs in the existing `build` job, then
+deploy in a new lightweight `docs` job.
+
+**4a. Add docs generation to the `build` job** (after the
+existing "Build and pack package" step):
+
+```yaml
+    - name: "Generate API docs"
+      run: 'pnpm -F "{package}" --if-present run docs'
+    # upload-pages-artifact uploads with artifact name "github-pages";
+    # deploy-pages finds the artifact by that same name within the run.
+    - name: "Upload docs artifact"
+      uses: "actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b" # v4.0.0
+      with:
+        path: "package/docs"
 ```
 
-### 5. Add deploy step to `.github/workflows/release.yaml`
-
-After the `build` job succeeds, add a `docs` job:
+**4b. Add a `docs` job** that only deploys (no checkout or
+setup — the artifact was already uploaded by `build`):
 
 ```yaml
 docs:
   name: "Deploy docs"
-  needs: "build"
+  needs: "publish"
+  if: "needs.publish.result == 'success'"
   runs-on: "ubuntu-latest"
+  timeout-minutes: 5
   permissions:
     pages: "write"
     id-token: "write"
@@ -83,26 +96,19 @@ docs:
     name: "github-pages"
     url: "${{ steps.deploy.outputs.page_url }}"
   steps:
-    - uses: "actions/checkout@..."
-      with:
-        ref: "${{ github.ref }}"
-        fetch-depth: 1
-        persist-credentials: false
-    - uses: "./.github/actions/setup"
-      with: ...
-    - name: "Generate docs"
-      run: "pnpm -F node-addon-slsa run docs"
-    - uses: "actions/upload-pages-artifact@v3"
-      with:
-        path: "package/docs"
-    - id: "deploy"
-      uses: "actions/deploy-pages@v4"
+    - name: "Deploy to GitHub Pages"
+      id: "deploy"
+      uses: "actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e" # v4.0.5
 ```
+
+The pipeline is: `build` → `publish` → `docs` + `smoke-test`.
+Docs are only deployed after npm publish succeeds, ensuring
+the docs site always matches a published version.
 
 Requires: repository Settings > Pages > Source set to
 "GitHub Actions".
 
-### 6. Review TSDoc coverage in source
+### 5. Review TSDoc coverage in source
 
 The public API already has JSDoc/TSDoc comments on every exported
 symbol. TypeDoc will render them as-is. Improvements to consider:
@@ -117,7 +123,7 @@ symbol. TypeDoc will render them as-is. Improvements to consider:
 
 These are optional — the docs site will be functional without them.
 
-### 7. Link the generated docs from README
+### 6. Link the generated docs from README
 
 Add to `package/README.md` API reference section:
 
@@ -129,14 +135,13 @@ Add to root `README.md` documentation line.
 
 ## Files touched
 
-| File | Change |
-| --- | --- |
-| `pnpm-workspace.yaml` | Add `typedoc` to catalog |
-| `package/package.json` | Add `typedoc` devDep, add `docs` script |
-| `package/typedoc.json` | New file |
-| `.gitignore` | Add `docs/` |
-| `mise.toml` | Add `docs` task |
-| `.github/workflows/release.yaml` | Add `docs` job |
-| `package/README.md` | Link to generated docs site |
-| `README.md` | Link to generated docs site |
-| Source files (optional) | Improve TSDoc comments |
+| File                             | Change                                                          |
+| -------------------------------- | --------------------------------------------------------------- |
+| `pnpm-workspace.yaml`            | Add `typedoc`, `typedoc-theme-oxide` to catalog                 |
+| `package/package.json`           | Add `typedoc`, `typedoc-theme-oxide` devDeps, add `docs` script |
+| `package/typedoc.json`           | New file                                                        |
+| `.gitignore`                     | Add `docs/`                                                     |
+| `.github/workflows/release.yaml` | Generate docs in `build`, add `docs` deploy job                 |
+| `package/README.md`              | Link to generated docs site                                     |
+| `README.md`                      | Link to generated docs site                                     |
+| Source files (optional)          | Improve TSDoc comments                                          |

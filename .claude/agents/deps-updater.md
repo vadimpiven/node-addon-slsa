@@ -22,14 +22,14 @@ Launch ALL of the following sub-agents IN PARALLEL using the Task tool with `run
    - Update version numbers in mise.toml
    - Respect pinned versions with comments explaining why
    - Also update .mise-version with latest mise release: `gh api repos/jdx/mise/releases/latest --jq '.tag_name'`
-   - Update Node.js version in mise.toml using `mise ls-remote node 25` to find latest v25.x
+   - Update Node.js version in mise.toml using `mise latest node@25` to find latest v25.x
    - Tools to check: jqlang/jq, mikefarah/yq, BurntSushi/ripgrep, aquasecurity/trivy, google/yamlfmt, gitleaks/gitleaks, rhysd/actionlint, koalaman/shellcheck, crate-ci/typos, tamasfe/taplo, zizmorcore/zizmor, cli/cli
 
 3. **GitHub Actions** - Update all action SHAs and version comments
    - For each action `uses:` with a pinned SHA, look up the latest release tag and resolve its commit SHA
    - To resolve a tag to commit SHA: first `gh api repos/{owner}/{repo}/git/ref/tags/{tag} --jq '.object'`, if type is "tag" then dereference with `gh api repos/{owner}/{repo}/git/tags/{sha} --jq '.object.sha'`, if type is "commit" use the sha directly
    - Update both the SHA and the version comment in ALL files under .github/
-   - Actions to check: actions/checkout, actions/cache, actions/setup-node, actions/attest-build-provenance, softprops/action-gh-release, zizmorcore/zizmor-action, aquasecurity/trivy-action, github/codeql-action, jdx/mise-action, codecov/codecov-action
+   - Actions to check: actions/checkout, actions/cache, actions/setup-node, actions/attest-build-provenance, zizmorcore/zizmor-action, aquasecurity/trivy-action, github/codeql-action, jdx/mise-action, codecov/codecov-action
 
 ## After All Sub-agents Complete
 

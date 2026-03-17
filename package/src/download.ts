@@ -34,10 +34,8 @@ function applyStallGuard(
     async pull(controller) {
       timer = globalThis.setTimeout(() => {
         interrupted = true;
-        controller.error(
-          new Error(`download stalled: no data received for ${stallTimeoutMs}ms`),
-        );
-        reader.cancel().catch(() => { });
+        controller.error(new Error(`download stalled: no data received for ${stallTimeoutMs}ms`));
+        reader.cancel().catch(() => {});
       }, stallTimeoutMs);
 
       try {
@@ -132,10 +130,21 @@ if (import.meta.vitest) {
 
   describe("applyStallGuard", () => {
     it("errors when no data arrives within stall timeout", async ({ expect }) => {
-      const input = new ReadableStream<Uint8Array>({ start() { } });
+      const input = new ReadableStream<Uint8Array>({ start() {} });
       const guarded = applyStallGuard(input, 50);
       const reader = guarded.getReader();
       await expect(reader.read()).rejects.toThrow(/download stalled/);
+    });
+
+    it("propagates upstream errors", async ({ expect }) => {
+      const input = new ReadableStream<Uint8Array>({
+        pull() {
+          throw new Error("upstream failure");
+        },
+      });
+      const guarded = applyStallGuard(input, 30_000);
+      const reader = guarded.getReader();
+      await expect(reader.read()).rejects.toThrow(/upstream failure/);
     });
   });
 }
