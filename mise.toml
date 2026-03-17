@@ -20,20 +20,20 @@ npm_config_store_dir = "{{ config_root }}/.cache/pnpm"
 _.path = ["{{ config_root }}/node_modules/.bin"]
 
 [tools]
-node = "25.7.0"
+node = "25.8.1"
 
 "aqua:jqlang/jq" = "1.8.1"
 "aqua:mikefarah/yq" = "4.52.4"
 "aqua:BurntSushi/ripgrep" = "15.1.0"
-"aqua:aquasecurity/trivy" = "0.69.2"
+"aqua:aquasecurity/trivy" = "0.69.3"
 "aqua:google/yamlfmt" = "0.21.0"
 "aqua:gitleaks/gitleaks" = "8.30.0"
 "aqua:rhysd/actionlint" = "1.7.11"
 "aqua:koalaman/shellcheck" = "0.11.0"
 "aqua:crate-ci/typos" = "1.44.0"
 "aqua:tamasfe/taplo" = "0.10.0"
-"aqua:zizmorcore/zizmor" = "1.22.0"
-"aqua:cli/cli" = "2.87.3"
+"aqua:zizmorcore/zizmor" = "1.23.1"
+"aqua:cli/cli" = "2.88.1"
 
 # ============================================================================
 # SETUP TASKS - Initialize environment and tools

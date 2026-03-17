@@ -33,75 +33,76 @@ checksum = "sha256:124510b94b6baa3380d051fdf4650eaa80a302c876d611e9dba0b2e18d874
 url = "https://github.com/BurntSushi/ripgrep/releases/download/15.1.0/ripgrep-15.1.0-x86_64-pc-windows-msvc.zip"
 
 [[tools."aqua:aquasecurity/trivy"]]
-version = "0.69.2"
+version = "0.69.3"
 backend = "aqua:aquasecurity/trivy"
 
 [tools."aqua:aquasecurity/trivy"."platforms.linux-arm64"]
-checksum = "sha256:c73b97699c317b0d25532b3f188564b4e29d13d5472ce6f8eb078082546a6481"
-url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.2/trivy_0.69.2_Linux-ARM64.tar.gz"
+checksum = "sha256:7e3924a974e912e57b4a99f65ece7931f8079584dae12eb7845024f97087bdfd"
+url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.69.3_Linux-ARM64.tar.gz"
 provenance = "cosign"
 
 [tools."aqua:aquasecurity/trivy"."platforms.linux-arm64-musl"]
-checksum = "sha256:c73b97699c317b0d25532b3f188564b4e29d13d5472ce6f8eb078082546a6481"
-url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.2/trivy_0.69.2_Linux-ARM64.tar.gz"
+checksum = "sha256:7e3924a974e912e57b4a99f65ece7931f8079584dae12eb7845024f97087bdfd"
+url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.69.3_Linux-ARM64.tar.gz"
 provenance = "cosign"
 
 [tools."aqua:aquasecurity/trivy"."platforms.linux-x64"]
-checksum = "sha256:affa59a1e37d86e4b8ab2cd02f0ab2e63d22f1bf9cf6a7aa326c884e25e26ce3"
-url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.2/trivy_0.69.2_Linux-64bit.tar.gz"
+checksum = "sha256:1816b632dfe529869c740c0913e36bd1629cb7688bd5634f4a858c1d57c88b75"
+url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.69.3_Linux-64bit.tar.gz"
 provenance = "cosign"
 
 [tools."aqua:aquasecurity/trivy"."platforms.linux-x64-musl"]
-checksum = "sha256:affa59a1e37d86e4b8ab2cd02f0ab2e63d22f1bf9cf6a7aa326c884e25e26ce3"
-url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.2/trivy_0.69.2_Linux-64bit.tar.gz"
+checksum = "sha256:1816b632dfe529869c740c0913e36bd1629cb7688bd5634f4a858c1d57c88b75"
+url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.69.3_Linux-64bit.tar.gz"
 provenance = "cosign"
 
 [tools."aqua:aquasecurity/trivy"."platforms.macos-arm64"]
-checksum = "sha256:320c0e6af90b5733b9326da0834240e944c6f44091e50019abdf584237ff4d0c"
-url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.2/trivy_0.69.2_macOS-ARM64.tar.gz"
+checksum = "sha256:a2f2179afd4f8bb265ca3c7aefb56a666bc4a9a411663bc0f22c3549fbc643a5"
+url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.69.3_macOS-ARM64.tar.gz"
 provenance = "cosign"
 
 [tools."aqua:aquasecurity/trivy"."platforms.macos-x64"]
-checksum = "sha256:41f6eac3ebe3a00448a16f08038b55ce769fe2d5128cb0d64bdf282cdad4831a"
-url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.2/trivy_0.69.2_macOS-64bit.tar.gz"
+checksum = "sha256:fec4a9f7569b624dd9d044fca019e5da69e032700edbb1d7318972c448ec2f4e"
+url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.69.3_macOS-64bit.tar.gz"
 provenance = "cosign"
 
 [tools."aqua:aquasecurity/trivy"."platforms.windows-x64"]
-checksum = "sha256:d772fa7c3c1bc52d2914ff78107596fbd20010b5f18bec6f39d63ee3bb31ad45"
-url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.2/trivy_0.69.2_windows-64bit.zip"
+checksum = "sha256:74362dc711383255308230ecbeb587eb1e4e83a8d332be5b0259afac6e0c2224"
+url = "https://github.com/aquasecurity/trivy/releases/download/v0.69.3/trivy_0.69.3_windows-64bit.zip"
 provenance = "cosign"
 
 [[tools."aqua:cli/cli"]]
-version = "2.87.3"
+version = "2.88.1"
 backend = "aqua:cli/cli"
 
 [tools."aqua:cli/cli"."platforms.linux-arm64"]
-checksum = "sha256:5f5d89563bf26751e2173b37e594065504e85b6b781c1f1832d24bf2c2b4554f"
-url = "https://github.com/cli/cli/releases/download/v2.87.3/gh_2.87.3_linux_arm64.tar.gz"
+checksum = "sha256:039ce25aab0cfa0ea5160e3db75ed44699bde4b20ff63ec5991f82201f1b33b8"
+url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_linux_arm64.tar.gz"
 
 [tools."aqua:cli/cli"."platforms.linux-arm64-musl"]
-checksum = "sha256:5f5d89563bf26751e2173b37e594065504e85b6b781c1f1832d24bf2c2b4554f"
-url = "https://github.com/cli/cli/releases/download/v2.87.3/gh_2.87.3_linux_arm64.tar.gz"
+checksum = "sha256:039ce25aab0cfa0ea5160e3db75ed44699bde4b20ff63ec5991f82201f1b33b8"
+url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_linux_arm64.tar.gz"
 
 [tools."aqua:cli/cli"."platforms.linux-x64"]
-checksum = "sha256:c6e5537631fca45f277ef405ce8751d139b491e9402cc20891a003525a8773b2"
-url = "https://github.com/cli/cli/releases/download/v2.87.3/gh_2.87.3_linux_amd64.tar.gz"
+checksum = "sha256:36352a993b97e9758793cdb87f9ba674bd6d88c914488e122be78a1962203803"
+url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_linux_amd64.tar.gz"
 
 [tools."aqua:cli/cli"."platforms.linux-x64-musl"]
-checksum = "sha256:c6e5537631fca45f277ef405ce8751d139b491e9402cc20891a003525a8773b2"
-url = "https://github.com/cli/cli/releases/download/v2.87.3/gh_2.87.3_linux_amd64.tar.gz"
+checksum = "sha256:36352a993b97e9758793cdb87f9ba674bd6d88c914488e122be78a1962203803"
+url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_linux_amd64.tar.gz"
 
 [tools."aqua:cli/cli"."platforms.macos-arm64"]
-checksum = "sha256:dedfc6f569e9dbc5b92d47dce44acadbdf5b6b7a861510db0c748dfac55002f6"
-url = "https://github.com/cli/cli/releases/download/v2.87.3/gh_2.87.3_macOS_arm64.zip"
+checksum = "sha256:bdbeed4821d450ef0d14821d856c05b308ab449fbf60527f298d96fbf5d2447b"
+url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_macOS_arm64.zip"
+provenance = "github-attestations"
 
 [tools."aqua:cli/cli"."platforms.macos-x64"]
-checksum = "sha256:7b8d5495fe9689494b1c69559c0d28209bc057bb028008e903ec4b3e19bd8c75"
-url = "https://github.com/cli/cli/releases/download/v2.87.3/gh_2.87.3_macOS_amd64.zip"
+checksum = "sha256:ff0fc4bdb9699f0c02e5bcdcbd09d0f8e4c4659aa5d30bcd39a3557ed7379b2e"
+url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_macOS_amd64.zip"
 
 [tools."aqua:cli/cli"."platforms.windows-x64"]
-checksum = "sha256:c590bcb488f80a85c8febd5cde27edd68fdd481bd004aaf9adc50dcf1b21c09c"
-url = "https://github.com/cli/cli/releases/download/v2.87.3/gh_2.87.3_windows_amd64.zip"
+checksum = "sha256:8fdaac525d8919f9f8c265f99ffa26189e5f1fd3a35636adad4fd890a141a555"
+url = "https://github.com/cli/cli/releases/download/v2.88.1/gh_2.88.1_windows_amd64.zip"
 
 [[tools."aqua:crate-ci/typos"]]
 version = "1.44.0"
@@ -361,65 +362,66 @@ url = "https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-darwin-x8
 url = "https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-windows-x86_64.zip"
 
 [[tools."aqua:zizmorcore/zizmor"]]
-version = "1.22.0"
+version = "1.23.1"
 backend = "aqua:zizmorcore/zizmor"
 
 [tools."aqua:zizmorcore/zizmor"."platforms.linux-arm64"]
-checksum = "sha256:afa6ea4ad183582adaf1610399ed9e697322a2374d377ccdb149216840f5171d"
-url = "https://github.com/zizmorcore/zizmor/releases/download/v1.22.0/zizmor-aarch64-unknown-linux-gnu.tar.gz"
+checksum = "sha256:3725d7cd7102e4d70827186389f7d5930b6878232930d0a3eb058d7e5b47e658"
+url = "https://github.com/zizmorcore/zizmor/releases/download/v1.23.1/zizmor-aarch64-unknown-linux-gnu.tar.gz"
 
 [tools."aqua:zizmorcore/zizmor"."platforms.linux-arm64-musl"]
-checksum = "sha256:afa6ea4ad183582adaf1610399ed9e697322a2374d377ccdb149216840f5171d"
-url = "https://github.com/zizmorcore/zizmor/releases/download/v1.22.0/zizmor-aarch64-unknown-linux-gnu.tar.gz"
+checksum = "sha256:3725d7cd7102e4d70827186389f7d5930b6878232930d0a3eb058d7e5b47e658"
+url = "https://github.com/zizmorcore/zizmor/releases/download/v1.23.1/zizmor-aarch64-unknown-linux-gnu.tar.gz"
 
 [tools."aqua:zizmorcore/zizmor"."platforms.linux-x64"]
-checksum = "sha256:f7633bbf155cddebd3fdfdcbfaa777a4e89e4da1bc719b08dfa9ae50e5daae46"
-url = "https://github.com/zizmorcore/zizmor/releases/download/v1.22.0/zizmor-x86_64-unknown-linux-gnu.tar.gz"
+checksum = "sha256:67a8df0a14352dd81882e14876653d097b99b0f4f6b6fe798edc0320cff27aff"
+url = "https://github.com/zizmorcore/zizmor/releases/download/v1.23.1/zizmor-x86_64-unknown-linux-gnu.tar.gz"
 
 [tools."aqua:zizmorcore/zizmor"."platforms.linux-x64-musl"]
-checksum = "sha256:f7633bbf155cddebd3fdfdcbfaa777a4e89e4da1bc719b08dfa9ae50e5daae46"
-url = "https://github.com/zizmorcore/zizmor/releases/download/v1.22.0/zizmor-x86_64-unknown-linux-gnu.tar.gz"
+checksum = "sha256:67a8df0a14352dd81882e14876653d097b99b0f4f6b6fe798edc0320cff27aff"
+url = "https://github.com/zizmorcore/zizmor/releases/download/v1.23.1/zizmor-x86_64-unknown-linux-gnu.tar.gz"
 
 [tools."aqua:zizmorcore/zizmor"."platforms.macos-arm64"]
-checksum = "sha256:24bee9d58ac48639a3b10ca3cf5f797d52937ab2d7d2daf73c62bbfc0651a6ed"
-url = "https://github.com/zizmorcore/zizmor/releases/download/v1.22.0/zizmor-aarch64-apple-darwin.tar.gz"
+checksum = "sha256:2632561b974c69f952258c1ab4b7432d5c7f92e555704155c3ac28a2910bd717"
+url = "https://github.com/zizmorcore/zizmor/releases/download/v1.23.1/zizmor-aarch64-apple-darwin.tar.gz"
+provenance = "github-attestations"
 
 [tools."aqua:zizmorcore/zizmor"."platforms.macos-x64"]
-checksum = "sha256:952175c0cfcd8d9ab3bbc86a4258813b97962bbd2585c95f04485f7e1a8ca044"
-url = "https://github.com/zizmorcore/zizmor/releases/download/v1.22.0/zizmor-x86_64-apple-darwin.tar.gz"
+checksum = "sha256:89d5ed42081dd9d0433a10b7545fac42b35f1f030885c278b9712b32c66f2597"
+url = "https://github.com/zizmorcore/zizmor/releases/download/v1.23.1/zizmor-x86_64-apple-darwin.tar.gz"
 
 [tools."aqua:zizmorcore/zizmor"."platforms.windows-x64"]
-checksum = "sha256:354ad2461d69d255fc7bfb8b359d4486440df9ae15af1efb8f497b9f56f87e74"
-url = "https://github.com/zizmorcore/zizmor/releases/download/v1.22.0/zizmor-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:33c2293ff02834720dd7cd8b47348aafb2e95a19bdc993c0ecaca9c804ade92a"
+url = "https://github.com/zizmorcore/zizmor/releases/download/v1.23.1/zizmor-x86_64-pc-windows-msvc.zip"
 
 [[tools.node]]
-version = "25.7.0"
+version = "25.8.1"
 backend = "core:node"
 
 [tools.node."platforms.linux-arm64"]
-checksum = "sha256:3a73c9145547b5d2e29491b0ed6a37b95306b784eb83cdb2361f1e2e76fa237f"
-url = "https://nodejs.org/dist/v25.7.0/node-v25.7.0-linux-arm64.tar.gz"
+checksum = "sha256:d990ec3c21ce8bdb6f76ed4e1c875d6e3e4b75a02d018e85df0662c0bad83b53"
+url = "https://nodejs.org/dist/v25.8.1/node-v25.8.1-linux-arm64.tar.gz"
 
 [tools.node."platforms.linux-arm64-musl"]
-checksum = "sha256:3a73c9145547b5d2e29491b0ed6a37b95306b784eb83cdb2361f1e2e76fa237f"
-url = "https://nodejs.org/dist/v25.7.0/node-v25.7.0-linux-arm64.tar.gz"
+checksum = "sha256:d990ec3c21ce8bdb6f76ed4e1c875d6e3e4b75a02d018e85df0662c0bad83b53"
+url = "https://nodejs.org/dist/v25.8.1/node-v25.8.1-linux-arm64.tar.gz"
 
 [tools.node."platforms.linux-x64"]
-checksum = "sha256:033ad3a740d62d3c7e3aaa1fecfeec16a719d4af33ab030666bf171057b070d9"
-url = "https://nodejs.org/dist/v25.7.0/node-v25.7.0-linux-x64.tar.gz"
+checksum = "sha256:6fe3b8fa448579f728f7a0e5bbb3ab6a352d2c6307e13ae37a86106a3e4c9aaf"
+url = "https://nodejs.org/dist/v25.8.1/node-v25.8.1-linux-x64.tar.gz"
 
 [tools.node."platforms.linux-x64-musl"]
-checksum = "sha256:033ad3a740d62d3c7e3aaa1fecfeec16a719d4af33ab030666bf171057b070d9"
-url = "https://nodejs.org/dist/v25.7.0/node-v25.7.0-linux-x64.tar.gz"
+checksum = "sha256:6fe3b8fa448579f728f7a0e5bbb3ab6a352d2c6307e13ae37a86106a3e4c9aaf"
+url = "https://nodejs.org/dist/v25.8.1/node-v25.8.1-linux-x64.tar.gz"
 
 [tools.node."platforms.macos-arm64"]
-checksum = "sha256:d4e3cfe5e6bddda41ba0c683e37329632465b93371ddc538c763578758d5bc35"
-url = "https://nodejs.org/dist/v25.7.0/node-v25.7.0-darwin-arm64.tar.gz"
+checksum = "sha256:c667629236e3213616f0917b84eb52706e213c0e8a2312402335fff6fc7463c4"
+url = "https://nodejs.org/dist/v25.8.1/node-v25.8.1-darwin-arm64.tar.gz"
 
 [tools.node."platforms.macos-x64"]
-checksum = "sha256:f83929f4a84ae5a88c2a5333466b100dd101658063592497626ae9eea15b3b1b"
-url = "https://nodejs.org/dist/v25.7.0/node-v25.7.0-darwin-x64.tar.gz"
+checksum = "sha256:1e5ebf69955e01216f5c60b9c989d1bdda8e5022e2f60c75e1baf309c5bff50e"
+url = "https://nodejs.org/dist/v25.8.1/node-v25.8.1-darwin-x64.tar.gz"
 
 [tools.node."platforms.windows-x64"]
-checksum = "sha256:4a66eac416c30474fe9c3f0ef7d4ffc85a8797cbc35f6b8566dfbce02789a9c4"
-url = "https://nodejs.org/dist/v25.7.0/node-v25.7.0-win-x64.zip"
+checksum = "sha256:09a5a0dbb2f4cefa800880012810e2dfaac0016a62e75f064c4ab7f3606b2d78"
+url = "https://nodejs.org/dist/v25.8.1/node-v25.8.1-win-x64.zip"

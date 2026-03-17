@@ -83,6 +83,7 @@ export async function wget(
     await pipeline(
       await fetchWithRetry(downloadUrl, options).then((r) => {
         if (!r.ok) {
+          r.body?.cancel().catch(() => {});
           throw new Error(`download failed: ${downloadUrl}: ${r.status} ${r.statusText}`);
         }
         if (!r.body) {
