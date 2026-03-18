@@ -1,6 +1,7 @@
 [![GitHub repo][github-badge]][github-repo]
 [![npm version][npm-badge]][npm-package]
 [![API docs][docs-badge]][docs-site]
+[![Ask DeepWiki][deepwiki-badge]][deepwiki-site]
 [![CI status][status-badge]][status-dashboard]
 [![Test coverage][coverage-badge]][coverage-dashboard]
 
@@ -10,6 +11,8 @@
 [npm-package]: https://www.npmjs.com/package/node-addon-slsa
 [docs-badge]: https://img.shields.io/badge/docs-typedoc-blue
 [docs-site]: https://vadimpiven.github.io/node-addon-slsa
+[deepwiki-badge]: https://deepwiki.com/badge.svg
+[deepwiki-site]: https://deepwiki.com/vadimpiven/node-addon-slsa
 [status-badge]: https://img.shields.io/github/checks-status/vadimpiven/node-addon-slsa/main
 [status-dashboard]: https://github.com/vadimpiven/node-addon-slsa/actions?query=branch%3Amain
 [coverage-badge]: https://img.shields.io/codecov/c/github/vadimpiven/node-addon-slsa/main

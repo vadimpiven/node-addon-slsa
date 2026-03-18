@@ -5,6 +5,7 @@ blockExoticSubdeps: true
 
 catalog:
   "@codecov/vite-plugin": 1.9.1
+  rollup-plugin-sbom: 3.0.5
   dedent: 1.7.2
   "@sigstore/bundle": 4.0.0
   "@sigstore/core": 3.1.0
@@ -34,5 +35,9 @@ onlyBuiltDependencies: []
 
 overrides:
   markdown-it: ">=14.1.1"
+
+peerDependencyRules:
+  allowedVersions:
+    "rollup-plugin-sbom>vite": "8"
 
 strictDepBuilds: true
