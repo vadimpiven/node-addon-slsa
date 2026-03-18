@@ -25,8 +25,12 @@ import {
 } from "./constants.ts";
 
 /**
- * Handle returned after npm package provenance verification succeeds.
- * Call {@link verifyAddon} to complete addon-level verification.
+ * Returned by {@link verifyPackageProvenance} after npm provenance checks pass.
+ *
+ * @remarks
+ * Captures the Run Invocation URI from the npm provenance certificate.
+ * Call {@link PackageProvenance.verifyAddon | verifyAddon} to confirm
+ * the addon binary was produced by the same GitHub Actions workflow run.
  */
 export interface PackageProvenance {
   readonly runInvocationURI: RunInvocationURI;
@@ -34,10 +38,34 @@ export interface PackageProvenance {
 }
 
 /**
- * Verify npm package provenance: fetch attestations, validate the
- * certificate chain against Fulcio CA, verify identity, and check
- * source repo. Returns a {@link PackageProvenance} object with the
- * Run Invocation URI and a `verifyAddon()` continuation method.
+ * Verify npm package provenance via sigstore attestations.
+ * Checks the certificate chain, issuer identity, and source repository.
+ * Returns a {@link PackageProvenance} handle for addon verification.
+ *
+ * @throws {@link ProvenanceError} if the package has no SLSA provenance
+ *   attestation, the certificate is invalid, or the source repo does not match.
+ * @throws `Error` on transient failures (network timeout, API rate limit) —
+ *   safe to retry.
+ *
+ * @example
+ * ```typescript
+ * import {
+ *   verifyPackageProvenance,
+ *   semVerString,
+ *   githubRepo,
+ *   sha256Hex,
+ * } from "node-addon-slsa";
+ *
+ * const provenance = await verifyPackageProvenance({
+ *   packageName: "my-native-addon",
+ *   version: semVerString("1.0.0"),
+ *   repo: githubRepo("owner/repo"),
+ * });
+ *
+ * // Verify the addon binary was produced by the same workflow run.
+ * const addonHash = sha256Hex("a".repeat(64)); // SHA-256 of the binary
+ * await provenance.verifyAddon({ sha256: addonHash });
+ * ```
  */
 export async function verifyPackageProvenance(
   options: {
@@ -105,11 +133,35 @@ export async function verifyPackageProvenance(
 }
 
 /**
- * Verify addon provenance: fetch attestation bundles from the
- * GitHub Attestations API for the artifact hash, verify each
- * through createVerifier (Fulcio chain, tlog inclusion proof,
- * SET, signature), and confirm the certificate matches the
- * expected workflow run and source repository.
+ * Verify addon binary provenance via the GitHub Attestations API.
+ * Confirms the artifact was attested in the expected workflow run
+ * and source repository.
+ *
+ * Typically called via {@link PackageProvenance.verifyAddon | verifyAddon}.
+ * Use directly when you already have a {@link RunInvocationURI}.
+ *
+ * @throws {@link ProvenanceError} if no attestation matches the expected
+ *   workflow run, or all attestations fail cryptographic verification.
+ * @throws `Error` on transient failures (network timeout, API rate limit) —
+ *   safe to retry.
+ *
+ * @example
+ * ```typescript
+ * import {
+ *   verifyAddonProvenance,
+ *   sha256Hex,
+ *   githubRepo,
+ *   runInvocationURI,
+ * } from "node-addon-slsa";
+ *
+ * await verifyAddonProvenance({
+ *   sha256: sha256Hex("a".repeat(64)),
+ *   runInvocationURI: runInvocationURI(
+ *     "https://github.com/owner/repo/actions/runs/123/attempts/1",
+ *   ),
+ *   repo: githubRepo("owner/repo"),
+ * });
+ * ```
  */
 export async function verifyAddonProvenance(
   options: {

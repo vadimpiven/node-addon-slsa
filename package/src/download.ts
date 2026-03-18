@@ -17,26 +17,43 @@ function jitteredDelay(attempt: number, baseMs: number): number {
 }
 
 /**
- * Web TransformStream that errors if no data arrives within the stall timeout.
+ * Wraps a ReadableStream with a stall guard that errors if no data
+ * arrives within the stall timeout. The timer only runs while data is
+ * being pulled, so unconsumed streams do not leak timers.
  */
-function createStallGuard(stallTimeoutMs: number): TransformStream<Uint8Array, Uint8Array> {
-  let timer: ReturnType<typeof globalThis.setTimeout>;
-  const resetTimer = (controller: TransformStreamDefaultController<Uint8Array>) => {
-    globalThis.clearTimeout(timer);
-    timer = globalThis.setTimeout(() => {
-      controller.error(new Error(`download stalled: no data received for ${stallTimeoutMs}ms`));
-    }, stallTimeoutMs);
-  };
-  return new TransformStream({
-    start(controller) {
-      resetTimer(controller);
+function applyStallGuard(
+  source: ReadableStream<Uint8Array>,
+  stallTimeoutMs: number,
+): ReadableStream<Uint8Array> {
+  const reader = source.getReader();
+  let timer: ReturnType<typeof globalThis.setTimeout> | undefined;
+  // Guards against the timer or cancel() racing with an in-flight pull().
+  let interrupted = false;
+
+  return new ReadableStream({
+    async pull(controller) {
+      timer = globalThis.setTimeout(() => {
+        interrupted = true;
+        controller.error(new Error(`download stalled: no data received for ${stallTimeoutMs}ms`));
+        reader.cancel().catch(() => {});
+      }, stallTimeoutMs);
+
+      try {
+        const { done, value } = await reader.read();
+        if (interrupted) return;
+        if (done) controller.close();
+        else controller.enqueue(value);
+      } catch (err) {
+        if (interrupted) return;
+        controller.error(err);
+      } finally {
+        globalThis.clearTimeout(timer);
+      }
     },
-    transform(chunk, controller) {
-      resetTimer(controller);
-      controller.enqueue(chunk);
-    },
-    flush() {
+    cancel(reason) {
+      interrupted = true;
       globalThis.clearTimeout(timer);
+      return reader.cancel(reason);
     },
   });
 }
@@ -50,7 +67,7 @@ function createStallGuard(stallTimeoutMs: number): TransformStream<Uint8Array, U
  * timeout via `AbortSignal.any()`. If the parent signal aborts, the
  * request is cancelled immediately and no further retries are attempted.
  *
- * When the response has a body, it is piped through a stall guard that
+ * When the response has a body, it is wrapped with a stall guard that
  * errors if no data arrives within `stallTimeoutMs`.
  */
 export async function fetchWithRetry(url: string, options?: FetchOptions): Promise<Response> {
@@ -87,7 +104,7 @@ export async function fetchWithRetry(url: string, options?: FetchOptions): Promi
 
       if (!response.body) return response;
 
-      const guardedBody = response.body.pipeThrough(createStallGuard(stallTimeoutMs));
+      const guardedBody = applyStallGuard(response.body, stallTimeoutMs);
       return new Response(guardedBody, response);
     } catch (err) {
       // If the parent signal aborted, propagate immediately — no retries
@@ -111,13 +128,23 @@ export async function fetchWithRetry(url: string, options?: FetchOptions): Promi
 if (import.meta.vitest) {
   const { describe, it } = import.meta.vitest;
 
-  describe("createStallGuard", () => {
+  describe("applyStallGuard", () => {
     it("errors when no data arrives within stall timeout", async ({ expect }) => {
-      const guard = createStallGuard(50);
-      const input = new ReadableStream({ start() {} }); // never pushes data
-      const guarded = input.pipeThrough(guard);
+      const input = new ReadableStream<Uint8Array>({ start() {} });
+      const guarded = applyStallGuard(input, 50);
       const reader = guarded.getReader();
       await expect(reader.read()).rejects.toThrow(/download stalled/);
+    });
+
+    it("propagates upstream errors", async ({ expect }) => {
+      const input = new ReadableStream<Uint8Array>({
+        pull() {
+          throw new Error("upstream failure");
+        },
+      });
+      const guarded = applyStallGuard(input, 30_000);
+      const reader = guarded.getReader();
+      await expect(reader.read()).rejects.toThrow(/upstream failure/);
     });
   });
 }

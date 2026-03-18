@@ -8,7 +8,7 @@ import { resolveConfig } from "../src/verify/config.ts";
 import { fetchGitHubAttestations, fetchNpmAttestations } from "../src/verify/attestations.ts";
 import { stubFetch } from "./helpers.ts";
 
-const defaultConfig = resolveConfig();
+const defaultConfig = resolveConfig({ retryCount: 0 });
 const tinyBundleConfig = resolveConfig({ maxBundleBytes: 10, retryCount: 0 });
 
 vi.setConfig({ testTimeout: 30_000 });

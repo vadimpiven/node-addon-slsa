@@ -18,5 +18,6 @@ report.junit.xml
 !.cache/trivy/
 !.cache/trivy/.gitkeep
 dist/
+docs/
 node_modules/
 coverage/

@@ -1,13 +1,19 @@
+[![GitHub repo][github-badge]][github-repo]
+[![npm version][npm-badge]][npm-package]
+[![API docs][docs-badge]][docs-site]
 [![CI status][status-badge]][status-dashboard]
 [![Test coverage][coverage-badge]][coverage-dashboard]
-[![npm version][npm-badge]][npm-package]
 
+[github-badge]: https://img.shields.io/github/stars/vadimpiven/node-addon-slsa?style=flat&logo=github
+[github-repo]: https://github.com/vadimpiven/node-addon-slsa
+[npm-badge]: https://img.shields.io/npm/v/node-addon-slsa
+[npm-package]: https://www.npmjs.com/package/node-addon-slsa
+[docs-badge]: https://img.shields.io/badge/docs-typedoc-blue
+[docs-site]: https://vadimpiven.github.io/node-addon-slsa
 [status-badge]: https://img.shields.io/github/checks-status/vadimpiven/node-addon-slsa/main
 [status-dashboard]: https://github.com/vadimpiven/node-addon-slsa/actions?query=branch%3Amain
 [coverage-badge]: https://img.shields.io/codecov/c/github/vadimpiven/node-addon-slsa/main
 [coverage-dashboard]: https://app.codecov.io/gh/vadimpiven/node-addon-slsa/tree/main
-[npm-badge]: https://img.shields.io/npm/v/node-addon-slsa
-[npm-package]: https://www.npmjs.com/package/node-addon-slsa
 
 # node-addon-slsa
 
