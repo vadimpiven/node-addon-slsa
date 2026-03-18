@@ -46,6 +46,7 @@ export default defineConfig({
   plugins: [
     sbom({
       rootComponentType: "library",
+      generateSerial: true,
     }),
     dts({
       staticImport: true,
