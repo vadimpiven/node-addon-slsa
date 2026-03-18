@@ -4,5 +4,5 @@
   "features": {
     "ghcr.io/devcontainers-extra/features/mise:1": {}
   },
-  "postCreateCommand": "mise install || true"
+  "postCreateCommand": "mise trust && mise install || true"
 }
