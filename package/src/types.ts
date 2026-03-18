@@ -29,8 +29,8 @@ export type RunInvocationURI = string & {
 export const SEMVER_RE = /^\d+\.\d+\.\d+(-[\w.]+)?(\+[\w.]+)?$/;
 
 /**
- * Validate and brand a lowercase hex-encoded SHA-256 digest.
- * @throws {TypeError} if the input is not exactly 64 hex characters.
+ * Validate and brand a string as a {@link Sha256Hex}.
+ * @throws {TypeError} if the input is not exactly 64 lowercase hex characters.
  */
 export function sha256Hex(value: string): Sha256Hex {
   if (!/^[a-f0-9]{64}$/.test(value)) {
@@ -40,7 +40,7 @@ export function sha256Hex(value: string): Sha256Hex {
 }
 
 /**
- * Validate and narrow a semver string (no `v` prefix).
+ * Validate and brand a string as a {@link SemVerString}.
  * @throws {TypeError} if the input does not match `major.minor.patch[-pre][+build]`.
  */
 export function semVerString(value: string): SemVerString {
@@ -51,7 +51,7 @@ export function semVerString(value: string): SemVerString {
 }
 
 /**
- * Validate and narrow a GitHub `owner/repo` slug.
+ * Validate and brand a string as a {@link GitHubRepo}.
  * @throws {TypeError} if the input is not in `owner/repo` format.
  */
 export function githubRepo(value: string): GitHubRepo {
@@ -62,8 +62,8 @@ export function githubRepo(value: string): GitHubRepo {
 }
 
 /**
- * Validate and brand a GitHub Actions run invocation URI.
- * @throws {TypeError} if the input does not match the expected URL format.
+ * Validate and brand a string as a {@link RunInvocationURI}.
+ * @throws {TypeError} if the input is not a valid GitHub Actions run invocation URL.
  */
 export function runInvocationURI(value: string): RunInvocationURI {
   if (
@@ -76,7 +76,7 @@ export function runInvocationURI(value: string): RunInvocationURI {
   return value as RunInvocationURI;
 }
 
-/** Options for {@link fetchWithRetry}. */
+/** Options controlling HTTP fetch behavior (timeouts, retries, cancellation). */
 export interface FetchOptions {
   /** Per-request timeout in ms. @default 30_000 */
   readonly timeoutMs?: number | undefined;
@@ -92,10 +92,7 @@ export interface FetchOptions {
   readonly headers?: Record<string, string> | undefined;
 }
 
-/**
- * Optional per-call transport overrides.
- * All fields have sensible defaults — pass only what you need.
- */
+/** Verification options: extends {@link FetchOptions} with attestation-specific limits. */
 export interface VerifyOptions extends FetchOptions {
   /** Upper bound for attestation bundle size in bytes. @default 52_428_800 (50 MB) */
   readonly maxBundleBytes?: number | undefined;

@@ -13,7 +13,7 @@
     "slsa",
     "supply-chain"
   ],
-  "homepage": "https://github.com/vadimpiven/node-addon-slsa",
+  "homepage": "https://vadimpiven.github.io/node-addon-slsa",
   "bugs": {
     "url": "https://github.com/vadimpiven/node-addon-slsa/issues"
   },
@@ -47,7 +47,7 @@
   "scripts": {
     "bump-version": "npm version --no-git-tag-version --allow-same-version",
     "type-check": "tsc --noEmit",
-    "build": "vite build && pnpm pack --out package.tar.gz",
+    "build": "vite build && typedoc && pnpm pack --out package.tar.gz",
     "test:vitest": "vitest run --coverage",
     "pretest": "pnpm run build",
     "test": "pnpm run type-check && pnpm run test:vitest",
@@ -63,6 +63,8 @@
     "dedent": "catalog:",
     "hysnappy": "catalog:",
     "sigstore": "catalog:",
+    "typedoc": "catalog:",
+    "typedoc-theme-oxide": "catalog:",
     "typescript": "catalog:",
     "undici": "catalog:",
     "vite": "catalog:",

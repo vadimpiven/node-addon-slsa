@@ -16,6 +16,8 @@ catalog:
   oxfmt: 0.40.0
   oxlint: 1.55.0
   sigstore: 4.1.0
+  typedoc: 0.28.17
+  typedoc-theme-oxide: 0.2.5
   typescript: 6.0.1-rc
   undici: 7.24.3
   vite: 8.0.0
