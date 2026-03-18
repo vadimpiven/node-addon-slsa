@@ -84,7 +84,9 @@ describe("fetchWithRetry (retry)", () => {
       calls++;
       throw new Error("network error");
     });
-    await expect(fetchWithRetry("https://example.com/fail")).rejects.toThrow("network error");
+    await expect(fetchWithRetry("https://example.com/fail", { retryBaseMs: 1 })).rejects.toThrow(
+      "network error",
+    );
     expect(calls).toBe(3);
   });
 
@@ -94,7 +96,7 @@ describe("fetchWithRetry (retry)", () => {
       calls++;
       return new Response(null, { status: 502 });
     });
-    const res = await fetchWithRetry("https://example.com/fail");
+    const res = await fetchWithRetry("https://example.com/fail", { retryBaseMs: 1 });
     expect(res.status).toBe(502);
     expect(calls).toBe(3);
   });
