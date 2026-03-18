@@ -63,7 +63,7 @@ export interface PackageProvenance {
  * });
  *
  * // Verify the addon binary was produced by the same workflow run.
- * const addonHash = sha256Hex("a]".repeat(32)); // SHA-256 of the binary
+ * const addonHash = sha256Hex("a".repeat(64)); // SHA-256 of the binary
  * await provenance.verifyAddon({ sha256: addonHash });
  * ```
  */
