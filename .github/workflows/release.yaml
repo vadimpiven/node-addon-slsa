@@ -11,7 +11,7 @@ concurrency:
 jobs:
   init:
     name: "Init"
-    runs-on: "ubuntu-latest"
+    runs-on: "ubuntu-24.04"
     timeout-minutes: 5
     permissions:
       contents: "read" # to fetch code
@@ -32,7 +32,7 @@ jobs:
   build:
     name: "Build"
     needs: "init"
-    runs-on: "ubuntu-latest"
+    runs-on: "ubuntu-24.04"
     timeout-minutes: 15
     permissions:
       contents: "write" # for release creation
@@ -81,7 +81,7 @@ jobs:
     name: "Publish"
     needs: "build"
     if: "needs.build.result == 'success'"
-    runs-on: "ubuntu-latest"
+    runs-on: "ubuntu-24.04"
     timeout-minutes: 15
     permissions:
       contents: "read" # to fetch code
@@ -112,7 +112,7 @@ jobs:
     name: "Deploy docs"
     needs: "publish"
     if: "needs.publish.result == 'success'"
-    runs-on: "ubuntu-latest"
+    runs-on: "ubuntu-24.04"
     timeout-minutes: 5
     permissions:
       pages: "write" # to deploy to GitHub Pages
@@ -128,7 +128,7 @@ jobs:
     name: "Smoke test"
     needs: "publish"
     if: "needs.publish.result == 'success'"
-    runs-on: "ubuntu-latest"
+    runs-on: "ubuntu-24.04"
     timeout-minutes: 10
     permissions: {}
     steps:
