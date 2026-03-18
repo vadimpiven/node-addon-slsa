@@ -1,6 +1,7 @@
 import { builtinModules } from "node:module";
 import { resolve } from "node:path";
 import { codecovVitePlugin } from "@codecov/vite-plugin";
+import sbom from "rollup-plugin-sbom";
 import dts from "vite-plugin-dts";
 import { defineConfig } from "vitest/config";
 
@@ -43,6 +44,9 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
   },
   plugins: [
+    sbom({
+      rootComponentType: "library",
+    }),
     dts({
       staticImport: true,
       entryRoot: "src",

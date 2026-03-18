@@ -62,6 +62,7 @@
     "@vitest/coverage-istanbul": "catalog:",
     "dedent": "catalog:",
     "hysnappy": "catalog:",
+    "rollup-plugin-sbom": "catalog:",
     "sigstore": "catalog:",
     "typedoc": "catalog:",
     "typedoc-theme-oxide": "catalog:",
