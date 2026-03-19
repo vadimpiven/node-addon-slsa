@@ -3,7 +3,6 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch: {}
 permissions: {}
 concurrency:
   group: "${{ github.workflow }}-${{ github.ref }}"
@@ -26,6 +25,17 @@ jobs:
           ref: "${{ github.ref }}"
           fetch-depth: 1
           persist-credentials: false
+      - name: "Verify tag is on main"
+        env:
+          GH_TOKEN: "${{ github.token }}"
+          GH_REPOSITORY: "${{ github.repository }}"
+        run: |
+          set -euo pipefail
+          STATUS=$(gh api "repos/$GH_REPOSITORY/compare/main...$GITHUB_SHA" --jq '.status')
+          case "$STATUS" in
+            behind|identical) echo "Tag $GITHUB_REF_NAME is on main (status: $STATUS)" ;;
+            *) echo "::error::Tag must point to a commit on main (got status: ${STATUS:-empty})"; exit 1 ;;
+          esac
       - name: "Init"
         id: "init"
         uses: "./.github/actions/init-workflow"
