@@ -18,8 +18,8 @@
     {
       "description": "Disable digest pinning for aqua packages (not supported by mise)",
       "matchManagers": ["mise"],
-      "matchDepPatterns": ["aqua:*"],
-      "pinDigests": false
+      "pinDigests": false,
+      "matchDepNames": ["/aqua:*/"]
     }
   ],
   "customManagers": [
