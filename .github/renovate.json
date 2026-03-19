@@ -14,6 +14,12 @@
       "description": "Group all major updates into a single PR",
       "matchUpdateTypes": ["major"],
       "groupName": "all major dependencies"
+    },
+    {
+      "description": "Disable digest pinning for aqua packages (not supported by mise)",
+      "matchManagers": ["mise"],
+      "matchDepPatterns": ["aqua:*"],
+      "pinDigests": false
     }
   ],
   "customManagers": [
