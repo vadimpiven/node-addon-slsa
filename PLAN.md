@@ -95,11 +95,37 @@ outputs:
     description: "The ID of the attestation."
 runs:
   using: "node24"
-  main: "action/index.mts"
+  main: "action/dist/index.mjs" # bundled — see build step below
 ```
 
+GitHub Actions runtime has no package manager — `@actions/core`,
+`@actions/attest`, and their transitive deps must be bundled
+into a single file. Use `esbuild` (already a transitive dep
+via vite):
+
+```jsonc
+// action/package.json
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild index.mts --bundle --platform=node --format=esm --outfile=dist/index.mjs --external:node:*"
+  },
+  "dependencies": {
+    "@actions/attest": "2.3.0",
+    "@actions/core": "1.11.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.4"
+  }
+}
+```
+
+`action/dist/index.mjs` is committed to the repo (same pattern
+as `actions/attest` committing their 4.3 MB `dist/index.js`).
+
 ```typescript
-// action/index.mts
+// action/index.mts (source — bundled into dist/index.mjs)
 import { getInput, setOutput } from "@actions/core";
 import { attestProvenance, type Subject } from "@actions/attest";
 import { createHash } from "node:crypto";
@@ -919,7 +945,9 @@ Replace `actions/attest` with `vadimpiven/node-addon-slsa@v1`.
 
 ## Task breakdown
 
-1. `action.yaml` + `action/index.mts` at repo root
+1. `action.yaml` + `action/index.mts` + `action/package.json`
+   at repo root; `esbuild` bundle → `action/dist/index.mjs`
+   (committed to repo)
 2. `@sigstore/tuf` 4.0.1 + `@sigstore/verify` 3.1.0 in catalog
    and `package/package.json`; patch `@sigstore/verify` to
    export `verifyCertificateChain` + `verifyTLogInclusion`
