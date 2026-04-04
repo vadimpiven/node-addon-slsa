@@ -59,7 +59,7 @@ Rekor fallback (new, when GitHub API returns 404 + no token):
         → check RunInvocationURI + OIDs
 ```
 
-### Prerequisite: force `public-good` sigstore in CI
+### Prerequisite: attest via public-good sigstore in CI
 
 Neither `actions/attest` nor `actions/attest-build-provenance`
 exposes a `sigstore` input. The instance is auto-detected from
@@ -76,26 +76,70 @@ const sigstoreInstance: SigstoreInstance =
 ```
 
 The underlying `@actions/attest` npm package **does** accept
-`sigstore: 'public-good'` programmatically. Private repos must
-use a custom workflow step instead of the standard actions:
+`sigstore: 'public-good'` programmatically. This repo provides
+a composite action that hardcodes `public-good`:
+
+```yaml
+# .github/actions/attest-public/action.yaml
+name: "Attest (public-good sigstore)"
+description: >-
+  Attest build provenance using the public-good sigstore
+  instance. Attestations are logged to the public Rekor
+  transparency log, enabling tokenless verification.
+inputs:
+  subject-path:
+    description: "Path to artifact(s) to attest. Supports globs."
+    required: true
+  github-token:
+    description: "GitHub token for authenticated API requests."
+    default: "${{ github.token }}"
+    required: false
+runs:
+  using: "node24"
+  main: "index.mjs"
+```
+
+```javascript
+// .github/actions/attest-public/index.mjs
+import * as core from "@actions/core";
+import { attestProvenance } from "@actions/attest";
+import { glob } from "@actions/glob";
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+
+const subjectPath = core.getInput("subject-path", { required: true });
+const token = core.getInput("github-token", { required: true });
+
+const globber = await glob.create(subjectPath);
+const files = await globber.glob();
+if (files.length === 0) {
+  throw new Error(`no files matched: ${subjectPath}`);
+}
+
+const subjects = await Promise.all(
+  files.map(async (file) => {
+    const content = await readFile(file);
+    const sha256 = createHash("sha256").update(content).digest("hex");
+    return { name: file, digest: { sha256 } };
+  }),
+);
+
+const result = await attestProvenance({
+  subjects,
+  token,
+  sigstore: "public-good", // hardcoded — the whole point of this action
+});
+
+core.setOutput("attestation-id", result.attestationID);
+```
+
+Usage in a consumer workflow (e.g. `node_reqwest`):
 
 ```yaml
 - name: "Attest build provenance"
-  uses: "actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea" # v7.0.1
+  uses: "vadimpiven/node-addon-slsa/.github/actions/attest-public@main"
   with:
-    script: |
-      const { attestProvenance } = require('@actions/attest');
-      const result = await attestProvenance({
-        subjects: [{
-          name: 'my_addon.node.gz',
-          digest: { sha256: '${{ steps.hash.outputs.sha256 }}' },
-        }],
-        token: process.env.GITHUB_TOKEN,
-        sigstore: 'public-good',  // force public Rekor + Fulcio
-      });
-      core.info(`Attestation: ${result.attestationID}`);
-  env:
-    GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+    subject-path: "dist/*.gz"
 ```
 
 This uses `fulcio.sigstore.dev` + `rekor.sigstore.dev`,
@@ -175,8 +219,8 @@ export async function fetchRekorAttestations(options: {
     throw new ProvenanceError(dedent`
       No attestation found on GitHub API or Rekor for artifact
       hash ${sha256}.
-      For private repos, either set GITHUB_TOKEN or attest
-      with sigstore: 'public-good' (see README).
+      For private repos, either set GITHUB_TOKEN or use the
+      attest-public action (see README).
     `);
   }
 
@@ -760,9 +804,9 @@ unnecessary. Real artifact hashes have 1–5 entries (verified:
 
 ### Information leak: private repo metadata in Rekor
 
-Attesting with `sigstore: 'public-good'` on a private repo
-exposes in the public Rekor log: repository name, workflow
-path, run URL, commit SHA. Source code stays private.
+Using the `attest-public` action on a private repo exposes
+in the public Rekor log: repository name, workflow path,
+run URL, commit SHA. Source code stays private.
 
 ### Certificate validity window
 
@@ -1045,13 +1089,14 @@ describe("fetchRekorAttestations (integration)", () => {
 
 Public repositories work without authentication. Private
 repositories work without authentication **if** the CI workflow
-attests with `sigstore: 'public-good'` via a custom workflow
-step using `@actions/attest` (the standard `actions/attest`
-action does not expose this option). Verification falls back to
-the public Rekor transparency log. Otherwise, private
-repositories require `GITHUB_TOKEN`.
+uses the `attest-public` action from this repository
+(`vadimpiven/node-addon-slsa/.github/actions/attest-public`).
+This action hardcodes the public-good sigstore instance,
+logging attestations to the public Rekor transparency log for
+tokenless verification. Otherwise, private repositories require
+`GITHUB_TOKEN`.
 
-> **Privacy note:** `sigstore: 'public-good'` on a private
+> **Privacy note:** the `attest-public` action on a private
 > repository exposes the repository name, workflow paths, commit
 > SHAs, and run URLs in the public Rekor transparency log.
 > Source code remains private.
@@ -1061,33 +1106,33 @@ repositories require `GITHUB_TOKEN`.
 
 Add to "Not protected":
 
-> **Private repo metadata leak** — attesting with
-> `sigstore: 'public-good'` on a private repository exposes
-> repository name and CI metadata in the public Rekor
-> transparency log.
+> **Private repo metadata leak** — using the `attest-public`
+> action on a private repository exposes repository name and
+> CI metadata in the public Rekor transparency log.
 
 ### `package/README.md` — CI setup
 
-Add a custom attestation step example for private repos using
-`@actions/attest` with `sigstore: 'public-good'`.
+Add `attest-public` action usage example for private repos.
 
 ## Task breakdown
 
-1. Add `@sigstore/tuf` 4.0.1 + `@sigstore/verify` 3.1.0 to
+1. Create `.github/actions/attest-public/` — `action.yaml` +
+   `index.mjs` (hardcoded `public-good` sigstore)
+2. Add `@sigstore/tuf` 4.0.1 + `@sigstore/verify` 3.1.0 to
    `pnpm-workspace.yaml` catalog and `package/package.json`
    devDependencies
-2. Add Rekor constants to `constants.ts`
-3. Add Rekor Zod schemas to `schemas.ts`
-4. Add `AttestationAccessError` + `isAttestationAccessError`
+3. Add Rekor constants to `constants.ts`
+4. Add Rekor Zod schemas to `schemas.ts`
+5. Add `AttestationAccessError` + `isAttestationAccessError`
    to `attestations.ts`
-5. Modify `throwGitHubApiError` in `attestations.ts` — throw
+6. Modify `throwGitHubApiError` in `attestations.ts` — throw
    `AttestationAccessError` on 404 + no token
-6. Create `rekor.ts` — full implementation per architecture
+7. Create `rekor.ts` — full implementation per architecture
    above, including inline vitest
-7. Modify `verifyAddonProvenance` in `api.ts` — catch
+8. Modify `verifyAddonProvenance` in `api.ts` — catch
    `AttestationAccessError`, call `fetchRekorAttestations`
-8. Update `verify.test.ts` — split 404 test into
+9. Update `verify.test.ts` — split 404 test into
    with-token/without-token variants
-9. Update `api.test.ts` — add Rekor fallback tests
-10. Add integration tests for `fetchRekorAttestations`
-11. `package/README.md` updates
+10. Update `api.test.ts` — add Rekor fallback tests
+11. Add integration tests for `fetchRekorAttestations`
+12. `package/README.md` updates
