@@ -167,6 +167,42 @@ pnpm strict hoisting blocks transitive dep access.
 `TrustMaterial.tlogs` → `TLogAuthority[]` with Rekor public
 keys for SET and checkpoint verification.
 
+### Patch `@sigstore/verify` to export internal functions
+
+`verifyCertificateChain` and `verifyTLogInclusion` exist in
+`@sigstore/verify` but are not exported. Reimplementing them
+means ~150 lines of crypto logic tracking upstream changes.
+Patching adds 4 export lines instead.
+
+```diff
+--- a/dist/index.js
++++ b/dist/index.js
++var key_1 = require("./key/certificate");
++Object.defineProperty(exports, "verifyCertificateChain",
++  { enumerable: true,
++    get: function () {
++      return key_1.verifyCertificateChain; } });
++var tlog_1 = require("./tlog");
++Object.defineProperty(exports, "verifyTLogInclusion",
++  { enumerable: true,
++    get: function () {
++      return tlog_1.verifyTLogInclusion; } });
+```
+
+```diff
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
++export { verifyCertificateChain }
++  from './key/certificate';
++export { verifyTLogInclusion }
++  from './tlog';
++export type { CertAuthority, TLogAuthority }
++  from './trust';
+```
+
+Apply via `pnpm patch @sigstore/verify` and commit the
+patch file to the repo.
+
 ## Architecture
 
 ### `package/src/verify/rekor.ts` (new)
@@ -174,8 +210,12 @@ keys for SET and checkpoint verification.
 ```typescript
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-import { crypto, json, X509Certificate } from "@sigstore/core";
-import type { TLogAuthority, TrustMaterial } from "@sigstore/verify";
+import { X509Certificate } from "@sigstore/core";
+import {
+  verifyCertificateChain,
+  verifyTLogInclusion,
+  type TrustMaterial,
+} from "@sigstore/verify"; // patched — see "Patch" section
 
 /**
  * Verify addon provenance via the public Rekor transparency log.
@@ -216,8 +256,15 @@ export async function verifyRekorAttestations(options: {
   for (const uuid of capped) {
     try {
       const entry = await fetchRekorEntry(uuid, config);
-      verifyTLogInclusion(entry, trustMaterial);
+      const tlogEntry = toTransparencyLogEntry(entry);
+      verifyTLogInclusion(tlogEntry, trustMaterial.tlogs);
       const cert = extractCertFromEntry(entry);
+      const timestamp = new Date(entry.integratedTime * 1000);
+      verifyCertificateChain(
+        timestamp,
+        cert,
+        trustMaterial.certificateAuthorities,
+      );
       const certRunURI = getExtensionValue(cert, OID_RUN_INVOCATION_URI);
       if (certRunURI === runInvocationURI) {
         verifyCertificateOIDs(cert, repo);
@@ -319,150 +366,51 @@ async function fetchRekorEntry(
 ```
 
 ```typescript
-// --- Transparency log inclusion verification ---
-// Reimplements @sigstore/verify internals using @sigstore/core
-// crypto. @sigstore/verify exports TrustMaterial but not the
-// individual tlog verification functions.
+// --- Transparency log + certificate chain verification ---
+// Uses patched @sigstore/verify exports (see "Patch" section).
 
-function verifyTLogInclusion(
-  entry: RekorLogEntry,
-  trustMaterial: TrustMaterial,
-): void {
-  const tlogs = trustMaterial.tlogs;
-  verifySET(entry, tlogs);
-  const checkpoint = verifyCheckpointSignature(entry, tlogs);
-  verifyMerkleProof(entry, checkpoint);
-}
+import {
+  verifyCertificateChain,
+  verifyTLogInclusion,
+  type CertAuthority,
+  type TLogAuthority,
+} from "@sigstore/verify"; // patched
+import type { TransparencyLogEntry } from "@sigstore/bundle";
 
-// SET: prove entry was acknowledged by a trusted Rekor instance
-function verifySET(entry: RekorLogEntry, tlogs: TLogAuthority[]): void {
-  const logIdBuf = Buffer.from(entry.logID, "hex");
-  const timestamp = new Date(entry.integratedTime * 1000);
-  const validTLogs = tlogs.filter(
-    (t) =>
-      crypto.bufferEqual(t.logID, logIdBuf) &&
-      timestamp >= t.validFor.start &&
-      timestamp <= t.validFor.end,
-  );
-
-  // Same payload structure as @sigstore/verify tlog/set.js
-  const payload = {
-    body: entry.body,
-    integratedTime: entry.integratedTime,
-    logIndex: entry.logIndex,
-    logID: entry.logID,
+/**
+ * Map Rekor REST API response fields to a
+ * @sigstore/bundle TransparencyLogEntry.
+ *
+ * The REST API uses strings/numbers; the protobuf type
+ * uses Buffers and string-encoded int64s.
+ */
+function toTransparencyLogEntry(entry: RekorLogEntry): TransparencyLogEntry {
+  return {
+    logIndex: String(entry.logIndex),
+    logId: {
+      keyId: Buffer.from(entry.logID, "hex"),
+    },
+    kindVersion: { kind: "dsse", version: "0.0.1" },
+    integratedTime: String(entry.integratedTime),
+    inclusionPromise: {
+      signedEntryTimestamp: Buffer.from(
+        entry.verification.signedEntryTimestamp,
+        "base64",
+      ),
+    },
+    inclusionProof: {
+      logIndex: String(entry.verification.inclusionProof.logIndex),
+      rootHash: Buffer.from(entry.verification.inclusionProof.rootHash, "hex"),
+      treeSize: String(entry.verification.inclusionProof.treeSize),
+      hashes: entry.verification.inclusionProof.hashes.map((h) =>
+        Buffer.from(h, "hex"),
+      ),
+      checkpoint: {
+        envelope: entry.verification.inclusionProof.checkpoint,
+      },
+    },
+    canonicalizedBody: Buffer.from(entry.body, "base64"),
   };
-  const data = Buffer.from(json.canonicalize(payload), "utf8");
-  const signature = Buffer.from(
-    entry.verification.signedEntryTimestamp,
-    "base64",
-  );
-  if (!validTLogs.some((t) => crypto.verify(data, t.publicKey, signature))) {
-    throw new Error("Rekor SET verification failed");
-  }
-}
-
-// Checkpoint: prove the log root is signed by a trusted key
-interface LogCheckpoint {
-  origin: string;
-  logSize: bigint;
-  logHash: Buffer;
-}
-
-function verifyCheckpointSignature(
-  entry: RekorLogEntry,
-  tlogs: TLogAuthority[],
-): LogCheckpoint {
-  const envelope = entry.verification.inclusionProof.checkpoint;
-
-  // Format: <note>\n\n— <identity> <keyhint+sig>\n
-  const sepIdx = envelope.indexOf("\n\n");
-  if (sepIdx === -1) {
-    throw new Error("invalid checkpoint: missing separator");
-  }
-  const note = envelope.slice(0, sepIdx + 1);
-  const sigs = envelope.slice(sepIdx + 2);
-
-  // Parse: origin\nsize\nbase64(rootHash)\n
-  const lines = note.trimEnd().split("\n");
-  if (lines.length < 3) {
-    throw new Error("invalid checkpoint: expected at least 3 lines");
-  }
-  const checkpoint: LogCheckpoint = {
-    origin: lines[0]!,
-    logSize: BigInt(lines[1]!),
-    logHash: Buffer.from(lines[2]!, "base64"),
-  };
-
-  // Verify signature(s)
-  // Format: "— <name> <base64(4-byte-hint + sig)>\n"
-  const sigRegex = /\u2014 (\S+) (\S+)\n/g;
-  const noteData = Buffer.from(note, "utf-8");
-  let anyVerified = false;
-
-  for (const match of sigs.matchAll(sigRegex)) {
-    const sigBytes = Buffer.from(match[2]!, "base64");
-    const keyHint = sigBytes.subarray(0, 4);
-    const sig = sigBytes.subarray(4);
-    // includes() not match() — match() treats '.' as wildcard
-    const tlog = tlogs.find(
-      (t) =>
-        crypto.bufferEqual(t.logID.subarray(0, 4), keyHint) &&
-        t.baseURL.includes(match[1]!),
-    );
-    if (tlog && crypto.verify(noteData, tlog.publicKey, sig)) {
-      anyVerified = true;
-      break;
-    }
-  }
-
-  if (!anyVerified) {
-    throw new Error("Rekor checkpoint signature verification failed");
-  }
-  return checkpoint;
-}
-
-// Merkle: RFC 6962 §2.1.1 inclusion proof
-function verifyMerkleProof(
-  entry: RekorLogEntry,
-  checkpoint: LogCheckpoint,
-): void {
-  const proof = entry.verification.inclusionProof;
-  const index = BigInt(proof.logIndex);
-  const size = checkpoint.logSize;
-
-  const { inner, border } = decompInclProof(index, size);
-  const hashes = proof.hashes.map((h) => Buffer.from(h, "hex"));
-
-  const LEAF = Buffer.from([0x00]);
-  const NODE = Buffer.from([0x01]);
-  const leafHash = crypto.digest(
-    "sha256",
-    LEAF,
-    Buffer.from(entry.body, "base64"),
-  );
-  const root = chainBorderRight(
-    chainInner(leafHash, hashes.slice(0, inner), index),
-    hashes.slice(inner),
-  );
-
-  if (!crypto.bufferEqual(root, checkpoint.logHash)) {
-    throw new Error("Merkle inclusion proof failed");
-  }
-
-  function chainInner(seed: Buffer, h: Buffer[], idx: bigint): Buffer {
-    return h.reduce(
-      (acc, v, i) =>
-        (idx >> BigInt(i)) & 1n
-          ? crypto.digest("sha256", NODE, v, acc)
-          : crypto.digest("sha256", NODE, acc, v),
-      seed,
-    );
-  }
-
-  function chainBorderRight(seed: Buffer, h: Buffer[]): Buffer {
-    return h.reduce((acc, v) => crypto.digest("sha256", NODE, v, acc), seed);
-  }
 }
 
 // Certificate from Rekor DSSE entry body
@@ -654,17 +602,28 @@ export const RekorDsseBodySchema = z.object({
 | Artifact binding      | SHA-256 Rekor search key   |
 
 The removed GitHub API path verified the full DSSE signature
-(proves certificate holder signed this exact in-toto statement).
-The Rekor path verifies the inclusion proof (proves signing event
-was logged) + certificate OIDs. Both require Fulcio compromise or
+(proves certificate holder signed this exact in-toto statement)
+and the Fulcio certificate chain. The Rekor path verifies the
+inclusion proof (proves signing event was logged), the Fulcio
+certificate chain (proves the cert was issued by a trusted CA),
+and the certificate OIDs. Both require Fulcio compromise or
 Rekor forgery to bypass.
 
 ### Threats
 
-**Attacker submits Rekor entries for the same hash.**
-Rekor is append-only and publicly writable.
-`verifyCertificateOIDs` rejects certificates with wrong
-`RunInvocationURI` or source repo.
+**Attacker submits Rekor entries with forged certificate.**
+Rekor is append-only and publicly writable — anyone can submit
+entries. An attacker could create a self-signed certificate
+with matching OIDs (RunInvocationURI, SourceRepoURI, Issuer)
+and submit a DSSE entry to Rekor for the same artifact hash.
+`verifyCertificateChain` rejects certificates not issued by a
+trusted Fulcio CA from the TUF trust root. Without this check,
+OID verification alone would be trivially bypassable.
+
+**Attacker submits entries from a different workflow.**
+Rekor entries from a legitimate but different workflow run have
+valid Fulcio certs but wrong `RunInvocationURI` or source repo.
+`verifyCertificateOIDs` rejects these.
 
 **Rekor entry flood (DoS).** Cap at `MAX_REKOR_ENTRIES` (50).
 Apply `maxJsonResponseBytes`. Sequential fetch with early-exit
@@ -848,35 +807,18 @@ describe("extractCertFromEntry", () => {
   });
 });
 
-describe("verifyMerkleProof", () => {
-  it("accepts valid fixture proof", ({ expect }) => {
-    expect(() =>
-      verifyMerkleProof(FIXTURE_ENTRY, FIXTURE_CHECKPOINT),
-    ).not.toThrow();
-  });
-
-  it("rejects tampered root hash", ({ expect }) => {
-    expect(() =>
-      verifyMerkleProof(FIXTURE_ENTRY, {
-        ...FIXTURE_CHECKPOINT,
-        logHash: Buffer.alloc(32),
-      }),
-    ).toThrow(/Merkle/);
-  });
-});
-
-describe("decompInclProof", () => {
-  it("index=3, size=7 → inner=2, border=1", ({ expect }) => {
-    expect(decompInclProof(3n, 7n)).toEqual({ inner: 2, border: 1 });
-  });
-  it("index=0, size=1 → inner=0, border=0", ({ expect }) => {
-    expect(decompInclProof(0n, 1n)).toEqual({ inner: 0, border: 0 });
-  });
-});
-
-describe("verifySET", () => {
-  it("rejects with no matching tlog authority", ({ expect }) => {
-    expect(() => verifySET(FIXTURE_ENTRY, [])).toThrow(/SET/);
+describe("toTransparencyLogEntry", () => {
+  it("maps REST fields to protobuf types", ({ expect }) => {
+    const tlog = toTransparencyLogEntry(FIXTURE_ENTRY);
+    // string-encoded int64
+    expect(tlog.logIndex).toBe(String(FIXTURE_ENTRY.logIndex));
+    // hex string → Buffer
+    expect(tlog.logId?.keyId).toEqual(Buffer.from(FIXTURE_ENTRY.logID, "hex"));
+    // base64 → Buffer
+    expect(tlog.canonicalizedBody).toEqual(
+      Buffer.from(FIXTURE_ENTRY.body, "base64"),
+    );
+    expect(tlog.kindVersion?.kind).toBe("dsse");
   });
 });
 
@@ -904,40 +846,6 @@ describe("searchRekorIndex", () => {
         resolveConfig({ retryCount: 0 }),
       ),
     ).rejects.toThrow(/Rekor search failed/);
-  });
-});
-
-describe("verifyCheckpointSignature", () => {
-  it("rejects missing separator", ({ expect }) => {
-    const bad = {
-      ...FIXTURE_ENTRY,
-      verification: {
-        ...FIXTURE_ENTRY.verification,
-        inclusionProof: {
-          ...FIXTURE_ENTRY.verification.inclusionProof,
-          checkpoint: "no separator here",
-        },
-      },
-    };
-    expect(() => verifyCheckpointSignature(bad, [])).toThrow(
-      /missing separator/,
-    );
-  });
-
-  it("rejects checkpoint with < 3 lines", ({ expect }) => {
-    const bad = {
-      ...FIXTURE_ENTRY,
-      verification: {
-        ...FIXTURE_ENTRY.verification,
-        inclusionProof: {
-          ...FIXTURE_ENTRY.verification.inclusionProof,
-          checkpoint: "one\n\n",
-        },
-      },
-    };
-    expect(() => verifyCheckpointSignature(bad, [])).toThrow(
-      /at least 3 lines/,
-    );
   });
 });
 
@@ -1013,7 +921,8 @@ Replace `actions/attest` with `vadimpiven/node-addon-slsa@v1`.
 
 1. `action.yaml` + `action/index.mts` at repo root
 2. `@sigstore/tuf` 4.0.1 + `@sigstore/verify` 3.1.0 in catalog
-   and `package/package.json`
+   and `package/package.json`; patch `@sigstore/verify` to
+   export `verifyCertificateChain` + `verifyTLogInclusion`
 3. `constants.ts` — add Rekor URLs + `MAX_REKOR_ENTRIES`, remove
    `GITHUB_ATTESTATIONS_URL`
 4. `schemas.ts` — add Rekor schemas, remove
