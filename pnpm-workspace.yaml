@@ -20,7 +20,7 @@ catalog:
   typedoc: 0.28.18
   typedoc-theme-oxide: 0.2.5
   typescript: 6.0.2
-  undici: 7.24.7
+  undici: 8.0.2
   vite: 8.0.3
   vite-plugin-dts: 5.0.0-beta.6
   vitest: 4.1.2
@@ -29,15 +29,9 @@ catalog:
 minimumReleaseAge: 1440
 
 minimumReleaseAgeExclude:
-  - "@oxfmt/*"
 
 onlyBuiltDependencies: []
 
 overrides:
-  markdown-it: ">=14.1.1"
-
-peerDependencyRules:
-  allowedVersions:
-    "rollup-plugin-sbom>vite": "8"
 
 strictDepBuilds: true
