@@ -76,11 +76,11 @@ const sigstoreInstance: SigstoreInstance =
 ```
 
 The underlying `@actions/attest` npm package **does** accept
-`sigstore: 'public-good'` programmatically. This repo provides
-a composite action that hardcodes `public-good`:
+`sigstore: 'public-good'` programmatically. This repo provides a root-level GitHub Action that hardcodes
+`public-good`, usable as `vadimpiven/node-addon-slsa@v1`:
 
 ```yaml
-# .github/actions/attest-public/action.yaml
+# action.yaml (repo root)
 name: "Attest (public-good sigstore)"
 description: >-
   Attest build provenance using the public-good sigstore
@@ -94,21 +94,28 @@ inputs:
     description: "GitHub token for authenticated API requests."
     default: "${{ github.token }}"
     required: false
+outputs:
+  attestation-id:
+    description: "The ID of the attestation."
 runs:
   using: "node24"
-  main: "index.mjs"
+  main: "action/index.mjs"
 ```
 
 ```javascript
-// .github/actions/attest-public/index.mjs
+// action/index.mjs
 import * as core from "@actions/core";
 import { attestProvenance } from "@actions/attest";
 import { glob } from "@actions/glob";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
-const subjectPath = core.getInput("subject-path", { required: true });
-const token = core.getInput("github-token", { required: true });
+const subjectPath = core.getInput("subject-path", {
+  required: true,
+});
+const token = core.getInput("github-token", {
+  required: true,
+});
 
 const globber = await glob.create(subjectPath);
 const files = await globber.glob();
@@ -119,7 +126,8 @@ if (files.length === 0) {
 const subjects = await Promise.all(
   files.map(async (file) => {
     const content = await readFile(file);
-    const sha256 = createHash("sha256").update(content).digest("hex");
+    const sha256 = createHash("sha256")
+      .update(content).digest("hex");
     return { name: file, digest: { sha256 } };
   }),
 );
@@ -127,7 +135,7 @@ const subjects = await Promise.all(
 const result = await attestProvenance({
   subjects,
   token,
-  sigstore: "public-good", // hardcoded — the whole point of this action
+  sigstore: "public-good", // hardcoded — the whole point
 });
 
 core.setOutput("attestation-id", result.attestationID);
@@ -137,7 +145,7 @@ Usage in a consumer workflow (e.g. `node_reqwest`):
 
 ```yaml
 - name: "Attest build provenance"
-  uses: "vadimpiven/node-addon-slsa/.github/actions/attest-public@main"
+  uses: "vadimpiven/node-addon-slsa@v1"
   with:
     subject-path: "dist/*.gz"
 ```
@@ -1116,8 +1124,8 @@ Add `attest-public` action usage example for private repos.
 
 ## Task breakdown
 
-1. Create `.github/actions/attest-public/` — `action.yaml` +
-   `index.mjs` (hardcoded `public-good` sigstore)
+1. Create root-level action — `action.yaml` +
+   `action/index.mjs` (hardcoded `public-good` sigstore)
 2. Add `@sigstore/tuf` 4.0.1 + `@sigstore/verify` 3.1.0 to
    `pnpm-workspace.yaml` catalog and `package/package.json`
    devDependencies
