@@ -102,9 +102,8 @@ runs:
 // action/index.mts
 import * as core from "@actions/core";
 import { attestProvenance, type Subject } from "@actions/attest";
-import { glob } from "@actions/glob";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { glob, readFile } from "node:fs/promises";
 
 const subjectPath: string = core.getInput("subject-path", {
   required: true,
@@ -113,8 +112,12 @@ const token: string = core.getInput("github-token", {
   required: true,
 });
 
-const globber = await glob.create(subjectPath);
-const files: string[] = await globber.glob();
+// node:fs/promises glob — stable since Node 22.17.0,
+// node24 action runtime guarantees availability.
+const files: string[] = [];
+for await (const file of glob(subjectPath)) {
+  files.push(file);
+}
 if (files.length === 0) {
   throw new Error(`no files matched: ${subjectPath}`);
 }
@@ -122,7 +125,8 @@ if (files.length === 0) {
 const subjects: Subject[] = await Promise.all(
   files.map(async (file: string): Promise<Subject> => {
     const content: Buffer = await readFile(file);
-    const sha256: string = createHash("sha256").update(content).digest("hex");
+    const sha256: string = createHash("sha256")
+      .update(content).digest("hex");
     return { name: file, digest: { sha256 } };
   }),
 );
