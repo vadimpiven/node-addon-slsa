@@ -43,14 +43,14 @@ Verified against entry `108e9186e8...` for `cli/cli`:
 ## Solution: certificate-level verification via Rekor
 
 ```text
-GitHub API path (existing):
+GitHub API path (primary):
   fetchGitHubAttestations
     → resolve bundles
     → verifier.verify(bundle)      // full DSSE + tlog
     → extractCertFromBundle
     → check RunInvocationURI + OIDs
 
-Rekor fallback (new, when GitHub API returns 404 + no token):
+Rekor fallback (when GitHub API returns 404 + no token):
   fetchRekorAttestations(sha256)   // POST rekor.sigstore.dev
     → for each entry UUID:
         fetchRekorEntry(uuid)
@@ -58,6 +58,19 @@ Rekor fallback (new, when GitHub API returns 404 + no token):
         → extractCertFromEntry()   // from entry body
         → check RunInvocationURI + OIDs
 ```
+
+Two paths are necessary:
+
+- **Rekor cannot be the only path.** Private repos using the
+  standard `actions/attest` (not our `attest-public`) have
+  attestations only in the GitHub API — private Fulcio + TSA,
+  no Rekor entry. These users must provide `GITHUB_TOKEN`.
+- **GitHub API stays primary.** It provides stronger verification
+  (full DSSE signature, not just inclusion proof + cert OIDs),
+  is faster (one call vs TUF init + search + entry fetches),
+  and already works for public repos without a token.
+- **Rekor is the fallback** for one specific scenario: private
+  repo, no token, attestation created via `attest-public`.
 
 ### Prerequisite: attest via public-good sigstore in CI
 
@@ -69,10 +82,10 @@ repo visibility with no user override
 ```typescript
 // actions/attest src/main.ts — hardcoded, no input
 const sigstoreInstance: SigstoreInstance =
-  github.context.payload.repository?.visibility === 'public' &&
-  !inputs.privateSigning   // undocumented, forces private on public repos
-    ? 'public-good'
-    : 'github'
+  github.context.payload.repository?.visibility === "public" &&
+  !inputs.privateSigning // undocumented, forces private on public repos
+    ? "public-good"
+    : "github";
 ```
 
 The underlying `@actions/attest` npm package **does** accept
@@ -126,8 +139,7 @@ if (files.length === 0) {
 const subjects = await Promise.all(
   files.map(async (file) => {
     const content = await readFile(file);
-    const sha256 = createHash("sha256")
-      .update(content).digest("hex");
+    const sha256 = createHash("sha256").update(content).digest("hex");
     return { name: file, digest: { sha256 } };
   }),
 );
