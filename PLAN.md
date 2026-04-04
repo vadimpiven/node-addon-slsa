@@ -95,32 +95,34 @@ outputs:
     description: "The ID of the attestation."
 runs:
   using: "node24"
-  main: "action/index.mjs"
+  main: "action/index.mts"
 ```
 
-```javascript
-// action/index.mjs
+```typescript
+// action/index.mts
 import * as core from "@actions/core";
-import { attestProvenance } from "@actions/attest";
+import { attestProvenance, type Subject } from "@actions/attest";
 import { glob } from "@actions/glob";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
-const subjectPath = core.getInput("subject-path", {
+const subjectPath: string = core.getInput("subject-path", {
   required: true,
 });
-const token = core.getInput("github-token", { required: true });
+const token: string = core.getInput("github-token", {
+  required: true,
+});
 
 const globber = await glob.create(subjectPath);
-const files = await globber.glob();
+const files: string[] = await globber.glob();
 if (files.length === 0) {
   throw new Error(`no files matched: ${subjectPath}`);
 }
 
-const subjects = await Promise.all(
-  files.map(async (file) => {
-    const content = await readFile(file);
-    const sha256 = createHash("sha256").update(content).digest("hex");
+const subjects: Subject[] = await Promise.all(
+  files.map(async (file: string): Promise<Subject> => {
+    const content: Buffer = await readFile(file);
+    const sha256: string = createHash("sha256").update(content).digest("hex");
     return { name: file, digest: { sha256 } };
   }),
 );
@@ -908,7 +910,7 @@ Replace `actions/attest` with `vadimpiven/node-addon-slsa@v1`.
 
 ## Task breakdown
 
-1. `action.yaml` + `action/index.mjs` at repo root
+1. `action.yaml` + `action/index.mts` at repo root
 2. `@sigstore/tuf` 4.0.1 + `@sigstore/verify` 3.1.0 in catalog
    and `package/package.json`
 3. `constants.ts` — add Rekor URLs + `MAX_REKOR_ENTRIES`, remove
