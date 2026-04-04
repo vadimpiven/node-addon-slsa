@@ -2,9 +2,10 @@
 
 ## Problem
 
-`actions/attest-build-provenance` selects the sigstore instance by
-repo visibility
-(from `@actions/toolkit` `packages/attest/src/endpoints.ts`):
+`actions/attest` (and its wrapper `actions/attest-build-provenance`)
+selects the sigstore instance by repo visibility
+(from `actions/attest` `src/main.ts` → `@actions/attest`
+`packages/attest/src/endpoints.ts`):
 
 | Visibility | Fulcio CA              | Witness  | Bundle storage     |
 | ---------- | ---------------------- | -------- | ------------------ |
@@ -58,15 +59,47 @@ Rekor fallback (new, when GitHub API returns 404 + no token):
         → check RunInvocationURI + OIDs
 ```
 
-### Prerequisite: `sigstore: public-good` in CI
+### Prerequisite: force `public-good` sigstore in CI
+
+Neither `actions/attest` nor `actions/attest-build-provenance`
+exposes a `sigstore` input. The instance is auto-detected from
+repo visibility with no user override
+(from `actions/attest` `src/main.ts`):
+
+```typescript
+// actions/attest src/main.ts — hardcoded, no input
+const sigstoreInstance: SigstoreInstance =
+  github.context.payload.repository?.visibility === 'public' &&
+  !inputs.privateSigning   // undocumented, forces private on public repos
+    ? 'public-good'
+    : 'github'
+```
+
+The underlying `@actions/attest` npm package **does** accept
+`sigstore: 'public-good'` programmatically. Private repos must
+use a custom workflow step instead of the standard actions:
 
 ```yaml
-# overrides auto-detection in @actions/toolkit endpoints.ts
-- uses: actions/attest-build-provenance@v4
+- name: "Attest build provenance"
+  uses: "actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea" # v7.0.1
   with:
-    subject-path: dist/my_addon-v*.node.gz
-    sigstore: public-good # → fulcio.sigstore.dev + rekor.sigstore.dev
+    script: |
+      const { attestProvenance } = require('@actions/attest');
+      const result = await attestProvenance({
+        subjects: [{
+          name: 'my_addon.node.gz',
+          digest: { sha256: '${{ steps.hash.outputs.sha256 }}' },
+        }],
+        token: process.env.GITHUB_TOKEN,
+        sigstore: 'public-good',  // force public Rekor + Fulcio
+      });
+      core.info(`Attestation: ${result.attestationID}`);
+  env:
+    GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 ```
+
+This uses `fulcio.sigstore.dev` + `rekor.sigstore.dev`,
+compatible with the existing `createVerifier` trust root.
 
 ## Public API changes
 
@@ -142,8 +175,8 @@ export async function fetchRekorAttestations(options: {
     throw new ProvenanceError(dedent`
       No attestation found on GitHub API or Rekor for artifact
       hash ${sha256}.
-      For private repos, either set GITHUB_TOKEN or use
-      sigstore: public-good in attest-build-provenance.
+      For private repos, either set GITHUB_TOKEN or attest
+      with sigstore: 'public-good' (see README).
     `);
   }
 
@@ -727,9 +760,9 @@ unnecessary. Real artifact hashes have 1–5 entries (verified:
 
 ### Information leak: private repo metadata in Rekor
 
-`sigstore: public-good` on a private repo exposes in the public
-Rekor log: repository name, workflow path, run URL, commit SHA.
-Source code stays private.
+Attesting with `sigstore: 'public-good'` on a private repo
+exposes in the public Rekor log: repository name, workflow
+path, run URL, commit SHA. Source code stays private.
 
 ### Certificate validity window
 
@@ -1012,11 +1045,13 @@ describe("fetchRekorAttestations (integration)", () => {
 
 Public repositories work without authentication. Private
 repositories work without authentication **if** the CI workflow
-uses `sigstore: public-good` in `actions/attest-build-provenance`
-(verification falls back to the public Rekor transparency log).
-Otherwise, private repositories require `GITHUB_TOKEN`.
+attests with `sigstore: 'public-good'` via a custom workflow
+step using `@actions/attest` (the standard `actions/attest`
+action does not expose this option). Verification falls back to
+the public Rekor transparency log. Otherwise, private
+repositories require `GITHUB_TOKEN`.
 
-> **Privacy note:** `sigstore: public-good` on a private
+> **Privacy note:** `sigstore: 'public-good'` on a private
 > repository exposes the repository name, workflow paths, commit
 > SHAs, and run URLs in the public Rekor transparency log.
 > Source code remains private.
@@ -1026,14 +1061,15 @@ Otherwise, private repositories require `GITHUB_TOKEN`.
 
 Add to "Not protected":
 
-> **Private repo metadata leak** — `sigstore: public-good` on a
-> private repository exposes repository name and CI metadata in
-> the public Rekor transparency log.
+> **Private repo metadata leak** — attesting with
+> `sigstore: 'public-good'` on a private repository exposes
+> repository name and CI metadata in the public Rekor
+> transparency log.
 
 ### `package/README.md` — CI setup
 
-Add `sigstore: public-good` to the attest step with a comment
-for private repos.
+Add a custom attestation step example for private repos using
+`@actions/attest` with `sigstore: 'public-good'`.
 
 ## Task breakdown
 
