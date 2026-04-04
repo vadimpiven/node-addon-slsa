@@ -6,10 +6,10 @@
 repo visibility
 (from `@actions/toolkit` `packages/attest/src/endpoints.ts`):
 
-| Visibility | Fulcio CA | Witness | Bundle storage |
-| --- | --- | --- | --- |
-| Public | `fulcio.sigstore.dev` | Rekor | GitHub API + Rekor |
-| Private | `fulcio.githubapp.com` | TSA only | GitHub API only |
+| Visibility | Fulcio CA              | Witness  | Bundle storage     |
+| ---------- | ---------------------- | -------- | ------------------ |
+| Public     | `fulcio.sigstore.dev`  | Rekor    | GitHub API + Rekor |
+| Private    | `fulcio.githubapp.com` | TSA only | GitHub API only    |
 
 Private repos: no Rekor entry, incompatible Fulcio CA, GitHub
 Attestations API returns 404 without `GITHUB_TOKEN`.
@@ -25,10 +25,12 @@ Verified against entry `108e9186e8...` for `cli/cli`:
   "spec": {
     "envelopeHash": { "algorithm": "sha256", "value": "72cd9b..." },
     "payloadHash": { "algorithm": "sha256", "value": "383256..." },
-    "signatures": [{
-      "signature": "MEUC...",
-      "verifier": "LS0tLS1CRUdJTi..." // base64 PEM certificate
-    }]
+    "signatures": [
+      {
+        "signature": "MEUC...",
+        "verifier": "LS0tLS1CRUdJTi..." // base64 PEM certificate
+      }
+    ]
   }
 }
 ```
@@ -63,7 +65,7 @@ Rekor fallback (new, when GitHub API returns 404 + no token):
 - uses: actions/attest-build-provenance@v4
   with:
     subject-path: dist/my_addon-v*.node.gz
-    sigstore: public-good  # → fulcio.sigstore.dev + rekor.sigstore.dev
+    sigstore: public-good # → fulcio.sigstore.dev + rekor.sigstore.dev
 ```
 
 ## Public API changes
@@ -129,8 +131,7 @@ export async function fetchRekorAttestations(options: {
   trustMaterial?: TrustMaterial; // injectable for testing
 }): Promise<void> {
   const { sha256, runInvocationURI, repo, config } = options;
-  const trustMaterial = options.trustMaterial
-    ?? await loadTrustMaterial();
+  const trustMaterial = options.trustMaterial ?? (await loadTrustMaterial());
 
   log(`searching Rekor for attestations`);
 
@@ -154,9 +155,7 @@ export async function fetchRekorAttestations(options: {
       const entry = await fetchRekorEntry(uuid, config);
       verifyTLogInclusion(entry, trustMaterial);
       const cert = extractCertFromEntry(entry);
-      const certRunURI = getExtensionValue(
-        cert, OID_RUN_INVOCATION_URI,
-      );
+      const certRunURI = getExtensionValue(cert, OID_RUN_INVOCATION_URI);
       if (certRunURI === runInvocationURI) {
         verifyCertificateOIDs(cert, repo);
         log(`Rekor verification passed (entry ${uuid})`);
@@ -171,13 +170,14 @@ export async function fetchRekorAttestations(options: {
 
   // Same error structure as verifyAddonProvenance in api.ts
   const total = capped.length;
-  const detail = verifyFailures === total
-    ? dedent`
+  const detail =
+    verifyFailures === total
+      ? dedent`
         All ${total} Rekor entry/entries failed verification.
         This may indicate a sigstore trust root issue rather
         than tampering.
       `
-    : dedent`
+      : dedent`
         ${total} Rekor entry/entries found but none matched
         workflow run ${runInvocationURI}.
         This can happen if the addon was rebuilt without
@@ -310,33 +310,147 @@ function verifyTLogInclusion(
 }
 
 // SET: prove entry was acknowledged by a trusted Rekor instance
-function verifySET(
-  entry: RekorLogEntry,
-  tlogs: TLogAuthority[],
-): void { /* ... same logic as previous plan ... */ }
+function verifySET(entry: RekorLogEntry, tlogs: TLogAuthority[]): void {
+  const logIdBuf = Buffer.from(entry.logID, "hex");
+  const timestamp = new Date(entry.integratedTime * 1000);
+  const validTLogs = tlogs.filter(
+    (t) =>
+      crypto.bufferEqual(t.logID, logIdBuf) &&
+      timestamp >= t.validFor.start &&
+      timestamp <= t.validFor.end,
+  );
+
+  // Re-create the SET verification payload
+  // (same structure as @sigstore/verify tlog/set.js)
+  const payload = {
+    body: entry.body,
+    integratedTime: entry.integratedTime,
+    logIndex: entry.logIndex,
+    logID: entry.logID,
+  };
+  const data = Buffer.from(json.canonicalize(payload), "utf8");
+  const signature = Buffer.from(
+    entry.verification.signedEntryTimestamp,
+    "base64",
+  );
+
+  const verified = validTLogs.some((tlog) =>
+    crypto.verify(data, tlog.publicKey, signature),
+  );
+  if (!verified) {
+    throw new Error("Rekor SET verification failed");
+  }
+}
 
 // Checkpoint: prove the log root is signed by a trusted key
+interface LogCheckpoint {
+  origin: string;
+  logSize: bigint;
+  logHash: Buffer;
+}
+
 function verifyCheckpointSignature(
   entry: RekorLogEntry,
   tlogs: TLogAuthority[],
-): LogCheckpoint { /* ... */ }
+): LogCheckpoint {
+  const envelope = entry.verification.inclusionProof.checkpoint;
+  const sepIdx = envelope.indexOf("\n\n");
+  if (sepIdx === -1) {
+    throw new Error("invalid checkpoint: missing separator");
+  }
+  const note = envelope.slice(0, sepIdx + 1);
+  const sigs = envelope.slice(sepIdx + 2);
+
+  const lines = note.trimEnd().split("\n");
+  if (lines.length < 3) {
+    throw new Error("invalid checkpoint: expected at least 3 lines");
+  }
+  const checkpoint: LogCheckpoint = {
+    origin: lines[0]!,
+    logSize: BigInt(lines[1]!),
+    logHash: Buffer.from(lines[2]!, "base64"),
+  };
+
+  // Verify signature(s)
+  // Format: "\u2014 <name> <base64(4-byte-hint + sig)>\n"
+  const sigRegex = /\u2014 (\S+) (\S+)\n/g;
+  const noteData = Buffer.from(note, "utf-8");
+  let anyVerified = false;
+
+  for (const match of sigs.matchAll(sigRegex)) {
+    const sigBytes = Buffer.from(match[2]!, "base64");
+    const keyHint = sigBytes.subarray(0, 4);
+    const sig = sigBytes.subarray(4);
+    // Use includes() not match() — match() treats the
+    // identity string as regex, turning '.' into wildcards
+    const tlog = tlogs.find(
+      (t) =>
+        crypto.bufferEqual(t.logID.subarray(0, 4), keyHint) &&
+        t.baseURL.includes(match[1]!),
+    );
+    if (tlog && crypto.verify(noteData, tlog.publicKey, sig)) {
+      anyVerified = true;
+      break;
+    }
+  }
+
+  if (!anyVerified) {
+    throw new Error("Rekor checkpoint signature verification failed");
+  }
+  return checkpoint;
+}
 
 // Merkle: prove the entry is included in the log at the
 // checkpoint's root hash (RFC 6962 §2.1.1)
 function verifyMerkleProof(
   entry: RekorLogEntry,
   checkpoint: LogCheckpoint,
-): void { /* ... */ }
+): void {
+  const proof = entry.verification.inclusionProof;
+  const index = BigInt(proof.logIndex);
+  const size = checkpoint.logSize;
+
+  const { inner, border } = decompInclProof(index, size);
+  const hashes = proof.hashes.map((h) => Buffer.from(h, "hex"));
+
+  const LEAF = Buffer.from([0x00]);
+  const NODE = Buffer.from([0x01]);
+
+  const leafHash = crypto.digest(
+    "sha256",
+    LEAF,
+    Buffer.from(entry.body, "base64"),
+  );
+  const root = chainBorderRight(
+    chainInner(leafHash, hashes.slice(0, inner), index),
+    hashes.slice(inner),
+  );
+
+  if (!crypto.bufferEqual(root, checkpoint.logHash)) {
+    throw new Error("Merkle inclusion proof failed");
+  }
+
+  // --- helpers ---
+  function chainInner(seed: Buffer, h: Buffer[], idx: bigint): Buffer {
+    return h.reduce(
+      (acc, v, i) =>
+        (idx >> BigInt(i)) & 1n
+          ? crypto.digest("sha256", NODE, v, acc)
+          : crypto.digest("sha256", NODE, acc, v),
+      seed,
+    );
+  }
+
+  function chainBorderRight(seed: Buffer, h: Buffer[]): Buffer {
+    return h.reduce((acc, v) => crypto.digest("sha256", NODE, v, acc), seed);
+  }
+}
 
 // --- Certificate extraction ---
 
 /** Extract Fulcio certificate from Rekor DSSE entry body. */
-function extractCertFromEntry(
-  entry: RekorLogEntry,
-): X509Certificate {
-  const body = JSON.parse(
-    Buffer.from(entry.body, "base64").toString("utf8"),
-  );
+function extractCertFromEntry(entry: RekorLogEntry): X509Certificate {
+  const body = JSON.parse(Buffer.from(entry.body, "base64").toString("utf8"));
   const parsed = RekorDsseBodySchema.parse(body);
   const certB64 = parsed.spec.signatures[0]!.verifier;
   const certPem = Buffer.from(certB64, "base64").toString("utf8");
@@ -372,12 +486,8 @@ async function postWithRetry(
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     config.signal?.throwIfAborted();
     const ac = new AbortController();
-    const timer = globalThis.setTimeout(
-      () => ac.abort(), config.timeoutMs,
-    );
-    const signal = AbortSignal.any(
-      [ac.signal, config.signal].filter(Boolean),
-    );
+    const timer = globalThis.setTimeout(() => ac.abort(), config.timeoutMs);
+    const signal = AbortSignal.any([ac.signal, config.signal].filter(Boolean));
 
     try {
       const response = await fetch(url, {
@@ -486,15 +596,16 @@ export async function verifyAddonProvenance(
 
   let ghAttestations: GitHubAttestations;
   try {
-    ghAttestations = await fetchGitHubAttestations(
-      { repo, sha256 }, config,
-    );
+    ghAttestations = await fetchGitHubAttestations({ repo, sha256 }, config);
   } catch (err) {
     if (isAttestationAccessError(err)) {
       // GitHub API inaccessible without token — try public Rekor
       log(`GitHub API inaccessible, trying Rekor fallback`);
       return fetchRekorAttestations({
-        sha256, runInvocationURI, repo, config,
+        sha256,
+        runInvocationURI,
+        repo,
+        config,
       });
     }
     throw err;
@@ -570,10 +681,14 @@ export const RekorDsseBodySchema = z.object({
       algorithm: z.literal("sha256"),
       value: z.string(),
     }),
-    signatures: z.array(z.object({
-      signature: z.string(),
-      verifier: z.string(),
-    })).min(1),
+    signatures: z
+      .array(
+        z.object({
+          signature: z.string(),
+          verifier: z.string(),
+        }),
+      )
+      .min(1),
   }),
 });
 ```
@@ -582,14 +697,14 @@ export const RekorDsseBodySchema = z.object({
 
 ### Trust model equivalence
 
-| Property | GitHub API path | Rekor path |
-| --- | --- | --- |
-| Certificate authority | public-good Fulcio | same |
-| Transparency proof | tlogEntry in bundle | inclusion proof direct |
-| Same-run binding | RunInvocationURI in cert | same |
-| Source repo check | OID 1.3.6.1.4.1.57264.1.12 | same |
-| Issuer check | OID 1.3.6.1.4.1.57264.1.8 | same |
-| Artifact binding | SHA-256 in DSSE subject | SHA-256 Rekor index |
+| Property              | GitHub API path            | Rekor path             |
+| --------------------- | -------------------------- | ---------------------- |
+| Certificate authority | public-good Fulcio         | same                   |
+| Transparency proof    | tlogEntry in bundle        | inclusion proof direct |
+| Same-run binding      | RunInvocationURI in cert   | same                   |
+| Source repo check     | OID 1.3.6.1.4.1.57264.1.12 | same                   |
+| Issuer check          | OID 1.3.6.1.4.1.57264.1.8  | same                   |
+| Artifact binding      | SHA-256 in DSSE subject    | SHA-256 Rekor index    |
 
 The GitHub API path verifies the DSSE signature (certificate
 holder signed this in-toto statement). The Rekor path verifies
@@ -605,7 +720,9 @@ Rekor is append-only and publicly writable.
 ### Threat: Rekor entry flood (DoS)
 
 Cap at `MAX_REKOR_ENTRIES` (50). Apply `maxJsonResponseBytes`
-to responses. Real artifact hashes have 1–5 entries (verified:
+to responses. Entries are fetched sequentially with early-exit
+on first match (typical case: 1 entry), so parallelism is
+unnecessary. Real artifact hashes have 1–5 entries (verified:
 `cli/cli` hash → 1).
 
 ### Information leak: private repo metadata in Rekor
@@ -633,34 +750,30 @@ Split into two tests:
 ```typescript
 // REPLACE existing "returns ProvenanceError on 404":
 
-it("throws AttestationAccessError on 404 without token",
-  async ({ expect }) => {
-    using _fetch = stubFetch(async () =>
-      new Response(null, { status: 404, statusText: "Not Found" }),
-    );
-    await expect(
-      fetchGitHubAttestations(
-        { repo: "owner/repo", sha256: FAKE_HASH },
-        defaultConfig,
-      ),
-    ).rejects.toThrow(AttestationAccessError);
-  },
-);
+it("throws AttestationAccessError on 404 without token", async ({ expect }) => {
+  using _fetch = stubFetch(
+    async () => new Response(null, { status: 404, statusText: "Not Found" }),
+  );
+  await expect(
+    fetchGitHubAttestations(
+      { repo: "owner/repo", sha256: FAKE_HASH },
+      defaultConfig,
+    ),
+  ).rejects.toThrow(AttestationAccessError);
+});
 
-it("throws ProvenanceError on 404 with token",
-  async ({ expect }) => {
-    using _token = stubEnvVar("GITHUB_TOKEN", "ghp_test");
-    using _fetch = stubFetch(async () =>
-      new Response(null, { status: 404, statusText: "Not Found" }),
-    );
-    await expect(
-      fetchGitHubAttestations(
-        { repo: "owner/repo", sha256: FAKE_HASH },
-        defaultConfig,
-      ),
-    ).rejects.toThrow(ProvenanceError);
-  },
-);
+it("throws ProvenanceError on 404 with token", async ({ expect }) => {
+  using _token = stubEnvVar("GITHUB_TOKEN", "ghp_test");
+  using _fetch = stubFetch(
+    async () => new Response(null, { status: 404, statusText: "Not Found" }),
+  );
+  await expect(
+    fetchGitHubAttestations(
+      { repo: "owner/repo", sha256: FAKE_HASH },
+      defaultConfig,
+    ),
+  ).rejects.toThrow(ProvenanceError);
+});
 ```
 
 #### `api.test.ts` — verifyAddonProvenance fallback
@@ -751,21 +864,24 @@ describe("extractCertFromEntry", () => {
   // FIXTURE_ENTRY: captured from cli/cli Rekor lookup
   it("extracts cert with correct OID values", ({ expect }) => {
     const cert = extractCertFromEntry(FIXTURE_ENTRY);
-    expect(getExtensionValue(cert, OID_RUN_INVOCATION_URI))
-      .toBe("https://github.com/cli/cli/actions/runs/"
-        + "22312430014/attempts/4");
-    expect(getExtensionValue(cert, OID_SOURCE_REPO_URI))
-      .toBe("https://github.com/cli/cli");
+    expect(getExtensionValue(cert, OID_RUN_INVOCATION_URI)).toBe(
+      "https://github.com/cli/cli/actions/runs/" + "22312430014/attempts/4",
+    );
+    expect(getExtensionValue(cert, OID_SOURCE_REPO_URI)).toBe(
+      "https://github.com/cli/cli",
+    );
   });
 
   it("rejects non-dsse entry kind", ({ expect }) => {
     const bad = {
       ...FIXTURE_ENTRY,
-      body: btoa(JSON.stringify({
-        apiVersion: "0.0.1",
-        kind: "hashedrekord",
-        spec: {},
-      })),
+      body: btoa(
+        JSON.stringify({
+          apiVersion: "0.0.1",
+          kind: "hashedrekord",
+          spec: {},
+        }),
+      ),
     };
     expect(() => extractCertFromEntry(bad)).toThrow();
   });
@@ -785,22 +901,18 @@ describe("verifyMerkleProof", () => {
       ...FIXTURE_CHECKPOINT,
       logHash: Buffer.alloc(32),
     };
-    expect(() =>
-      verifyMerkleProof(FIXTURE_ENTRY, bad),
-    ).toThrow(/Merkle/);
+    expect(() => verifyMerkleProof(FIXTURE_ENTRY, bad)).toThrow(/Merkle/);
   });
 });
 
 describe("decompInclProof", () => {
   // Known values from RFC 6962 examples
   it("index=3, size=7 → inner=2, border=1", ({ expect }) => {
-    expect(decompInclProof(3n, 7n))
-      .toEqual({ inner: 2, border: 1 });
+    expect(decompInclProof(3n, 7n)).toEqual({ inner: 2, border: 1 });
   });
 
   it("index=0, size=1 → inner=0, border=0", ({ expect }) => {
-    expect(decompInclProof(0n, 1n))
-      .toEqual({ inner: 0, border: 0 });
+    expect(decompInclProof(0n, 1n)).toEqual({ inner: 0, border: 0 });
   });
 });
 
@@ -809,9 +921,7 @@ describe("decompInclProof", () => {
 describe("verifySET", () => {
   it("rejects when no matching tlog authority", ({ expect }) => {
     const emptyTlogs: TLogAuthority[] = [];
-    expect(() =>
-      verifySET(FIXTURE_ENTRY, emptyTlogs),
-    ).toThrow(/SET/);
+    expect(() => verifySET(FIXTURE_ENTRY, emptyTlogs)).toThrow(/SET/);
   });
 });
 
@@ -820,12 +930,10 @@ describe("verifySET", () => {
 describe("searchRekorIndex", () => {
   it("sends POST with correct body", async ({ expect }) => {
     let capturedBody: string | undefined;
-    using _fetch = stubFetch(
-      async (_url: unknown, init?: RequestInit) => {
-        capturedBody = init?.body as string;
-        return new Response("[]", { status: 200 });
-      },
-    );
+    using _fetch = stubFetch(async (_url: unknown, init?: RequestInit) => {
+      capturedBody = init?.body as string;
+      return new Response("[]", { status: 200 });
+    });
     await searchRekorIndex(
       sha256Hex("a".repeat(64)),
       resolveConfig({ retryCount: 0 }),
@@ -853,47 +961,45 @@ describe("fetchRekorAttestations (integration)", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("throws ProvenanceError for hash with no Rekor entries",
-    async ({ expect }) => {
-      await expect(
-        fetchRekorAttestations({
-          sha256: sha256Hex("ff".repeat(32)),
-          runInvocationURI: CLI_RUN_URI,
-          repo: CLI_REPO,
-          config: resolveConfig({ retryCount: 0 }),
-        }),
-      ).rejects.toThrow(ProvenanceError);
-    },
-  );
+  it("throws ProvenanceError for hash with no Rekor entries", async ({
+    expect,
+  }) => {
+    await expect(
+      fetchRekorAttestations({
+        sha256: sha256Hex("ff".repeat(32)),
+        runInvocationURI: CLI_RUN_URI,
+        repo: CLI_REPO,
+        config: resolveConfig({ retryCount: 0 }),
+      }),
+    ).rejects.toThrow(ProvenanceError);
+  });
 
-  it("throws ProvenanceError when run URI does not match",
-    async ({ expect }) => {
-      const wrongRunURI = runInvocationURI(
-        "https://github.com/cli/cli/actions/runs/1/attempts/1",
-      );
-      await expect(
-        fetchRekorAttestations({
-          sha256: CLI_HASH,
-          runInvocationURI: wrongRunURI,
-          repo: CLI_REPO,
-          config: resolveConfig({ retryCount: 0 }),
-        }),
-      ).rejects.toThrow(ProvenanceError);
-    },
-  );
+  it("throws ProvenanceError when run URI does not match", async ({
+    expect,
+  }) => {
+    const wrongRunURI = runInvocationURI(
+      "https://github.com/cli/cli/actions/runs/1/attempts/1",
+    );
+    await expect(
+      fetchRekorAttestations({
+        sha256: CLI_HASH,
+        runInvocationURI: wrongRunURI,
+        repo: CLI_REPO,
+        config: resolveConfig({ retryCount: 0 }),
+      }),
+    ).rejects.toThrow(ProvenanceError);
+  });
 
-  it("throws ProvenanceError when repo does not match",
-    async ({ expect }) => {
-      await expect(
-        fetchRekorAttestations({
-          sha256: CLI_HASH,
-          runInvocationURI: CLI_RUN_URI,
-          repo: "wrong/repo",
-          config: resolveConfig({ retryCount: 0 }),
-        }),
-      ).rejects.toThrow(ProvenanceError);
-    },
-  );
+  it("throws ProvenanceError when repo does not match", async ({ expect }) => {
+    await expect(
+      fetchRekorAttestations({
+        sha256: CLI_HASH,
+        runInvocationURI: CLI_RUN_URI,
+        repo: "wrong/repo",
+        config: resolveConfig({ retryCount: 0 }),
+      }),
+    ).rejects.toThrow(ProvenanceError);
+  });
 });
 ```
 
