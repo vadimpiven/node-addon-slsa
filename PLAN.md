@@ -95,33 +95,32 @@ outputs:
     description: "The ID of the attestation."
 runs:
   using: "node24"
-  main: "action/dist/index.mjs" # bundled — see build step below
+  main: "action/dist/index.js" # bundled by ncc
 ```
 
 GitHub Actions runtime has no package manager — `@actions/core`,
 `@actions/attest`, and their transitive deps must be bundled
-into a single file. Use `esbuild` (already a transitive dep
-via vite):
+into a single file. Use `@vercel/ncc` (the standard tool for
+GitHub Actions — same as `actions/attest`, `actions/checkout`):
 
 ```jsonc
 // action/package.json
 {
   "private": true,
-  "type": "module",
   "scripts": {
-    "build": "esbuild index.mts --bundle --platform=node --format=esm --outfile=dist/index.mjs --external:node:*"
+    "build": "ncc build index.mts --license licenses.txt",
   },
   "dependencies": {
     "@actions/attest": "2.3.0",
-    "@actions/core": "1.11.1"
+    "@actions/core": "1.11.1",
   },
   "devDependencies": {
-    "esbuild": "0.25.4"
-  }
+    "@vercel/ncc": "0.38.4",
+  },
 }
 ```
 
-`action/dist/index.mjs` is committed to the repo (same pattern
+`action/dist/index.js` is committed to the repo (same pattern
 as `actions/attest` committing their 4.3 MB `dist/index.js`).
 A CI check verifies the dist is up to date:
 
@@ -130,11 +129,11 @@ A CI check verifies the dist is up to date:
 - name: "Verify action dist is up to date"
   run: |
     cd action && pnpm install && pnpm run build
-    git diff --exit-code action/dist/index.mjs
+    git diff --exit-code action/dist/
 ```
 
 ```typescript
-// action/index.mts (source — bundled into dist/index.mjs)
+// action/index.mts (source — bundled by ncc into dist/index.js)
 import { getInput, setOutput } from "@actions/core";
 import { attestProvenance, type Subject } from "@actions/attest";
 import { createHash } from "node:crypto";
@@ -955,7 +954,7 @@ Replace `actions/attest` with `vadimpiven/node-addon-slsa@v1`.
 ## Task breakdown
 
 1. `action.yaml` + `action/index.mts` + `action/package.json`
-   at repo root; `esbuild` bundle → `action/dist/index.mjs`
+   at repo root; `ncc build` → `action/dist/index.js`
    (committed to repo)
 2. `@sigstore/tuf` 4.0.1 + `@sigstore/verify` 3.1.0 in catalog
    and `package/package.json`; patch `@sigstore/verify` to
