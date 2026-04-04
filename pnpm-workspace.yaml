@@ -29,15 +29,9 @@ catalog:
 minimumReleaseAge: 1440
 
 minimumReleaseAgeExclude:
-  - "@oxfmt/*"
 
 onlyBuiltDependencies: []
 
 overrides:
-  markdown-it: ">=14.1.1"
-
-peerDependencyRules:
-  allowedVersions:
-    "rollup-plugin-sbom>vite": "8"
 
 strictDepBuilds: true

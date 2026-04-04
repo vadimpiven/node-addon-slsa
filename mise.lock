@@ -104,36 +104,36 @@ checksum = "sha256:f3326f6406c98c99701b257d77e2b040eedf83d0176c2c2e9809aa339ceb4
 url = "https://github.com/cli/cli/releases/download/v2.89.0/gh_2.89.0_windows_amd64.zip"
 
 [[tools."aqua:crate-ci/typos"]]
-version = "1.44.0"
+version = "1.45.0"
 backend = "aqua:crate-ci/typos"
 
 [tools."aqua:crate-ci/typos"."platforms.linux-arm64"]
-checksum = "sha256:132c20fc5e3c9ba540ec55a0a468dcb9c1504625a405df1c237b10dd4f2ec433"
-url = "https://github.com/crate-ci/typos/releases/download/v1.44.0/typos-v1.44.0-aarch64-unknown-linux-musl.tar.gz"
+checksum = "sha256:dde3b5c5bd5d0ab6ff76a1465658dc6485e7d420cf8eccfdfbdea37809bed793"
+url = "https://github.com/crate-ci/typos/releases/download/v1.45.0/typos-v1.45.0-aarch64-unknown-linux-musl.tar.gz"
 
 [tools."aqua:crate-ci/typos"."platforms.linux-arm64-musl"]
-checksum = "sha256:132c20fc5e3c9ba540ec55a0a468dcb9c1504625a405df1c237b10dd4f2ec433"
-url = "https://github.com/crate-ci/typos/releases/download/v1.44.0/typos-v1.44.0-aarch64-unknown-linux-musl.tar.gz"
+checksum = "sha256:dde3b5c5bd5d0ab6ff76a1465658dc6485e7d420cf8eccfdfbdea37809bed793"
+url = "https://github.com/crate-ci/typos/releases/download/v1.45.0/typos-v1.45.0-aarch64-unknown-linux-musl.tar.gz"
 
 [tools."aqua:crate-ci/typos"."platforms.linux-x64"]
-checksum = "sha256:1b788b7d764e2f20fe089487428a3944ed218d1fb6fcd8eac4230b5893a38779"
-url = "https://github.com/crate-ci/typos/releases/download/v1.44.0/typos-v1.44.0-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:fa10c3c77c61bdf03f2f6f8245eb6fb89d92115450272a4eabe326b3967ac375"
+url = "https://github.com/crate-ci/typos/releases/download/v1.45.0/typos-v1.45.0-x86_64-unknown-linux-musl.tar.gz"
 
 [tools."aqua:crate-ci/typos"."platforms.linux-x64-musl"]
-checksum = "sha256:1b788b7d764e2f20fe089487428a3944ed218d1fb6fcd8eac4230b5893a38779"
-url = "https://github.com/crate-ci/typos/releases/download/v1.44.0/typos-v1.44.0-x86_64-unknown-linux-musl.tar.gz"
+checksum = "sha256:fa10c3c77c61bdf03f2f6f8245eb6fb89d92115450272a4eabe326b3967ac375"
+url = "https://github.com/crate-ci/typos/releases/download/v1.45.0/typos-v1.45.0-x86_64-unknown-linux-musl.tar.gz"
 
 [tools."aqua:crate-ci/typos"."platforms.macos-arm64"]
-checksum = "sha256:ca82d593351dbac519a5c9fa832fc147b176d80100d00d08e855fcb46d43882d"
-url = "https://github.com/crate-ci/typos/releases/download/v1.44.0/typos-v1.44.0-aarch64-apple-darwin.tar.gz"
+checksum = "sha256:c42f8d8af49bff559f0bf0a45d1fb704f9e13446cc8faebfb30a3f669b89c802"
+url = "https://github.com/crate-ci/typos/releases/download/v1.45.0/typos-v1.45.0-aarch64-apple-darwin.tar.gz"
 
 [tools."aqua:crate-ci/typos"."platforms.macos-x64"]
-checksum = "sha256:70e7cbfd9c0bac3b27d096171413a8fff989cc9f9227d3ef66694ed99fdc7b5c"
-url = "https://github.com/crate-ci/typos/releases/download/v1.44.0/typos-v1.44.0-x86_64-apple-darwin.tar.gz"
+checksum = "sha256:4a4c1060b248c13ce7bc6c1ffe5cb75120885e8ecb62e7ba2b40f5567680f9ba"
+url = "https://github.com/crate-ci/typos/releases/download/v1.45.0/typos-v1.45.0-x86_64-apple-darwin.tar.gz"
 
 [tools."aqua:crate-ci/typos"."platforms.windows-x64"]
-checksum = "sha256:afd85c8f3c5c925ee7452389acdf70b048d8c6eae5e52a581e63a7d1b7655f17"
-url = "https://github.com/crate-ci/typos/releases/download/v1.44.0/typos-v1.44.0-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:dc89f5f175ee1a389e1f5cc5173353d9db3751e2cddedf34339d8ec45cd38aa0"
+url = "https://github.com/crate-ci/typos/releases/download/v1.45.0/typos-v1.45.0-x86_64-pc-windows-msvc.zip"
 
 [[tools."aqua:gitleaks/gitleaks"]]
 version = "8.30.1"
@@ -296,36 +296,37 @@ checksum = "sha256:47594981f3848a4b4447494adeca9555f908f7cf0a89c4da3fd0243a4631d
 url = "https://github.com/mikefarah/yq/releases/download/v4.52.5/yq_windows_amd64.exe"
 
 [[tools."aqua:rhysd/actionlint"]]
-version = "1.7.11"
+version = "1.7.12"
 backend = "aqua:rhysd/actionlint"
 
 [tools."aqua:rhysd/actionlint"."platforms.linux-arm64"]
-checksum = "sha256:21bc0dfb57a913fe175298c2a9e906ee630f747cb66d0a934d0d4b69f4ee1235"
-url = "https://github.com/rhysd/actionlint/releases/download/v1.7.11/actionlint_1.7.11_linux_arm64.tar.gz"
+checksum = "sha256:325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6"
+url = "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_arm64.tar.gz"
 
 [tools."aqua:rhysd/actionlint"."platforms.linux-arm64-musl"]
-checksum = "sha256:21bc0dfb57a913fe175298c2a9e906ee630f747cb66d0a934d0d4b69f4ee1235"
-url = "https://github.com/rhysd/actionlint/releases/download/v1.7.11/actionlint_1.7.11_linux_arm64.tar.gz"
+checksum = "sha256:325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6"
+url = "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_arm64.tar.gz"
 
 [tools."aqua:rhysd/actionlint"."platforms.linux-x64"]
-checksum = "sha256:900919a84f2229bac68ca9cd4103ea297abc35e9689ebb842c6e34a3d1b01b0a"
-url = "https://github.com/rhysd/actionlint/releases/download/v1.7.11/actionlint_1.7.11_linux_amd64.tar.gz"
+checksum = "sha256:8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+url = "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz"
 
 [tools."aqua:rhysd/actionlint"."platforms.linux-x64-musl"]
-checksum = "sha256:900919a84f2229bac68ca9cd4103ea297abc35e9689ebb842c6e34a3d1b01b0a"
-url = "https://github.com/rhysd/actionlint/releases/download/v1.7.11/actionlint_1.7.11_linux_amd64.tar.gz"
+checksum = "sha256:8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+url = "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz"
 
 [tools."aqua:rhysd/actionlint"."platforms.macos-arm64"]
-checksum = "sha256:a21ba7366d8329e7223faee0ed69eb13da27fe8acabb356bb7eb0b7f1e1cb6d8"
-url = "https://github.com/rhysd/actionlint/releases/download/v1.7.11/actionlint_1.7.11_darwin_arm64.tar.gz"
+checksum = "sha256:aba9ced2dee8d27fecca3dc7feb1a7f9a52caefa1eb46f3271ea66b6e0e6953f"
+url = "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_darwin_arm64.tar.gz"
+provenance = "github-attestations"
 
 [tools."aqua:rhysd/actionlint"."platforms.macos-x64"]
-checksum = "sha256:17ffc17fed8f0258ef6ad4aed932d3272464c7ef7d64e1cb0d65aa97c9752107"
-url = "https://github.com/rhysd/actionlint/releases/download/v1.7.11/actionlint_1.7.11_darwin_amd64.tar.gz"
+checksum = "sha256:5b44c3bc2255115c9b69e30efc0fecdf498fdb63c5d58e17084fd5f16324c644"
+url = "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_darwin_amd64.tar.gz"
 
 [tools."aqua:rhysd/actionlint"."platforms.windows-x64"]
-checksum = "sha256:5414b7124a91f4b5abee62e5c9d84802237734f8d15b9b7032732a32c3ebffa3"
-url = "https://github.com/rhysd/actionlint/releases/download/v1.7.11/actionlint_1.7.11_windows_amd64.zip"
+checksum = "sha256:6e7241b51e6817ea6a047693d8e6fed13b31819c9a0dd6c5a726e1592d22f6e9"
+url = "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_windows_amd64.zip"
 
 [[tools."aqua:tamasfe/taplo"]]
 version = "0.10.0"
@@ -387,33 +388,33 @@ checksum = "sha256:33c2293ff02834720dd7cd8b47348aafb2e95a19bdc993c0ecaca9c804ade
 url = "https://github.com/zizmorcore/zizmor/releases/download/v1.23.1/zizmor-x86_64-pc-windows-msvc.zip"
 
 [[tools.node]]
-version = "25.8.2"
+version = "25.9.0"
 backend = "core:node"
 
 [tools.node."platforms.linux-arm64"]
-checksum = "sha256:2f823ecd4f9331d6492fedbe50c5a610be3084521f3a5af146875e00a52f2e63"
-url = "https://nodejs.org/dist/v25.8.2/node-v25.8.2-linux-arm64.tar.gz"
+checksum = "sha256:8fb4283301b8c720fc9f18bffff0f659e72cc14d0cf207a3bb411808aaa73a57"
+url = "https://nodejs.org/dist/v25.9.0/node-v25.9.0-linux-arm64.tar.gz"
 
 [tools.node."platforms.linux-arm64-musl"]
-checksum = "sha256:2f823ecd4f9331d6492fedbe50c5a610be3084521f3a5af146875e00a52f2e63"
-url = "https://nodejs.org/dist/v25.8.2/node-v25.8.2-linux-arm64.tar.gz"
+checksum = "sha256:8fb4283301b8c720fc9f18bffff0f659e72cc14d0cf207a3bb411808aaa73a57"
+url = "https://nodejs.org/dist/v25.9.0/node-v25.9.0-linux-arm64.tar.gz"
 
 [tools.node."platforms.linux-x64"]
-checksum = "sha256:e06c7069012d40914c57b31157c69d4ce83ea1fe9d63bbb7d26e0509a4535d21"
-url = "https://nodejs.org/dist/v25.8.2/node-v25.8.2-linux-x64.tar.gz"
+checksum = "sha256:134e55b2408448a219760fe04dc44d6851f9de8a79549021ffd870e9082d9e7b"
+url = "https://nodejs.org/dist/v25.9.0/node-v25.9.0-linux-x64.tar.gz"
 
 [tools.node."platforms.linux-x64-musl"]
-checksum = "sha256:e06c7069012d40914c57b31157c69d4ce83ea1fe9d63bbb7d26e0509a4535d21"
-url = "https://nodejs.org/dist/v25.8.2/node-v25.8.2-linux-x64.tar.gz"
+checksum = "sha256:134e55b2408448a219760fe04dc44d6851f9de8a79549021ffd870e9082d9e7b"
+url = "https://nodejs.org/dist/v25.9.0/node-v25.9.0-linux-x64.tar.gz"
 
 [tools.node."platforms.macos-arm64"]
-checksum = "sha256:fb8dabfda3232ef90d992e6439824fc3237356c04d182f3fa883bebeef31e871"
-url = "https://nodejs.org/dist/v25.8.2/node-v25.8.2-darwin-arm64.tar.gz"
+checksum = "sha256:e479f3c469d3d9303a44f00a8ea37a3788395d171bb8059c48a4bbbd2e371b59"
+url = "https://nodejs.org/dist/v25.9.0/node-v25.9.0-darwin-arm64.tar.gz"
 
 [tools.node."platforms.macos-x64"]
-checksum = "sha256:530ffb419789f843215375a65b8fcf4cf010735e99276f512a241a31ba8e5e13"
-url = "https://nodejs.org/dist/v25.8.2/node-v25.8.2-darwin-x64.tar.gz"
+checksum = "sha256:7d737b53ce191142bfa1c17cfa5b070d96e84eebf76b8dd06d84981cbdc3f7e3"
+url = "https://nodejs.org/dist/v25.9.0/node-v25.9.0-darwin-x64.tar.gz"
 
 [tools.node."platforms.windows-x64"]
-checksum = "sha256:51815d5b0256b947d27d614de04060fcfdbdb830d2c86e63e6f33dbf7964cca7"
-url = "https://nodejs.org/dist/v25.8.2/node-v25.8.2-win-x64.zip"
+checksum = "sha256:929552b8305effac843ba7b4270c437aefb702fc3fbd73fcd1bffd35d4ac284e"
+url = "https://nodejs.org/dist/v25.9.0/node-v25.9.0-win-x64.zip"

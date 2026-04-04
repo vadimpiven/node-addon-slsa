@@ -55,8 +55,8 @@ catalogs:
       specifier: 6.0.2
       version: 6.0.2
     undici:
-      specifier: 7.24.7
-      version: 7.24.7
+      specifier: 8.0.2
+      version: 8.0.2
     vite:
       specifier: 8.0.3
       version: 8.0.3
@@ -69,9 +69,6 @@ catalogs:
     zod:
       specifier: 4.3.6
       version: 4.3.6
-
-overrides:
-  markdown-it: '>=14.1.1'
 
 importers:
 
@@ -130,7 +127,7 @@ importers:
         version: 6.0.2
       undici:
         specifier: 'catalog:'
-        version: 7.24.7
+        version: 8.0.2
       vite:
         specifier: 'catalog:'
         version: 8.0.3(@types/node@25.5.2)(yaml@2.8.2)
@@ -1942,6 +1939,10 @@ packages:
   undici@7.24.7:
     resolution: {integrity: sha512-H/nlJ/h0ggGC+uRL3ovD+G0i4bqhvsDOpbDv7At5eFLlj2b41L8QliGbnl2H7SnDiYhENphh1tQFJZf+MyfLsQ==}
     engines: {node: '>=20.18.1'}
+
+  undici@8.0.2:
+    resolution: {integrity: sha512-B9MeU5wuFhkFAuNeA19K2GDFcQXZxq33fL0nRy2Aq30wdufZbyyvxW3/ChaeipXVfy/wUweZyzovQGk39+9k2w==}
+    engines: {node: '>=22.19.0'}
 
   unicorn-magic@0.4.0:
     resolution: {integrity: sha512-wH590V9VNgYH9g3lH9wWjTrUoKsjLF6sGLjhR4sH1LWpLmCOH0Zf7PukhDA8BiS7KHe4oPNkcTHqYkj7SOGUOw==}
@@ -4013,6 +4014,8 @@ snapshots:
       '@fastify/busboy': 2.1.1
 
   undici@7.24.7: {}
+
+  undici@8.0.2: {}
 
   unicorn-magic@0.4.0: {}
 
