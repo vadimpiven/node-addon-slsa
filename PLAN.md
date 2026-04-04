@@ -100,15 +100,15 @@ runs:
 
 ```typescript
 // action/index.mts
-import * as core from "@actions/core";
+import { getInput, setOutput } from "@actions/core";
 import { attestProvenance, type Subject } from "@actions/attest";
 import { createHash } from "node:crypto";
 import { glob, readFile } from "node:fs/promises";
 
-const subjectPath: string = core.getInput("subject-path", {
+const subjectPath: string = getInput("subject-path", {
   required: true,
 });
-const token: string = core.getInput("github-token", {
+const token: string = getInput("github-token", {
   required: true,
 });
 
@@ -125,8 +125,7 @@ if (files.length === 0) {
 const subjects: Subject[] = await Promise.all(
   files.map(async (file: string): Promise<Subject> => {
     const content: Buffer = await readFile(file);
-    const sha256: string = createHash("sha256")
-      .update(content).digest("hex");
+    const sha256: string = createHash("sha256").update(content).digest("hex");
     return { name: file, digest: { sha256 } };
   }),
 );
@@ -137,7 +136,7 @@ const result = await attestProvenance({
   sigstore: "public-good", // hardcoded — the whole point
 });
 
-core.setOutput("attestation-id", result.attestationID);
+setOutput("attestation-id", result.attestationID);
 ```
 
 ```yaml
