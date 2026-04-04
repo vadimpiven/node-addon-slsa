@@ -123,6 +123,15 @@ via vite):
 
 `action/dist/index.mjs` is committed to the repo (same pattern
 as `actions/attest` committing their 4.3 MB `dist/index.js`).
+A CI check verifies the dist is up to date:
+
+```yaml
+# .github/workflows/regular.yaml — add step
+- name: "Verify action dist is up to date"
+  run: |
+    cd action && pnpm install && pnpm run build
+    git diff --exit-code action/dist/index.mjs
+```
 
 ```typescript
 // action/index.mts (source — bundled into dist/index.mjs)
