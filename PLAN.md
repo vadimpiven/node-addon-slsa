@@ -53,7 +53,7 @@ Before:
     → extractCertFromBundle → check OIDs
 
 After:
-  fetchRekorAttestations(sha256)   // POST rekor.sigstore.dev
+  verifyRekorAttestations(sha256)   // POST rekor.sigstore.dev
     → for each entry UUID:
         fetchRekorEntry(uuid) → verifyTLogInclusion()
         → extractCertFromEntry() → check OIDs
@@ -112,8 +112,6 @@ const token: string = getInput("github-token", {
   required: true,
 });
 
-// node:fs/promises glob — stable since Node 22.17.0,
-// node24 action runtime guarantees availability.
 const files: string[] = [];
 for await (const file of glob(subjectPath)) {
   files.push(file);
@@ -191,7 +189,7 @@ import type { TLogAuthority, TrustMaterial } from "@sigstore/verify";
  * @throws `Error` on transient failures (network, Rekor
  *   unavailable) — safe to retry.
  */
-export async function fetchRekorAttestations(options: {
+export async function verifyRekorAttestations(options: {
   sha256: Sha256Hex;
   runInvocationURI: RunInvocationURI;
   repo: GitHubRepo;
@@ -530,8 +528,24 @@ or duplicate (~3 lines).
 ### `package/src/verify/api.ts` — replace
 
 ```typescript
-import { fetchRekorAttestations } from "./rekor.ts";
+import { verifyRekorAttestations } from "./rekor.ts";
 
+/**
+ * Verify addon binary provenance via the public Rekor
+ * transparency log. Confirms the artifact was attested in
+ * the expected workflow run and source repository.
+ *
+ * Typically called via
+ * {@link PackageProvenance.verifyAddon | verifyAddon}.
+ * Use directly when you already have a
+ * {@link RunInvocationURI}.
+ *
+ * @throws {@link ProvenanceError} if no attestation matches
+ *   the expected workflow run, or all attestations fail
+ *   verification.
+ * @throws `Error` on transient failures (network timeout,
+ *   Rekor unavailable) — safe to retry.
+ */
 export async function verifyAddonProvenance(
   options: {
     sha256: Sha256Hex;
@@ -542,7 +556,7 @@ export async function verifyAddonProvenance(
   const { sha256, runInvocationURI, repo } = options;
   const config = resolveConfig(options);
   log(`verifying addon provenance`);
-  return fetchRekorAttestations({
+  return verifyRekorAttestations({
     sha256,
     runInvocationURI,
     repo,
@@ -555,13 +569,18 @@ export async function verifyAddonProvenance(
 
 - **`attestations.ts`** — remove `fetchGitHubAttestations`,
   `throwGitHubApiError`, `resolveBundle`, `mapSettled`, Snappy
-  decompression. Keep `fetchNpmAttestations`.
+  decompression. Keep `fetchNpmAttestations`. Extract
+  `readJsonBounded` to a shared location (used by both
+  `fetchNpmAttestations` and `rekor.ts`).
 - **`schemas.ts`** — remove `GitHubAttestationsApiSchema`.
   Keep `NpmAttestationsSchema`, `BundleSchema`.
 - **`constants.ts`** — remove `GITHUB_ATTESTATIONS_URL`. Add
   `REKOR_SEARCH_URL`, `REKOR_ENTRY_URL`, `MAX_REKOR_ENTRIES`.
 - **`certificates.ts`** — remove `extractCertFromBundle`. Keep
   `verifyCertificateOIDs`, `getExtensionValue`.
+- **`hysnappy` dependency** — remove from `package.json`.
+  Only used by `resolveBundle` for Snappy-compressed
+  bundle_url responses, which are removed.
 
 ### New schemas in `schemas.ts`
 
@@ -617,7 +636,9 @@ export const RekorDsseBodySchema = z.object({
 
 ### Unchanged files
 
-`types.ts`, `config.ts`, `commands.ts`, `index.ts`
+- `types.ts` — `VerifyOptions.verifier` is now only used by
+  `verifyPackageProvenance` (npm sigstore). Update its JSDoc.
+- `config.ts`, `commands.ts`, `index.ts`
 
 ## Security analysis
 
@@ -669,15 +690,15 @@ resolution, Snappy decompression.
 
 ```typescript
 vi.mock("../src/verify/rekor.ts", () => ({
-  fetchRekorAttestations: vi.fn(),
+  verifyRekorAttestations: vi.fn(),
 }));
-const { fetchRekorAttestations } =
+const { verifyRekorAttestations } =
   await import("../src/verify/rekor.ts");
 
 describe("verifyAddonProvenance", () => {
-  it("delegates to fetchRekorAttestations",
+  it("delegates to verifyRekorAttestations",
     async ({ expect }) => {
-      vi.mocked(fetchRekorAttestations)
+      vi.mocked(verifyRekorAttestations)
         .mockResolvedValueOnce(undefined);
       await verifyAddonProvenance({
         sha256: sha256Hex("a".repeat(64)),
@@ -686,7 +707,7 @@ describe("verifyAddonProvenance", () => {
             as RunInvocationURI,
         repo: "owner/repo",
       });
-      expect(fetchRekorAttestations).toHaveBeenCalledWith(
+      expect(verifyRekorAttestations).toHaveBeenCalledWith(
         expect.objectContaining({
           sha256: "a".repeat(64),
           repo: "owner/repo",
@@ -696,7 +717,7 @@ describe("verifyAddonProvenance", () => {
   );
 
   it("propagates ProvenanceError", async ({ expect }) => {
-    vi.mocked(fetchRekorAttestations)
+    vi.mocked(verifyRekorAttestations)
       .mockRejectedValueOnce(
         new ProvenanceError("no matching entries"),
       );
@@ -749,10 +770,10 @@ describe("verifyAddonProvenance (integration)", () => {
   });
 });
 
-describe("fetchRekorAttestations (integration)", () => {
+describe("verifyRekorAttestations (integration)", () => {
   it("succeeds for known public attestation", async ({ expect }) => {
     await expect(
-      fetchRekorAttestations({
+      verifyRekorAttestations({
         sha256: CLI_HASH,
         runInvocationURI: CLI_RUN_URI,
         repo: CLI_REPO,
@@ -763,7 +784,7 @@ describe("fetchRekorAttestations (integration)", () => {
 
   it("throws for unknown hash", async ({ expect }) => {
     await expect(
-      fetchRekorAttestations({
+      verifyRekorAttestations({
         sha256: sha256Hex("ff".repeat(32)),
         runInvocationURI: CLI_RUN_URI,
         repo: CLI_REPO,
@@ -774,7 +795,7 @@ describe("fetchRekorAttestations (integration)", () => {
 
   it("throws when run URI mismatches", async ({ expect }) => {
     await expect(
-      fetchRekorAttestations({
+      verifyRekorAttestations({
         sha256: CLI_HASH,
         runInvocationURI: runInvocationURI(
           "https://github.com/cli/cli/actions/runs/1/attempts/1",
@@ -787,7 +808,7 @@ describe("fetchRekorAttestations (integration)", () => {
 
   it("throws when repo mismatches", async ({ expect }) => {
     await expect(
-      fetchRekorAttestations({
+      verifyRekorAttestations({
         sha256: CLI_HASH,
         runInvocationURI: CLI_RUN_URI,
         repo: "wrong/repo",
@@ -874,6 +895,83 @@ describe("searchRekorIndex", () => {
       hash: `sha256:${"a".repeat(64)}`,
     });
   });
+
+  it("throws on non-ok response", async ({ expect }) => {
+    using _f = stubFetch(async () => new Response(null, { status: 500 }));
+    await expect(
+      searchRekorIndex(
+        sha256Hex("a".repeat(64)),
+        resolveConfig({ retryCount: 0 }),
+      ),
+    ).rejects.toThrow(/Rekor search failed/);
+  });
+});
+
+describe("verifyCheckpointSignature", () => {
+  it("rejects missing separator", ({ expect }) => {
+    const bad = {
+      ...FIXTURE_ENTRY,
+      verification: {
+        ...FIXTURE_ENTRY.verification,
+        inclusionProof: {
+          ...FIXTURE_ENTRY.verification.inclusionProof,
+          checkpoint: "no separator here",
+        },
+      },
+    };
+    expect(() => verifyCheckpointSignature(bad, [])).toThrow(
+      /missing separator/,
+    );
+  });
+
+  it("rejects checkpoint with < 3 lines", ({ expect }) => {
+    const bad = {
+      ...FIXTURE_ENTRY,
+      verification: {
+        ...FIXTURE_ENTRY.verification,
+        inclusionProof: {
+          ...FIXTURE_ENTRY.verification.inclusionProof,
+          checkpoint: "one\n\n",
+        },
+      },
+    };
+    expect(() => verifyCheckpointSignature(bad, [])).toThrow(
+      /at least 3 lines/,
+    );
+  });
+});
+
+describe("postWithRetry", () => {
+  it("retries on 5xx", async ({ expect }) => {
+    let attempts = 0;
+    using _f = stubFetch(async () => {
+      attempts++;
+      if (attempts === 1) {
+        return new Response(null, { status: 500 });
+      }
+      return new Response("[]", { status: 200 });
+    });
+    const response = await postWithRetry("https://example.com", {
+      body: "{}",
+      config: resolveConfig({ retryCount: 1 }),
+    });
+    expect(attempts).toBe(2);
+    expect(response.ok).toBe(true);
+  });
+
+  it("does not retry on 4xx", async ({ expect }) => {
+    let attempts = 0;
+    using _f = stubFetch(async () => {
+      attempts++;
+      return new Response(null, { status: 400 });
+    });
+    const response = await postWithRetry("https://example.com", {
+      body: "{}",
+      config: resolveConfig({ retryCount: 2 }),
+    });
+    expect(attempts).toBe(1);
+    expect(response.status).toBe(400);
+  });
 });
 ```
 
@@ -921,10 +1019,10 @@ Replace `actions/attest` with `vadimpiven/node-addon-slsa@v1`.
 4. `schemas.ts` — add Rekor schemas, remove
    `GitHubAttestationsApiSchema`
 5. `rekor.ts` — full implementation + inline vitest
-6. `api.ts` — replace with `fetchRekorAttestations` call
+6. `api.ts` — replace with `verifyRekorAttestations` call
 7. `attestations.ts` — remove GitHub API logic
 8. `certificates.ts` — remove `extractCertFromBundle`
 9. `verify.test.ts` — remove `fetchGitHubAttestations` tests
-10. `api.test.ts` — mock `fetchRekorAttestations`
+10. `api.test.ts` — mock `verifyRekorAttestations`
 11. `verify.integration.test.ts` — Rekor-based tests
 12. `package/README.md` updates
