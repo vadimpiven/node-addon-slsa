@@ -20,7 +20,7 @@ npm_config_store_dir = "{{ config_root }}/.cache/pnpm"
 _.path = ["{{ config_root }}/node_modules/.bin"]
 
 [tools]
-node = "25.8.2"
+node = "25.9.0"
 
 "aqua:jqlang/jq" = "1.8.1"
 "aqua:mikefarah/yq" = "4.52.5"
@@ -28,9 +28,9 @@ node = "25.8.2"
 "aqua:aquasecurity/trivy" = "0.69.3"
 "aqua:google/yamlfmt" = "0.21.0"
 "aqua:gitleaks/gitleaks" = "8.30.1"
-"aqua:rhysd/actionlint" = "1.7.11"
+"aqua:rhysd/actionlint" = "1.7.12"
 "aqua:koalaman/shellcheck" = "0.11.0"
-"aqua:crate-ci/typos" = "1.44.0"
+"aqua:crate-ci/typos" = "1.45.0"
 "aqua:tamasfe/taplo" = "0.10.0"
 "aqua:zizmorcore/zizmor" = "1.23.1"
 "aqua:cli/cli" = "2.89.0"
