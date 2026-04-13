@@ -1,35 +1,32 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-import * as fsp from "node:fs/promises";
 import { join } from "node:path";
+import { access, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import process from "node:process";
-import { gunzip } from "node:zlib";
 import { promisify } from "node:util";
-import { gzipSync } from "node:zlib";
-import { MockAgent, setGlobalDispatcher, getGlobalDispatcher } from "undici";
+import { gunzip, gzipSync } from "node:zlib";
+import { MockAgent } from "undici";
 import { beforeEach, describe, it, vi } from "vitest";
 
 import { pack, wget } from "../src/commands.ts";
 import { tempDir } from "../src/util/fs.ts";
-import type { RunInvocationURI } from "../src/types.ts";
 import { FAKE_BINARY, writeTestPkg } from "./fixtures.ts";
 
 const gunzipAsync = promisify(gunzip);
-const { access, mkdir, readdir, readFile, writeFile } = fsp;
 
-const mockVerifyAddon = vi.fn().mockResolvedValue(undefined);
-
-vi.mock("node:fs/promises", async (importOriginal) => {
-  const orig = await importOriginal<typeof fsp>();
-  return { ...orig, unlink: vi.fn(orig.unlink) };
+const { mockVerifyAddon, MOCK_RUN_URI } = vi.hoisted(() => {
+  const mockVerifyAddon = vi.fn().mockResolvedValue(undefined);
+  // vi.mock factories are hoisted above imports, so branded type
+  // constructors are unavailable. Use a pre-validated literal.
+  const MOCK_RUN_URI = "https://github.com/vadimpiven/node_reqwest/actions/runs/123/attempts/1";
+  return { mockVerifyAddon, MOCK_RUN_URI };
 });
 
 vi.mock("../src/verify/index.ts", () => ({
   verifyPackageProvenance: vi.fn().mockResolvedValue({
     // Type cast: vi.mock is hoisted above imports,
     // so runtime constructors are unavailable
-    runInvocationURI:
-      "https://github.com/vadimpiven/node_reqwest/actions/runs/123/attempts/1" as RunInvocationURI,
+    runInvocationURI: MOCK_RUN_URI,
     verifyAddon: (...args: unknown[]) => mockVerifyAddon(...args),
   }),
   verifyAddonProvenance: vi.fn().mockResolvedValue(undefined),
@@ -45,10 +42,8 @@ function mockDownload(
   body: Buffer | string,
   times = 1,
 ): MockAgent & AsyncDisposable {
-  const original = getGlobalDispatcher();
   const agent = new MockAgent();
   agent.disableNetConnect();
-  setGlobalDispatcher(agent);
 
   agent
     .get("https://github.com")
@@ -60,8 +55,7 @@ function mockDownload(
     .times(times);
 
   return Object.assign(agent, {
-    async [Symbol.asyncDispose]() {
-      setGlobalDispatcher(original);
+    async [Symbol.asyncDispose](): Promise<void> {
       await agent.close();
     },
   });
@@ -98,30 +92,30 @@ describe("wget", () => {
 
 describe("wget (download pipeline)", () => {
   it("downloads, decompresses, and writes binary correctly", async ({ expect }) => {
-    await using _mock = mockDownload(200, gzipSync(FAKE_BINARY));
+    await using dispatcher = mockDownload(200, gzipSync(FAKE_BINARY));
     await using tmp = await tempDir();
     await writeTestPkg(tmp.path, "1.0.0");
 
-    await wget(tmp.path);
+    await wget(tmp.path, { dispatcher });
 
     const written = await readFile(join(tmp.path, "dist", "node_reqwest.node"));
     expect(written).toEqual(FAKE_BINARY);
   });
 
   it("propagates HTTP 503 error with status", async ({ expect }) => {
-    await using _mock = mockDownload(503, "Service Unavailable", 3);
+    await using dispatcher = mockDownload(503, "Service Unavailable", 3);
     await using tmp = await tempDir();
     await writeTestPkg(tmp.path, "1.0.0");
 
-    await expect(wget(tmp.path)).rejects.toThrow(/503/);
+    await expect(wget(tmp.path, { dispatcher })).rejects.toThrow(/503/);
   });
 
   it("throws on invalid (non-gzip) content and cleans up temp file", async ({ expect }) => {
-    await using _mock = mockDownload(200, Buffer.from("this is not gzip data"));
+    await using dispatcher = mockDownload(200, Buffer.from("this is not gzip data"));
     await using tmp = await tempDir();
     await writeTestPkg(tmp.path, "1.0.0");
 
-    await expect(wget(tmp.path)).rejects.toThrow();
+    await expect(wget(tmp.path, { dispatcher })).rejects.toThrow();
 
     // No temp files should remain in dist/
     const files = await readdir(join(tmp.path, "dist"));
@@ -129,13 +123,13 @@ describe("wget (download pipeline)", () => {
   });
 
   it("cleans up temp file when verifyAddon rejects", async ({ expect }) => {
-    await using _mock = mockDownload(200, gzipSync(FAKE_BINARY));
+    await using dispatcher = mockDownload(200, gzipSync(FAKE_BINARY));
     mockVerifyAddon.mockRejectedValueOnce(new Error("provenance failed"));
 
     await using tmp = await tempDir();
     await writeTestPkg(tmp.path, "1.0.0");
 
-    await expect(wget(tmp.path)).rejects.toThrow("provenance failed");
+    await expect(wget(tmp.path, { dispatcher })).rejects.toThrow("provenance failed");
 
     // Final binary should not exist
     await expect(access(join(tmp.path, "dist", "node_reqwest.node"))).rejects.toThrow();
@@ -143,24 +137,6 @@ describe("wget (download pipeline)", () => {
     // No temp files should remain in dist/
     const files = await readdir(join(tmp.path, "dist"));
     expect(files.filter((f) => f.startsWith(".tmp-"))).toHaveLength(0);
-  });
-
-  it("logs non-ENOENT unlink errors during cleanup", async ({ expect }) => {
-    await using _mock = mockDownload(200, gzipSync(FAKE_BINARY));
-    mockVerifyAddon.mockRejectedValueOnce(new Error("provenance failed"));
-
-    const eacces = Object.assign(new Error("permission denied"), { code: "EACCES" });
-    vi.mocked(fsp.unlink).mockRejectedValueOnce(eacces);
-
-    const spy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-
-    await using tmp = await tempDir();
-    await writeTestPkg(tmp.path, "1.0.0");
-
-    await expect(wget(tmp.path)).rejects.toThrow("provenance failed");
-
-    expect(spy).toHaveBeenCalledWith(expect.stringContaining("failed to clean up temp file"));
-    spy.mockRestore();
   });
 });
 

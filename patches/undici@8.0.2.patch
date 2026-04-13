@@ -1,0 +1,77 @@
+# Why this patch exists
+#
+# undici's RequestHandler inherits from AsyncResource (node:async_hooks).
+# This keeps async context alive for the lifetime of every request, which
+# prevents the process from exiting cleanly when requests are still
+# referenced by the async-hooks bookkeeping. It also leaks
+# AsyncLocalStorage context between unrelated requests in tests.
+#
+# The patch removes the AsyncResource inheritance and replaces
+# runInAsyncScope() with direct callback invocation. This is safe
+# because node-addon-slsa never relies on AsyncLocalStorage propagation
+# through undici response/error callbacks.
+#
+# Additionally exports MockInterceptor from types to support test usage.
+#
+# Re-evaluate when upgrading undici — the upstream may have changed the
+# async-hooks integration or made it optional.
+
+diff --git a/lib/api/api-request.js b/lib/api/api-request.js
+index 1d56fb0c9ad904dfa5348980e05d194a00a67143..c8d57d6e98ace130f13d7168e25b5e44332febae 100644
+--- a/lib/api/api-request.js
++++ b/lib/api/api-request.js
+@@ -1,14 +1,13 @@
+ 'use strict'
+ 
+ const assert = require('node:assert')
+-const { AsyncResource } = require('node:async_hooks')
+ const { Readable } = require('./readable')
+ const { InvalidArgumentError, RequestAbortedError } = require('../core/errors')
+ const util = require('../core/util')
+ 
+ function noop () {}
+ 
+-class RequestHandler extends AsyncResource {
++class RequestHandler {
+   constructor (opts, callback) {
+     if (!opts || typeof opts !== 'object') {
+       throw new InvalidArgumentError('invalid opts')
+@@ -37,7 +36,6 @@ class RequestHandler extends AsyncResource {
+         throw new InvalidArgumentError('invalid onInfo callback')
+       }
+ 
+-      super('UNDICI_REQUEST')
+     } catch (err) {
+       if (util.isStream(body)) {
+         util.destroy(body.on('error', noop), err)
+@@ -124,7 +122,7 @@ class RequestHandler extends AsyncResource {
+     this.res = res
+     if (callback !== null) {
+       try {
+-        this.runInAsyncScope(callback, null, null, {
++        callback(null, {
+           statusCode,
+           statusText,
+           headers: responseHeaderData,
+@@ -184,7 +182,7 @@ class RequestHandler extends AsyncResource {
+       // TODO: Does this need queueMicrotask?
+       this.callback = null
+       queueMicrotask(() => {
+-        this.runInAsyncScope(callback, null, err, { opaque })
++        callback(err, { opaque })
+       })
+     }
+ 
+diff --git a/types/index.d.ts b/types/index.d.ts
+index 891358f33105597e8ff82f34441a2a73e3155f59..aef43f7d55c0b727acad03243795b46cb7d40c84 100644
+--- a/types/index.d.ts
++++ b/types/index.d.ts
+@@ -41,7 +41,7 @@ export * from './diagnostics-channel'
+ export * from './websocket'
+ export * from './content-type'
+ export * from './cache'
+-export { Interceptable } from './mock-interceptor'
++export { Interceptable, MockInterceptor } from './mock-interceptor'
+ 
+ declare function globalThisInstall (): void
+ 

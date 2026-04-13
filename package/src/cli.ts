@@ -1,9 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+/**
+ * CLI entry point (`slsa wget`, `slsa pack`).
+ * {@link runSlsaInner} is the testable core; {@link runSlsa}
+ * adds signal handling and process.exit().
+ */
+
 import process from "node:process";
 import { parseArgs } from "node:util";
 
 import { pack, wget } from "./commands.ts";
+import type { FetchOptions } from "./types.ts";
 import { log } from "./util/log.ts";
 import { isProvenanceError } from "./util/provenance-error.ts";
 
@@ -19,7 +26,6 @@ Options:
   -h, --help    Show this help message
 
 Environment:
-  GITHUB_TOKEN  GitHub API auth (required for private repos, increases rate limits)
   SLSA_DEBUG=1  Debug logging to stderr
 `;
 
@@ -27,9 +33,9 @@ Environment:
  * Testable CLI core. Returns an exit code instead of calling process.exit().
  * Accepts an optional AbortSignal for graceful shutdown.
  */
-export async function runSlsaInner(options?: {
-  signal?: AbortSignal;
-}): Promise<{ exitCode: number }> {
+export async function runSlsaInner(
+  options?: FetchOptions & { signal?: AbortSignal },
+): Promise<{ exitCode: number }> {
   let values: { help: boolean };
   let positionals: string[];
   try {
@@ -62,7 +68,10 @@ export async function runSlsaInner(options?: {
         await pack(packageDir, signal ? { signal } : undefined);
         break;
       case "wget":
-        await wget(packageDir, signal ? { signal } : undefined);
+        await wget(packageDir, {
+          ...(signal && { signal }),
+          ...(options?.dispatcher && { dispatcher: options.dispatcher }),
+        });
         break;
       default:
         console.error(HELP);
@@ -85,12 +94,12 @@ export async function runSlsaInner(options?: {
 }
 
 /**
- * CLI entry point. Sets up signal handling and calls process.exit().
+ * CLI entry point. Sets up signal handling and sets process.exitCode.
  */
 export async function runSlsa(): Promise<void> {
   const ac = new AbortController();
 
-  const onSignal = () => {
+  const onSignal = (): void => {
     ac.abort();
   };
   process.on("SIGINT", onSignal);
@@ -98,7 +107,7 @@ export async function runSlsa(): Promise<void> {
 
   try {
     const { exitCode } = await runSlsaInner({ signal: ac.signal });
-    process.exit(ac.signal.aborted ? 130 : exitCode);
+    process.exitCode = ac.signal.aborted ? 130 : exitCode;
   } finally {
     process.off("SIGINT", onSignal);
     process.off("SIGTERM", onSignal);

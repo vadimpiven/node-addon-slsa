@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+/** File system helpers: temp directories, path traversal guards, safe cleanup. */
+
 import { mkdtemp, rm, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
@@ -114,6 +116,16 @@ if (import.meta.vitest) {
 
     it("ignores ENOENT silently", async ({ expect }) => {
       await expect(safeUnlink("/nonexistent/file.txt", "test")).resolves.toBeUndefined();
+    });
+
+    it("warns on non-ENOENT errors", async ({ expect }) => {
+      const { vi } = await import("vitest");
+      const spy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+      await using tmp = await tempDir();
+      // Unlinking a directory fails with EISDIR/EPERM on all platforms
+      await safeUnlink(tmp.path, "test-label");
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining("failed to clean up test-label"));
+      spy.mockRestore();
     });
   });
 }

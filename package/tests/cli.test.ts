@@ -6,7 +6,7 @@ import { describe, it, vi, beforeEach } from "vitest";
 import { runSlsaInner } from "../src/cli.ts";
 import { tempDir } from "../src/util/fs.ts";
 import { writeTestPkg } from "./fixtures.ts";
-import { stubFetch } from "./helpers.ts";
+import { mockFetch } from "./helpers.ts";
 
 beforeEach(() => {
   delete process.env["SLSA_DEBUG"];
@@ -93,9 +93,7 @@ describe("runSlsaInner", () => {
     await writeTestPkg(tmp.path, "1.0.0");
 
     // npm 404 triggers ProvenanceError from fetchNpmAttestations
-    using _fetch = stubFetch(
-      async () => new Response(null, { status: 404, statusText: "Not Found" }),
-    );
+    await using dispatcher = mockFetch(() => ({ statusCode: 404, data: "" }));
 
     const origArgv = process.argv;
     const origCwd = process.cwd();
@@ -103,7 +101,7 @@ describe("runSlsaInner", () => {
     process.chdir(tmp.path);
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      const { exitCode } = await runSlsaInner();
+      const { exitCode } = await runSlsaInner({ dispatcher });
       expect(exitCode).toBe(1);
       expect(spy).toHaveBeenCalledWith(expect.stringContaining("No provenance"));
       // ProvenanceError should NOT show debug hint

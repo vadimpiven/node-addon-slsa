@@ -1,0 +1,18 @@
+name: "Attest (public-good sigstore)"
+description: >-
+  Attest build provenance via the public-good sigstore instance.
+  Logs to the public Rekor transparency log for tokenless verification.
+inputs:
+  subject-path:
+    description: "Artifact path(s) to attest. Globs."
+    required: true
+  github-token:
+    description: "GitHub token."
+    default: "${{ github.token }}"
+    required: false
+outputs:
+  attestation-id:
+    description: "The ID of the attestation."
+runs:
+  using: "node24"
+  main: "dist/index.js"

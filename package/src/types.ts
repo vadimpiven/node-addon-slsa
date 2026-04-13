@@ -1,9 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+/**
+ * Branded types, runtime validators, and option interfaces.
+ * All public types are re-exported from index.ts.
+ */
+
 import type { createVerifier } from "sigstore";
+import type { TrustMaterial } from "@sigstore/verify";
+import type { Dispatcher } from "undici";
 
 /** Sigstore bundle verifier created by `createVerifier()` from the `sigstore` package. */
 export type BundleVerifier = Awaited<ReturnType<typeof createVerifier>>;
+
+/**
+ * Sigstore trust material (Fulcio CAs, Rekor public keys).
+ * Load via {@link loadTrustMaterial}.
+ */
+export type { TrustMaterial };
 
 /** GitHub `owner/repo` slug. */
 export type GitHubRepo = `${string}/${string}`;
@@ -77,7 +90,7 @@ export function runInvocationURI(value: string): RunInvocationURI {
 }
 
 /** Options controlling HTTP fetch behavior (timeouts, retries, cancellation). */
-export interface FetchOptions {
+export type FetchOptions = {
   /** Per-request timeout in ms. @default 30_000 */
   readonly timeoutMs?: number | undefined;
   /** Stall timeout: abort if no data for this long. @default 30_000 */
@@ -90,19 +103,38 @@ export interface FetchOptions {
   readonly signal?: AbortSignal | undefined;
   /** Custom HTTP headers for fetch requests. */
   readonly headers?: Record<string, string> | undefined;
-}
+  /** HTTP method. @default "GET" */
+  readonly method?: string | undefined;
+  /** Request body (for POST). */
+  readonly body?: string | undefined;
+  /**
+   * Custom undici Dispatcher for connection control (proxies,
+   * TLS, connection pooling). Defaults to an HTTP/1.1-only
+   * agent with no keep-alive.
+   */
+  readonly dispatcher?: Dispatcher | undefined;
+};
 
 /** Verification options: extends {@link FetchOptions} with attestation-specific limits. */
-export interface VerifyOptions extends FetchOptions {
-  /** Upper bound for attestation bundle size in bytes. @default 52_428_800 (50 MB) */
-  readonly maxBundleBytes?: number | undefined;
+export type VerifyOptions = FetchOptions & {
   /** Upper bound for JSON API response size in bytes. @default 52_428_800 (50 MB) */
   readonly maxJsonResponseBytes?: number | undefined;
-  /** Max concurrent bundle_url fetches. @default 5 */
-  readonly resolveConcurrency?: number | undefined;
-  /** Pre-created sigstore verifier. Created automatically if not provided. */
+  /**
+   * Pre-created sigstore verifier. Created automatically if not provided.
+   * Only used by {@link verifyPackageProvenance}.
+   * Ignored by {@link verifyAddonProvenance}.
+   */
   readonly verifier?: BundleVerifier | undefined;
-}
+  /** Max Rekor entries to check per artifact hash. @default 10 */
+  readonly maxRekorEntries?: number | undefined;
+  /**
+   * Pre-loaded sigstore trust material (Fulcio CAs, Rekor keys).
+   * Loaded automatically if not provided.
+   * Use {@link loadTrustMaterial} to pre-load.
+   * Only used by {@link verifyAddonProvenance}.
+   */
+  readonly trustMaterial?: TrustMaterial | undefined;
+};
 
 if (import.meta.vitest) {
   const { describe, it } = import.meta.vitest;

@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+/**
+ * High-level commands: {@link wget} (download + verify + install)
+ * and {@link pack} (gzip compress for release).
+ */
+
 import { randomBytes } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, rename } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
-import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createGunzip, createGzip } from "node:zlib";
 
@@ -13,7 +17,7 @@ import process from "node:process";
 import dedent from "dedent";
 
 import { extractExpectedRepo, readPackageJson } from "./package.ts";
-import { fetchWithRetry } from "./download.ts";
+import { fetchWithRetry } from "./http.ts";
 import { assertWithinDir, safeUnlink } from "./util/fs.ts";
 import { log, warn } from "./util/log.ts";
 import { evalTemplate } from "./util/template.ts";
@@ -73,7 +77,7 @@ export async function wget(
 
   // Stream: download → hash compressed bytes → decompress → write temp file.
   // The hash is computed over the compressed bytes because
-  // actions/attest-build-provenance attests the .gz artifact
+  // The attest-public action attests the .gz artifact
   // (the GitHub release asset), not the decompressed binary.
   // flags: "wx" (O_EXCL) fails if file exists, preventing symlink attacks.
   const tmpPath = join(addonDir, `.tmp-${randomBytes(8).toString("hex")}.node`);
@@ -82,14 +86,11 @@ export async function wget(
   try {
     await pipeline(
       await fetchWithRetry(downloadUrl, options).then((r) => {
-        if (!r.ok) {
-          r.body?.cancel().catch(() => {});
-          throw new Error(`download failed: ${downloadUrl}: ${r.status} ${r.statusText}`);
+        if (r.statusCode >= 400) {
+          r.body.dump().catch(() => {});
+          throw new Error(`download failed: ${downloadUrl}: ${r.statusCode}`);
         }
-        if (!r.body) {
-          throw new Error(`download failed: ${downloadUrl}: response body is empty`);
-        }
-        return Readable.fromWeb(r.body);
+        return r.body;
       }),
       hashStream,
       createGunzip(),
@@ -98,7 +99,7 @@ export async function wget(
     );
 
     await provenance.verifyAddon({ sha256: digest() });
-    log(`verification passed`);
+    log(`verification passed for ${name}@${version}`);
 
     await rename(tmpPath, binaryPath);
   } catch (err: unknown) {

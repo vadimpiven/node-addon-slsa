@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+/** Debug logging (SLSA_DEBUG=1) and unconditional warnings to stderr. */
+
 import process from "node:process";
 
 /** Write `[slsa] message` to stderr when SLSA_DEBUG=1. */

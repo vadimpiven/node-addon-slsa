@@ -1,21 +1,27 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+/**
+ * Public verification functions: {@link verifyPackageProvenance},
+ * {@link verifyAddonProvenance}, and {@link loadTrustMaterial}.
+ * Other files in verify/ are internal implementation details.
+ */
+
+import { getTrustedRoot } from "@sigstore/tuf";
+import { toTrustMaterial, type TrustMaterial } from "@sigstore/verify";
 import { createVerifier } from "sigstore";
 import dedent from "dedent";
 
-import type { X509Certificate } from "@sigstore/core";
-
-import { runInvocationURI } from "../types.ts";
-import type {
-  GitHubRepo,
-  RunInvocationURI,
-  SemVerString,
-  Sha256Hex,
-  VerifyOptions,
+import {
+  runInvocationURI,
+  type GitHubRepo,
+  type RunInvocationURI,
+  type SemVerString,
+  type Sha256Hex,
+  type VerifyOptions,
 } from "../types.ts";
 import { log } from "../util/log.ts";
-import { ProvenanceError, isProvenanceError } from "../util/provenance-error.ts";
-import { fetchGitHubAttestations, fetchNpmAttestations } from "./attestations.ts";
+import { ProvenanceError } from "../util/provenance-error.ts";
+import { fetchNpmAttestations } from "./npm.ts";
 import { extractCertFromBundle, getExtensionValue, verifyCertificateOIDs } from "./certificates.ts";
 import { resolveConfig } from "./config.ts";
 import {
@@ -23,6 +29,12 @@ import {
   OID_RUN_INVOCATION_URI,
   SLSA_PROVENANCE_PREFIX,
 } from "./constants.ts";
+import { verifyRekorAttestations } from "./rekor.ts";
+
+/** Load sigstore trust material (Fulcio CAs, Rekor public keys) from the TUF repository. */
+export async function loadTrustMaterial(): Promise<TrustMaterial> {
+  return toTrustMaterial(await getTrustedRoot());
+}
 
 /**
  * Returned by {@link verifyPackageProvenance} after npm provenance checks pass.
@@ -32,10 +44,10 @@ import {
  * Call {@link PackageProvenance.verifyAddon | verifyAddon} to confirm
  * the addon binary was produced by the same GitHub Actions workflow run.
  */
-export interface PackageProvenance {
+export type PackageProvenance = {
   readonly runInvocationURI: RunInvocationURI;
-  verifyAddon(options: { sha256: Sha256Hex }): Promise<void>;
-}
+  readonly verifyAddon: (options: { sha256: Sha256Hex }) => Promise<void>;
+};
 
 /**
  * Verify npm package provenance via sigstore attestations.
@@ -44,8 +56,8 @@ export interface PackageProvenance {
  *
  * @throws {@link ProvenanceError} if the package has no SLSA provenance
  *   attestation, the certificate is invalid, or the source repo does not match.
- * @throws `Error` on transient failures (network timeout, API rate limit) —
- *   safe to retry.
+ * @throws `Error` on transient failures (network timeout, service unavailable)
+ *   — safe to retry.
  *
  * @example
  * ```typescript
@@ -79,7 +91,7 @@ export async function verifyPackageProvenance(
     options.verifier ?? (await createVerifier({ certificateIssuer: GITHUB_ACTIONS_ISSUER }));
   const config = resolveConfig({ ...options, verifier });
 
-  log(`verifying npm package provenance`);
+  log(`verifying npm package provenance: ${packageName}@${version}`);
   const attestations = await fetchNpmAttestations({ packageName, version }, config);
 
   const provenanceAttestation = attestations.attestations.find((attestation) =>
@@ -128,12 +140,17 @@ export async function verifyPackageProvenance(
   return {
     runInvocationURI: runURI,
     verifyAddon: ({ sha256 }: { sha256: Sha256Hex }) =>
-      verifyAddonProvenance({ ...options, sha256, runInvocationURI: runURI, verifier }),
+      verifyAddonProvenance({
+        ...options,
+        sha256,
+        runInvocationURI: runURI,
+        verifier: undefined, // addon uses Rekor, not sigstore verifier
+      }),
   };
 }
 
 /**
- * Verify addon binary provenance via the GitHub Attestations API.
+ * Verify addon binary provenance via the Rekor transparency log.
  * Confirms the artifact was attested in the expected workflow run
  * and source repository.
  *
@@ -141,9 +158,9 @@ export async function verifyPackageProvenance(
  * Use directly when you already have a {@link RunInvocationURI}.
  *
  * @throws {@link ProvenanceError} if no attestation matches the expected
- *   workflow run, or all attestations fail cryptographic verification.
- * @throws `Error` on transient failures (network timeout, API rate limit) —
- *   safe to retry.
+ *   workflow run, or all entries fail verification.
+ * @throws `Error` on transient failures (network timeout, Rekor unavailable)
+ *   — safe to retry.
  *
  * @example
  * ```typescript
@@ -170,51 +187,9 @@ export async function verifyAddonProvenance(
     repo: GitHubRepo;
   } & VerifyOptions,
 ): Promise<void> {
-  const { sha256, runInvocationURI, repo } = options;
+  const { sha256, runInvocationURI: runURI, repo } = options;
   const config = resolveConfig(options);
-
-  log(`verifying addon provenance`);
-  const ghAttestations = await fetchGitHubAttestations({ repo, sha256 }, config);
-
-  const verifier =
-    config.verifier ?? (await createVerifier({ certificateIssuer: GITHUB_ACTIONS_ISSUER }));
-
-  let verifyFailures = 0;
-  for (const attestation of ghAttestations.attestations) {
-    let cert: X509Certificate;
-    try {
-      // Guard against synchronous throw (see verifyPackageProvenance)
-      await Promise.resolve(verifier.verify(attestation.bundle));
-      cert = extractCertFromBundle(attestation.bundle);
-    } catch (err) {
-      if (isProvenanceError(err)) throw err;
-      // This bundle failed cryptographic verification; try next.
-      verifyFailures++;
-      continue;
-    }
-
-    const certRunURI = getExtensionValue(cert, OID_RUN_INVOCATION_URI);
-    if (certRunURI === runInvocationURI) {
-      return verifyCertificateOIDs(cert, repo);
-    }
-  }
-
-  const total = ghAttestations.attestations.length;
-  const detail =
-    verifyFailures === total
-      ? dedent`
-          All ${total} attestation(s) failed cryptographic verification.
-          This may indicate a sigstore trust root issue rather than tampering.
-        `
-      : dedent`
-          ${total} attestation(s) found but none matched workflow run ${runInvocationURI}.
-          This can happen if the addon was rebuilt without re-attesting,
-          or if the npm package and addon were produced by different workflow runs.
-        `;
-  throw new ProvenanceError(
-    dedent`
-      Addon provenance verification failed.
-      ${detail}
-    `,
-  );
+  log(`verifying addon provenance: sha256=${sha256} repo=${repo}`);
+  const trustMaterial = config.trustMaterial ?? (await loadTrustMaterial());
+  return verifyRekorAttestations({ sha256, runInvocationURI: runURI, repo, config, trustMaterial });
 }

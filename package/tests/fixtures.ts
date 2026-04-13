@@ -5,7 +5,14 @@ import { join } from "node:path";
 
 export const FAKE_BINARY = Buffer.from("fake native addon binary content");
 
-export function testPkg(version: string) {
+export type TestPackageJson = {
+  readonly name: string;
+  readonly version: string;
+  readonly addon: { readonly path: string; readonly url: string };
+  readonly repository: { readonly url: string };
+};
+
+export function testPkg(version: string): TestPackageJson {
   return {
     name: "node-reqwest",
     version,

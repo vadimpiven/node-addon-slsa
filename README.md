@@ -30,13 +30,13 @@ is signed — but how do you know the binary was built from the same
 source? You don't, unless both artifacts are verified against the same
 CI run.
 
-`node-addon-slsa` cross-checks [sigstore] npm provenance with
-[GitHub Attestations][gh-attestations] to confirm the package and its
+`node-addon-slsa` cross-checks [sigstore] npm provenance with the
+[Rekor transparency log][rekor] to confirm the package and its
 binary were produced by the _same_ GitHub Actions workflow run.
 If they were not, installation aborts with a `SECURITY` error.
 
 [sigstore]: https://www.sigstore.dev/
-[gh-attestations]: https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations
+[rekor]: https://docs.sigstore.dev/logging/overview/
 
 ```sh
 npm install node-addon-slsa

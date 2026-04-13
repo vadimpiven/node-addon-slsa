@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+# @actions/core setSecret() JSDoc contains a sample API token string.
+# Present in every GitHub Action that bundles @actions/core.
+[[rules]]
+id = "generic-api-key"
+[rules.allowlist]
+paths = ["attest-public/dist/"]

@@ -52,20 +52,42 @@ sources = ["pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json", "package/pac
 # LINT & CHECK/FIX TASKS - Verify and fix code quality and security
 # ============================================================================
 
+# --- action dist ---
+[tasks."fix:action"]
+description = "Rebuild the attest-public GitHub Action dist"
+hide = true
+wait_for = ["setup"]
+run = 'pnpm -F "{attest-public}" run build'
+sources = [
+  "attest-public/index.ts",
+  "attest-public/package.json",
+  "attest-public/tsconfig.json",
+  "pnpm-workspace.yaml",
+  "pnpm-lock.yaml",
+  "mise.toml",
+]
+outputs = ["attest-public/dist/"]
+
+[tasks."check:action"]
+description = "Verify action dist is up to date"
+hide = true
+depends = ["fix:action"]
+run = "git diff --exit-code attest-public/dist/"
+
 # --- oxlint (JS/TS) ---
 [tasks."check:oxlint"]
 description = "Check JS/TS with oxlint"
 hide = true
 wait_for = ["setup"]
 run = "pnpm -w exec oxlint . --deny-warnings"
-sources = ["package/{src,tests,bin}/**/*.{ts,js,mts,mjs}"]
+sources = ["package/{src,tests,bin}/**/*.{ts,js,mts,mjs}", "attest-public/**/*.ts"]
 
 [tasks."fix:oxlint"]
 description = "Fix JS/TS with oxlint"
 hide = true
 wait_for = ["setup"]
 run = "pnpm -w exec oxlint . --fix"
-sources = ["package/{src,tests,bin}/**/*.{ts,js,mts,mjs}"]
+sources = ["package/{src,tests,bin}/**/*.{ts,js,mts,mjs}", "attest-public/**/*.ts"]
 
 # --- oxfmt (JS/TS/JSON) ---
 [tasks."check:oxfmt"]
@@ -76,6 +98,7 @@ run = "pnpm -w exec oxfmt --check ."
 sources = [
   "*.{json,jsonc}",
   "package/{src,tests,bin}/**/*.{ts,js,mts,mjs,json,jsonc}",
+  "attest-public/**/*.{ts,json,jsonc}",
   ".oxfmtrc.json",
 ]
 
@@ -87,6 +110,7 @@ run = "pnpm -w exec oxfmt --write ."
 sources = [
   "*.{json,jsonc}",
   "package/{src,tests,bin}/**/*.{ts,js,mts,mjs,json,jsonc}",
+  "attest-public/**/*.{ts,json,jsonc}",
   ".oxfmtrc.json",
 ]
 
@@ -207,6 +231,7 @@ description = "Verify code quality"
 alias = "c"
 depends = [
   "setup",
+  "check:action",
   "check:oxlint",
   "check:oxfmt",
   "check:taplo",
@@ -224,6 +249,7 @@ description = "Auto-fix code issues"
 alias = "f"
 depends = [
   "setup",
+  "fix:action",
   "fix:oxlint",
   "fix:oxfmt",
   "fix:taplo",
