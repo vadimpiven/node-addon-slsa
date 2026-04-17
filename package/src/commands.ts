@@ -90,7 +90,7 @@ export async function wget(packageDir: string, options?: VerifyOptions): Promise
     await pipeline(
       await fetchWithRetry(downloadUrl, options).then((r) => {
         if (r.statusCode >= 400) {
-          r.body.dump().catch(() => { });
+          r.body.dump().catch(() => {});
           throw new Error(`download failed: ${downloadUrl}: ${r.statusCode}`);
         }
         return r.body;

@@ -4,6 +4,7 @@
 mise.local.toml
 mise.local.lock
 .claude/settings.local.json
+.claude/worktrees
 .DS_Store
 lcov.info
 package.tar.gz
