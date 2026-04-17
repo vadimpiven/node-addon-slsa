@@ -92,14 +92,17 @@ compromised, verification may pass for malicious artifacts.
     "pack-addon": "slsa pack"
   },
   "dependencies": {
-    "node-addon-slsa": "0.7.0"
+    "node-addon-slsa": "0.7.1"
   }
 }
 ```
 
 - **`addon.path`** — where the addon is installed (relative to package root)
 - **`addon.url`** — download template; `{version}`, `{platform}`, `{arch}`
-  resolve at install time
+  resolve at install time. Any origin is accepted — verification is
+  hash-based against the sigstore/Rekor attestation, so the download
+  host is a mirror, not a trust anchor. GitHub Releases is the usual
+  choice; custom CDNs work the same as long as the bytes match.
 - **`postinstall`** — `slsa wget` downloads, verifies, and installs the
   binary on `npm install`. Pair it with [`requireAddon`](#3-loading-the-addon):
   pnpm ≥ 10 blocks `postinstall` scripts by default, so consumers
