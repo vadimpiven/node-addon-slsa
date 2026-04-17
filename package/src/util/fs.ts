@@ -15,6 +15,11 @@ export function isEnoent(err: unknown): boolean {
   return err instanceof Error && "code" in err && err.code === "ENOENT";
 }
 
+/** Check whether an error is a Node.js `ENOTDIR` (not a directory) error. */
+export function isEnotdir(err: unknown): boolean {
+  return err instanceof Error && "code" in err && err.code === "ENOTDIR";
+}
+
 /**
  * Creates a temporary directory that is automatically removed on dispose.
  */
@@ -77,6 +82,15 @@ if (import.meta.vitest) {
       expect(isEnoent(Object.assign(new Error("msg"), { code: "ENOENT" }))).toBe(true);
       expect(isEnoent(Object.assign(new Error("msg"), { code: "EACCES" }))).toBe(false);
       expect(isEnoent("not an error")).toBe(false);
+    });
+  });
+
+  describe("isEnotdir", () => {
+    it("recognizes ENOTDIR errors and rejects others", ({ expect }) => {
+      expect(isEnotdir(Object.assign(new Error("msg"), { code: "ENOTDIR" }))).toBe(true);
+      expect(isEnotdir(Object.assign(new Error("msg"), { code: "ENOENT" }))).toBe(false);
+      expect(isEnotdir(Object.assign(new Error("msg"), { code: "EACCES" }))).toBe(false);
+      expect(isEnotdir("not an error")).toBe(false);
     });
   });
 

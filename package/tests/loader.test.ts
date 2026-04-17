@@ -41,6 +41,22 @@ describe("requireAddon end-to-end", () => {
     );
   });
 
+  it("walks up from a real file path (ENOTDIR on `file.ts/package.json`)", async () => {
+    await using tmp = await tempDir();
+    await writeTestPkg(tmp.path, "0.0.0");
+
+    // Create a real file so that join(file, "package.json") errors with
+    // ENOTDIR rather than ENOENT. Regression test: the walker used to
+    // rethrow ENOTDIR instead of continuing upward.
+    const realFile = join(tmp.path, "src", "lib", "index.js");
+    await mkdir(dirname(realFile), { recursive: true });
+    await writeFile(realFile, "// empty");
+
+    await expect(requireAddon({ from: pathToFileURL(realFile).href })).rejects.toThrow(
+      /node_reqwest\.node|ENOENT|Cannot find module/,
+    );
+  });
+
   it("walks up to the nearest package.json, not a distant ancestor", async () => {
     await using tmp = await tempDir();
 
