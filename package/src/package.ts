@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+/** Parse and validate package.json: name, version, addon config, repository. */
+
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import dedent from "dedent";
 import { z } from "zod/v4";
 
-import { githubRepo, SEMVER_RE } from "./types.ts";
-import type { GitHubRepo, SemVerString } from "./types.ts";
+import { githubRepo, SEMVER_RE, type GitHubRepo, type SemVerString } from "./types.ts";
 
 const SemVerStringSchema = z
   .string()

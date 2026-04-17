@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-import { bundleFromJSON } from "@sigstore/bundle";
+/** X.509 certificate extraction and OID verification for Fulcio certs. */
+
+import { bundleFromJSON, type SerializedBundle } from "@sigstore/bundle";
 import { X509Certificate } from "@sigstore/core";
 import dedent from "dedent";
-
-import type { SerializedBundle } from "@sigstore/bundle";
 
 import type { GitHubRepo } from "../types.ts";
 import { ProvenanceError } from "../util/provenance-error.ts";

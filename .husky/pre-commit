@@ -1,3 +1,4 @@
 #!/bin/sh
 mise run fix
+git add attest-public/dist/
 git update-index --again

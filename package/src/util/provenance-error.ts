@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+/**
+ * Security error type for provenance verification failures.
+ * Messages are prefixed with "SECURITY:" and include remediation advice.
+ * Use {@link isProvenanceError} in catch blocks to distinguish from transient errors.
+ */
+
 import dedent from "dedent";
 
 const SECURITY_ADVICE = `Do not use this package version. Report this issue to the maintainer.`;
@@ -13,7 +19,7 @@ const BRAND = Symbol.for("node-addon-slsa.ProvenanceError");
 export class ProvenanceError extends Error {
   readonly [BRAND] = true as const;
 
-  constructor(message: string, options?: { cause?: unknown }) {
+  constructor(message: string, options?: ErrorOptions) {
     const msg = dedent`
       SECURITY: ${message}
       ${SECURITY_ADVICE}

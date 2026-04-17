@@ -4,6 +4,7 @@
 [![Ask DeepWiki][deepwiki-badge]][deepwiki-site]
 [![CI status][status-badge]][status-dashboard]
 [![Test coverage][coverage-badge]][coverage-dashboard]
+[![Supply-chain score][socket-badge]][socket-dashboard]
 
 [github-badge]: https://img.shields.io/github/stars/vadimpiven/node-addon-slsa?style=flat&logo=github
 [github-repo]: https://github.com/vadimpiven/node-addon-slsa
@@ -17,6 +18,8 @@
 [status-dashboard]: https://github.com/vadimpiven/node-addon-slsa/actions?query=branch%3Amain
 [coverage-badge]: https://img.shields.io/codecov/c/github/vadimpiven/node-addon-slsa/main?logo=codecov
 [coverage-dashboard]: https://app.codecov.io/gh/vadimpiven/node-addon-slsa/tree/main
+[socket-badge]: https://badge.socket.dev/npm/package/node-addon-slsa
+[socket-dashboard]: https://socket.dev/npm/package/node-addon-slsa
 
 [![Open in GitHub Codespaces][codespace-badge]][codespace-action]
 
@@ -30,13 +33,13 @@ is signed — but how do you know the binary was built from the same
 source? You don't, unless both artifacts are verified against the same
 CI run.
 
-`node-addon-slsa` cross-checks [sigstore] npm provenance with
-[GitHub Attestations][gh-attestations] to confirm the package and its
+`node-addon-slsa` cross-checks [sigstore] npm provenance with the
+[Rekor transparency log][rekor] to confirm the package and its
 binary were produced by the _same_ GitHub Actions workflow run.
 If they were not, installation aborts with a `SECURITY` error.
 
 [sigstore]: https://www.sigstore.dev/
-[gh-attestations]: https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations
+[rekor]: https://docs.sigstore.dev/logging/overview/
 
 ```sh
 npm install node-addon-slsa

@@ -1,29 +1,35 @@
 packages:
   - "package"
+  - "attest-public"
 
 blockExoticSubdeps: true
 
 catalog:
-  "@codecov/vite-plugin": 1.9.1
-  rollup-plugin-sbom: 3.1.0
-  dedent: 1.7.2
+  "@actions/attest": 3.2.0
+  "@actions/core": 3.0.0
+  "@codecov/vite-plugin": 2.0.1
   "@sigstore/bundle": 4.0.0
   "@sigstore/core": 3.2.0
-  "@types/node": 25.5.2
-  "@vitest/coverage-istanbul": 4.1.2
-  hysnappy: 1.1.1
+  "@sigstore/tuf": 4.0.2
+  "@sigstore/verify": 3.1.0
+  "@types/node": 25.6.0
+  "@vercel/ncc": 0.38.4
+  "@vitest/coverage-istanbul": 4.1.4
+  dedent: 1.7.2
   husky: 9.1.7
   markdownlint-cli2: 0.22.0
-  oxfmt: 0.43.0
-  oxlint: 1.58.0
+  oxfmt: 0.45.0
+  oxlint: 1.60.0
+  rollup-plugin-sbom: 3.1.0
   sigstore: 4.1.0
-  typedoc: 0.28.18
-  typedoc-theme-oxide: 0.2.5
+
+  typedoc: 0.28.19
+  typedoc-theme-oxide: 0.3.0
   typescript: 6.0.2
   undici: 8.0.2
-  vite: 8.0.3
+  vite: 8.0.8
   vite-plugin-dts: 5.0.0-beta.6
-  vitest: 4.1.2
+  vitest: 4.1.4
   zod: 4.3.6
 
 minimumReleaseAge: 1440
@@ -33,5 +39,19 @@ minimumReleaseAgeExclude:
 onlyBuiltDependencies: []
 
 overrides:
+
+# @sigstore/verify: export verifyCertificateChain and verifyTLogInclusion
+# for direct Rekor entry verification without reconstructing a full Bundle.
+# Track upstream: https://github.com/sigstore/sigstore-js/issues/XXX
+#
+# undici: remove AsyncResource from RequestHandler to prevent leaked
+# async_hooks handles in tests. Safe for Promise-based await request()
+# usage (Promise continuations preserve async context). Breaks
+# AsyncLocalStorage propagation in callback-style undici APIs —
+# not used by this project. Also exports MockInterceptor type.
+# Re-evaluate on undici upgrades.
+patchedDependencies:
+  '@sigstore/verify@3.1.0': patches/@sigstore__verify@3.1.0.patch
+  undici@8.0.2: patches/undici@8.0.2.patch
 
 strictDepBuilds: true

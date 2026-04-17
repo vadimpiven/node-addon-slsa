@@ -14,18 +14,6 @@ mise install     # install Node.js and CLI tools defined in mise.toml
 mise run test    # auto-fix, build, type-check, run unit tests
 ```
 
-If tests fail with GitHub rate-limit errors, create a `.env` file
-(loaded by mise automatically):
-
-```bash
-cp .env.example .env
-# edit .env and set GITHUB_TOKEN to a personal access token
-# with read-only access to public repositories
-```
-
-Generate a token at
-<https://github.com/settings/personal-access-tokens/new>.
-
 ## Coding Standards
 
 - **License Headers**: Start every new source file with:

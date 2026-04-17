@@ -2,26 +2,32 @@
 
 import { beforeAll, describe, it, vi } from "vitest";
 import { createVerifier } from "sigstore";
+import { type TrustMaterial } from "@sigstore/verify";
 
-import type { BundleVerifier } from "../src/types.ts";
+import { runInvocationURI, sha256Hex, type BundleVerifier } from "../src/types.ts";
 import type { PackageProvenance } from "../src/verify/index.ts";
-import { runInvocationURI, sha256Hex } from "../src/types.ts";
 import { ProvenanceError } from "../src/util/provenance-error.ts";
 import { GITHUB_ACTIONS_ISSUER } from "../src/verify/constants.ts";
-import { verifyAddonProvenance, verifyPackageProvenance } from "../src/verify/index.ts";
+import { resolveConfig } from "../src/verify/config.ts";
+import {
+  verifyAddonProvenance,
+  verifyPackageProvenance,
+  loadTrustMaterial,
+} from "../src/verify/index.ts";
+import { verifyRekorAttestations } from "../src/verify/rekor.ts";
 
 vi.setConfig({ testTimeout: 30_000 });
 
-// Shared sigstore verifier — avoids re-initialising TUF trust root per test.
-let verifier: BundleVerifier;
-beforeAll(async () => {
-  verifier = await createVerifier({ certificateIssuer: GITHUB_ACTIONS_ISSUER });
-});
-
 // Integration tests below require network access. They verify provenance
-// against real npm/GitHub API responses for specific published versions.
+// against real npm/Rekor responses for specific published versions.
 
 describe("verifyPackageProvenance (integration)", () => {
+  // Shared sigstore verifier — avoids re-initialising TUF trust root per test.
+  let verifier: BundleVerifier;
+  beforeAll(async () => {
+    verifier = await createVerifier({ certificateIssuer: GITHUB_ACTIONS_ISSUER });
+  });
+
   // Fetched once in "succeeds for unscoped package", reused by later tests
   // to avoid redundant npm registry round-trips for the same package.
   let semverProvenance: PackageProvenance;
@@ -104,6 +110,14 @@ const CLI_RUN_URI = runInvocationURI(
   "https://github.com/cli/cli/actions/runs/22312430014/attempts/4",
 );
 
+// Pre-load TUF trust material once for all Rekor tests.
+let trustMaterial: TrustMaterial;
+beforeAll(async () => {
+  trustMaterial = await loadTrustMaterial();
+});
+
+const rekorConfig = resolveConfig({ retryCount: 0 });
+
 describe("verifyAddonProvenance (integration)", () => {
   it("succeeds with correct hash, repo, and run URI", async ({ expect }) => {
     await expect(
@@ -111,30 +125,79 @@ describe("verifyAddonProvenance (integration)", () => {
         sha256: CLI_HASH,
         runInvocationURI: CLI_RUN_URI,
         repo: CLI_REPO,
-        verifier,
+        trustMaterial,
       }),
     ).resolves.toBeUndefined();
   });
 
-  it("rejects when expected repo does not match", async ({ expect }) => {
+  it("rejects when repo does not match", async ({ expect }) => {
     await expect(
       verifyAddonProvenance({
         sha256: CLI_HASH,
         runInvocationURI: CLI_RUN_URI,
         repo: "wrong/repo",
-        verifier,
+        trustMaterial,
       }),
     ).rejects.toThrow(ProvenanceError);
   });
 
-  it("rejects when run invocation URI does not match", async ({ expect }) => {
-    const wrongRunURI = runInvocationURI("https://github.com/cli/cli/actions/runs/1/attempts/1");
+  it("rejects when run URI does not match", async ({ expect }) => {
     await expect(
       verifyAddonProvenance({
         sha256: CLI_HASH,
-        runInvocationURI: wrongRunURI,
+        runInvocationURI: runInvocationURI("https://github.com/cli/cli/actions/runs/1/attempts/1"),
         repo: CLI_REPO,
-        verifier,
+        trustMaterial,
+      }),
+    ).rejects.toThrow(ProvenanceError);
+  });
+});
+
+describe("verifyRekorAttestations (integration)", () => {
+  it("succeeds for known public attestation", async ({ expect }) => {
+    await expect(
+      verifyRekorAttestations({
+        sha256: CLI_HASH,
+        runInvocationURI: CLI_RUN_URI,
+        repo: CLI_REPO,
+        config: rekorConfig,
+        trustMaterial,
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("throws ProvenanceError for unknown hash", async ({ expect }) => {
+    await expect(
+      verifyRekorAttestations({
+        sha256: sha256Hex("ff".repeat(32)),
+        runInvocationURI: CLI_RUN_URI,
+        repo: CLI_REPO,
+        config: rekorConfig,
+        trustMaterial,
+      }),
+    ).rejects.toThrow(ProvenanceError);
+  });
+
+  it("throws ProvenanceError when run URI mismatches", async ({ expect }) => {
+    await expect(
+      verifyRekorAttestations({
+        sha256: CLI_HASH,
+        runInvocationURI: runInvocationURI("https://github.com/cli/cli/actions/runs/1/attempts/1"),
+        repo: CLI_REPO,
+        config: rekorConfig,
+        trustMaterial,
+      }),
+    ).rejects.toThrow(ProvenanceError);
+  });
+
+  it("throws ProvenanceError when repo mismatches", async ({ expect }) => {
+    await expect(
+      verifyRekorAttestations({
+        sha256: CLI_HASH,
+        runInvocationURI: CLI_RUN_URI,
+        repo: "wrong/repo",
+        config: rekorConfig,
+        trustMaterial,
       }),
     ).rejects.toThrow(ProvenanceError);
   });
