@@ -17,14 +17,15 @@ const SemVerStringSchema = z
 
 // z.url() accepts template placeholders like {version} because
 // curly braces are tolerated in URL paths by Node.js URL parser.
-// Origin check works because placeholders are in the path, not the host.
+// Any origin is accepted: verification is hash-based against the
+// sigstore/Rekor attestation, so the download host is a mirror, not
+// a trust anchor. The `repository` field still binds the attestation
+// to a specific github.com/owner/repo.
 const AddonConfigSchema = z.object({
   path: z.string().refine((path) => !path.split(/[/\\]/).includes("..") && path.endsWith(".node"), {
     message: `addon.path must be a relative .node file path`,
   }),
-  url: z.url().refine((url) => new URL(url).origin === "https://github.com", {
-    message: `addon.url must point to github.com`,
-  }),
+  url: z.url(),
 });
 
 const RepositorySchema = z.union([z.string(), z.object({ url: z.string().optional() })]);
@@ -163,7 +164,7 @@ if (import.meta.vitest) {
       await expect(readPackageJson(tmp.path)).rejects.toThrow();
     });
 
-    it("rejects non-github.com addon URL", async ({ expect }) => {
+    it("accepts non-github.com addon URL (custom mirror)", async ({ expect }) => {
       const { writeFile } = await import("node:fs/promises");
       const { join } = await import("node:path");
       const { tempDir } = await import("./util/fs.ts");
@@ -174,16 +175,36 @@ if (import.meta.vitest) {
         version: "1.0.0",
         addon: {
           path: "./dist/test.node",
-          url: "https://example.com/test-v{version}.node.gz",
+          url: "https://cdn.example.com/test-v{version}.node.gz",
         },
         repository: {
           url: "git+https://github.com/owner/repo.git",
         },
       };
       await writeFile(join(tmp.path, "package.json"), JSON.stringify(pkg));
-      await expect(readPackageJson(tmp.path)).rejects.toThrow(
-        /addon\.url must point to github\.com/,
-      );
+      const result = await readPackageJson(tmp.path);
+      expect(result.addon.url).toBe("https://cdn.example.com/test-v{version}.node.gz");
+    });
+
+    it("rejects malformed addon URL", async ({ expect }) => {
+      const { writeFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
+      const { tempDir } = await import("./util/fs.ts");
+
+      await using tmp = await tempDir();
+      const pkg = {
+        name: "test-pkg",
+        version: "1.0.0",
+        addon: {
+          path: "./dist/test.node",
+          url: "not a url",
+        },
+        repository: {
+          url: "git+https://github.com/owner/repo.git",
+        },
+      };
+      await writeFile(join(tmp.path, "package.json"), JSON.stringify(pkg));
+      await expect(readPackageJson(tmp.path)).rejects.toThrow();
     });
 
     it("formats top-level type error without path prefix", async ({ expect }) => {
