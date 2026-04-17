@@ -4,6 +4,7 @@
 [![Ask DeepWiki][deepwiki-badge]][deepwiki-site]
 [![CI status][status-badge]][status-dashboard]
 [![Test coverage][coverage-badge]][coverage-dashboard]
+[![Supply-chain score][socket-badge]][socket-dashboard]
 
 [github-badge]: https://img.shields.io/github/stars/vadimpiven/node-addon-slsa?style=flat&logo=github
 [github-repo]: https://github.com/vadimpiven/node-addon-slsa
@@ -17,6 +18,8 @@
 [status-dashboard]: https://github.com/vadimpiven/node-addon-slsa/actions?query=branch%3Amain
 [coverage-badge]: https://img.shields.io/codecov/c/github/vadimpiven/node-addon-slsa/main?logo=codecov
 [coverage-dashboard]: https://app.codecov.io/gh/vadimpiven/node-addon-slsa/tree/main
+[socket-badge]: https://badge.socket.dev/npm/package/node-addon-slsa
+[socket-dashboard]: https://socket.dev/npm/package/node-addon-slsa
 
 # node-addon-slsa
 
@@ -89,7 +92,7 @@ compromised, verification may pass for malicious artifacts.
     "pack-addon": "slsa pack"
   },
   "dependencies": {
-    "node-addon-slsa": "0.6.5"
+    "node-addon-slsa": "0.7.0"
   }
 }
 ```

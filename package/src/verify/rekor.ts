@@ -162,11 +162,21 @@ export async function verifyRekorAttestations(options: {
   // the current release. If an attacker floods entries past this window,
   // verification fails closed (rejects install, does not accept malicious artifacts).
   const capped = config.maxRekorEntries > 0 ? uuids.slice(-config.maxRekorEntries) : uuids;
+  let fetchFailures = 0;
   let verifyFailures = 0;
 
   for (const uuid of capped) {
+    let entry: RekorLogEntry;
     try {
-      const entry = await fetchRekorEntry(uuid, config);
+      entry = await fetchRekorEntry(uuid, config);
+    } catch (err) {
+      fetchFailures++;
+      const msg = err instanceof Error ? err.message : String(err);
+      log(`Rekor entry ${uuid} fetch failed: ${msg}`);
+      continue;
+    }
+
+    try {
       const { tlogEntry, cert } = parseRekorEntry(entry);
       verifyTLogInclusion(tlogEntry, trustMaterial.tlogs);
       verifyCertificateChain(
@@ -188,18 +198,26 @@ export async function verifyRekorAttestations(options: {
   }
 
   const n = capped.length;
+
+  // Every attempt failed at the network layer — transient, retriable,
+  // not a provenance issue. Throw a plain Error so callers can distinguish.
+  if (fetchFailures === n) {
+    throw new Error(dedent`
+      Failed to fetch ${n} Rekor transparency log entries for this artifact.
+      ${REKOR_NETWORK_ADVICE}
+    `);
+  }
+
   const detail =
-    verifyFailures === n
+    verifyFailures + fetchFailures === n
       ? dedent`
-          All ${n} Rekor entries failed verification.
-          This may indicate a sigstore trust root issue.
-          If this persists, report it to the package maintainer.
+          All ${n} Rekor entries failed cryptographic verification.
+          This may indicate an outdated sigstore trust root or a tampered attestation.
         `
       : dedent`
           ${n} Rekor entries found, none matched workflow run ${runInvocationURI}.
           The addon may have been rebuilt without re-attesting,
           or the npm package and addon were produced by different workflow runs.
-          Verify that both are from the same release.
         `;
   throw new ProvenanceError(dedent`
     Addon provenance verification failed.
@@ -369,11 +387,10 @@ if (import.meta.vitest) {
           runInvocationURI: runInvocationURIFn("https://github.com/o/r/actions/runs/1/attempts/1"),
           repo: "o/r",
           config: resolveConfig({ retryCount: 0, maxRekorEntries: 3, dispatcher }),
-          // All entries fail with HTTP 500, so trust material is never used.
           // All entries fail with HTTP 500 before trust material is used.
           trustMaterial: stubTrustMaterial,
         }),
-      ).rejects.toThrow(ProvenanceError);
+      ).rejects.toThrow(/Failed to fetch 3 Rekor transparency log entries/);
       expect(fetchCount).toBe(3);
     });
   });
