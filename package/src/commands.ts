@@ -25,6 +25,12 @@ import type { SemVerString, VerifyOptions } from "./types.ts";
 import { createHashPassthrough } from "./util/hash.ts";
 import { verifyPackageProvenance } from "./verify/index.ts";
 
+/** Options for {@link pack}. */
+export type PackOptions = {
+  /** Cooperative cancellation for the gzip pipeline. */
+  readonly signal?: AbortSignal | undefined;
+};
+
 /** Build the template variables available for `addon.url`: `{version}`, `{platform}`, `{arch}`. */
 function createTemplateVars(version: SemVerString): Record<string, string> {
   return { version, platform: process.platform, arch: process.arch };
@@ -36,10 +42,7 @@ function createTemplateVars(version: SemVerString): Record<string, string> {
  * @throws {ProvenanceError} if provenance verification fails.
  * @throws {Error} if the download or decompression fails.
  */
-export async function wget(
-  packageDir: string,
-  options?: VerifyOptions & { signal?: AbortSignal },
-): Promise<void> {
+export async function wget(packageDir: string, options?: VerifyOptions): Promise<void> {
   const { name, version, addon, repository } = await readPackageJson(packageDir);
 
   // 0.0.0 is treated as a local/development placeholder — skip download and verification
@@ -87,7 +90,7 @@ export async function wget(
     await pipeline(
       await fetchWithRetry(downloadUrl, options).then((r) => {
         if (r.statusCode >= 400) {
-          r.body.dump().catch(() => {});
+          r.body.dump().catch(() => { });
           throw new Error(`download failed: ${downloadUrl}: ${r.statusCode}`);
         }
         return r.body;
@@ -111,7 +114,7 @@ export async function wget(
 /**
  * Gzip-compresses the native addon for distribution.
  */
-export async function pack(packageDir: string, options?: { signal?: AbortSignal }): Promise<void> {
+export async function pack(packageDir: string, options?: PackOptions): Promise<void> {
   const { version, addon } = await readPackageJson(packageDir);
   log(`packing addon v${version}`);
 

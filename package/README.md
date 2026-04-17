@@ -78,8 +78,7 @@ compromised, verification may pass for malicious artifacts.
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    },
-    "./package.json": "./package.json"
+    }
   },
   "addon": {
     "path": "./dist/my_addon.node",
@@ -99,10 +98,10 @@ compromised, verification may pass for malicious artifacts.
 - **`addon.url`** — download template; `{version}`, `{platform}`, `{arch}`
   resolve at install time
 - **`postinstall`** — `slsa wget` downloads, verifies, and installs the
-  binary on `npm install`
+  binary on `npm install`. Pair it with [`requireAddon`](#3-loading-the-addon):
+  pnpm ≥ 10 blocks `postinstall` scripts by default, so consumers
+  may never run this hook.
 - **`pack-addon`** — `slsa pack` gzip-compresses the binary for release
-- **`exports["./package.json"]`** — required for
-  [loading the addon](#loading-the-addon)
 - **`repository`** — github.com URL (HTTPS, SSH, with or without `.git`).
   Determines the expected source repository for attestation checks.
 
@@ -155,6 +154,26 @@ Each matrix runner produces a platform-specific binary. The `{platform}`
 and `{arch}` placeholders resolve to `process.platform` and `process.arch`
 at install time.
 
+### 3. Loading the addon
+
+```typescript
+import { requireAddon } from "node-addon-slsa";
+
+type MyAddon = { greet(name: string): string };
+
+export const addon = await requireAddon<MyAddon>();
+```
+
+Walks up from the caller's file to the enclosing `package.json`, then
+downloads and provenance-verifies the binary if missing. Subsequent
+calls are a `stat` plus `require` — safe to invoke at module load.
+
+- `T` defaults to `unknown`; supply the addon's type at the call site.
+- Pass `{ from: import.meta.url }` when the caller lives outside the
+  consuming package (e.g. a re-export wrapper).
+- `RequireAddonOptions` extends [`VerifyOptions`](#options); see
+  [error handling](#error-handling) for failure modes.
+
 ## API reference
 
 ### CLI
@@ -172,6 +191,7 @@ at install time.
 import {
   verifyPackageProvenance,
   verifyAddonProvenance,
+  requireAddon,
   isProvenanceError,
   sha256Hex,
   semVerString,
@@ -196,6 +216,10 @@ await verifyAddonProvenance({
   runInvocationURI,
   repo: githubRepo("owner/repo"),
 });
+
+// Runtime loader: verify-on-demand, then require the addon.
+// Supply the addon's type as T (defaults to `unknown`).
+const addon = await requireAddon<MyAddon>();
 ```
 
 #### Types
@@ -245,26 +269,9 @@ try {
 }
 ```
 
-### Loading the addon
-
-```typescript
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
-import packageJson from "../package.json" with { type: "json" };
-
-const require = createRequire(import.meta.url);
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const addon = require(join(root, packageJson.addon.path));
-```
-
-The `"./package.json"` export in your `exports` map is required for this
-JSON import to resolve under strict ESM exports.
-
 ## Requirements
 
-- Node.js `^20.19.0 || >=22.12.0`
+- Node.js `>=22.12.0`
 - npm package published with [`--provenance`][npm-provenance]
 - Binary attested with `vadimpiven/node-addon-slsa/attest-public`
 

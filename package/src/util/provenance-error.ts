@@ -19,7 +19,7 @@ const BRAND = Symbol.for("node-addon-slsa.ProvenanceError");
 export class ProvenanceError extends Error {
   readonly [BRAND] = true as const;
 
-  constructor(message: string, options?: { cause?: unknown }) {
+  constructor(message: string, options?: ErrorOptions) {
     const msg = dedent`
       SECURITY: ${message}
       ${SECURITY_ADVICE}

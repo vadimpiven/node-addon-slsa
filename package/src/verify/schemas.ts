@@ -12,6 +12,7 @@ import { z } from "zod/v4";
  */
 export const BundleSchema = z.looseObject({}).transform((val) => bundleToJSON(bundleFromJSON(val)));
 
+/** `GET /-/npm/v1/attestations/{pkg}@{version}` response schema. */
 export const NpmAttestationsSchema = z.object({
   attestations: z.array(
     z.object({
@@ -21,6 +22,7 @@ export const NpmAttestationsSchema = z.object({
   ),
 });
 
+/** Decoded npm attestations response. */
 export type NpmAttestations = z.infer<typeof NpmAttestationsSchema>;
 
 /** Rekor search-by-hash response: hex entry UUIDs. */
@@ -44,6 +46,7 @@ const RekorLogEntryObject = z.object({
   }),
 });
 
+/** Decoded single Rekor log entry. */
 export type RekorLogEntry = z.infer<typeof RekorLogEntryObject>;
 
 /** Rekor GET /log/entries/{uuid}: { [uuid]: entry }. */

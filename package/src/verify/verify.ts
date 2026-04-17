@@ -45,7 +45,15 @@ export async function loadTrustMaterial(): Promise<TrustMaterial> {
  * the addon binary was produced by the same GitHub Actions workflow run.
  */
 export type PackageProvenance = {
+  /** Run Invocation URI extracted from the npm provenance certificate. */
   readonly runInvocationURI: RunInvocationURI;
+  /**
+   * Verify that the addon binary with the given SHA-256 was attested by
+   * the same GitHub Actions workflow run that produced the npm package.
+   *
+   * @throws {@link ProvenanceError} if no Rekor entry matches the hash
+   *   or the entry's run URI does not match.
+   */
   readonly verifyAddon: (options: { sha256: Sha256Hex }) => Promise<void>;
 };
 

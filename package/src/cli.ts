@@ -33,9 +33,7 @@ Environment:
  * Testable CLI core. Returns an exit code instead of calling process.exit().
  * Accepts an optional AbortSignal for graceful shutdown.
  */
-export async function runSlsaInner(
-  options?: FetchOptions & { signal?: AbortSignal },
-): Promise<{ exitCode: number }> {
+export async function runSlsaInner(options?: FetchOptions): Promise<{ exitCode: number }> {
   let values: { help: boolean };
   let positionals: string[];
   try {

@@ -24,6 +24,10 @@ export {
   loadTrustMaterial,
 } from "./verify/index.ts";
 
+/** Runtime addon loader. */
+export { requireAddon } from "./loader.ts";
+export type { RequireAddonOptions } from "./loader.ts";
+
 /** Type constructors. */
 export { sha256Hex, semVerString, githubRepo, runInvocationURI } from "./types.ts";
 

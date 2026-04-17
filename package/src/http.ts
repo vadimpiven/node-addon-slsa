@@ -13,9 +13,13 @@ import { Agent, request, type Dispatcher } from "undici";
 import type { FetchOptions } from "./types.ts";
 import { log } from "./util/log.ts";
 
+/** Per-request timeout used when {@link FetchOptions.timeoutMs} is not supplied. */
 export const DEFAULT_TIMEOUT_MS = 30_000;
+/** Stall timeout (no bytes received) used when {@link FetchOptions.stallTimeoutMs} is not supplied. */
 export const DEFAULT_STALL_TIMEOUT_MS = 30_000;
+/** Retry count used when {@link FetchOptions.retryCount} is not supplied. */
 export const DEFAULT_RETRY_COUNT = 2;
+/** Base delay for exponential backoff used when {@link FetchOptions.retryBaseMs} is not supplied. */
 export const DEFAULT_RETRY_BASE_MS = 500;
 
 /** Exponential backoff with ±20% jitter to avoid thundering-herd collisions. */
