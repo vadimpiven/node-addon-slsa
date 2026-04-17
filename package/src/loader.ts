@@ -17,7 +17,7 @@ import dedent from "dedent";
 import { wget } from "./commands.ts";
 import { readPackageJson } from "./package.ts";
 import type { VerifyOptions } from "./types.ts";
-import { assertWithinDir, isEnoent } from "./util/fs.ts";
+import { assertWithinDir, isEnoent, isEnotdir } from "./util/fs.ts";
 
 export type RequireAddonOptions = VerifyOptions & {
   /**
@@ -36,7 +36,11 @@ async function findPackageDir(startDir: string): Promise<string> {
       await access(join(dir, "package.json"));
       return dir;
     } catch (err: unknown) {
-      if (!isEnoent(err)) throw err;
+      // ENOTDIR arises when `dir` itself is a file path (e.g. the caller
+      // passed `import.meta.url` pointing to a real module file): joining
+      // `"package.json"` produces `/…/file.ts/package.json`, which fails
+      // with ENOTDIR rather than ENOENT. Treat both as "keep walking up".
+      if (!isEnoent(err) && !isEnotdir(err)) throw err;
     }
     const parent = dirname(dir);
     if (parent === dir) {
