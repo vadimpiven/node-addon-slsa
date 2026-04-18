@@ -34,8 +34,8 @@ per-visibility branches in the publisher workflow or the verifier.
   second input.
 
 Binary URLs are not in `package.json` — they live in
-`manifest.addons[platform-arch].url`, concrete per platform, filled in by
-the `publish-attested` action from its `addons` input.
+`manifest.addons[platform][arch].url`, concrete per platform/arch,
+filled in by the `publish-attested` action from its `addons` input.
 
 ### Publisher CI workflow
 
@@ -87,9 +87,13 @@ jobs:
           tarball: packages/node/my-native-addon-1.0.0.tgz
           addons: |
             {
-              "linux-x64":    "https://.../v1.0.0/my_addon-v1.0.0-linux-x64.node.gz",
-              "linux-arm64":  "https://.../v1.0.0/my_addon-v1.0.0-linux-arm64.node.gz",
-              "darwin-arm64": "https://.../v1.0.0/my_addon-v1.0.0-darwin-arm64.node.gz"
+              "linux":  {
+                "x64":   "https://.../v1.0.0/my_addon-v1.0.0-linux-x64.node.gz",
+                "arm64": "https://.../v1.0.0/my_addon-v1.0.0-linux-arm64.node.gz"
+              },
+              "darwin": {
+                "arm64": "https://.../v1.0.0/my_addon-v1.0.0-darwin-arm64.node.gz"
+              }
             }
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -109,7 +113,7 @@ from the current run.
    consumer's `package.json` → `addon.manifest` (default
    `./slsa-manifest.json`). Trust: npm's `dist.integrity` sha512 covers
    the tarball; `dist.signatures` is TUF-backed via npm keys.
-2. Look up `manifest.addons[${process.platform}-${process.arch}]`.
+2. Look up `manifest.addons[process.platform]?.[process.arch]`.
    Download from `url`, verify sha256.
 3. Rekor lookup on sha256. Cross-check cert OIDs against the manifest
    (issuer, `sourceRepo`, `sourceCommit`, `sourceRef`,
@@ -165,39 +169,98 @@ per release, covered by `dist.integrity` regardless of location.
 
 ```jsonc
 {
-  "schemaVersion": 1,
+  "$schema": "https://vadimpiven.github.io/node-addon-slsa/schema/slsa-manifest.v1.json",
   "runInvocationURI": "https://github.com/owner/repo/actions/runs/123/attempts/1",
   "sourceRepo": "owner/repo",
   "sourceCommit": "<40-hex>",
   "sourceRef": "refs/tags/v1.2.3",
   "addons": {
-    "linux-x64": {
-      "url": "https://.../addon-linux-x64.node.gz",
-      "sha256": "...",
+    "linux": {
+      "x64": { "url": "https://.../addon-linux-x64.node.gz", "sha256": "..." },
+      "arm64": {
+        "url": "https://.../addon-linux-arm64.node.gz",
+        "sha256": "...",
+      },
     },
-    "linux-arm64": {
-      "url": "https://.../addon-linux-arm64.node.gz",
-      "sha256": "...",
+    "darwin": {
+      "x64": { "url": "https://.../addon-darwin-x64.node.gz", "sha256": "..." },
+      "arm64": {
+        "url": "https://.../addon-darwin-arm64.node.gz",
+        "sha256": "...",
+      },
     },
-    "darwin-x64": {
-      "url": "https://.../addon-darwin-x64.node.gz",
-      "sha256": "...",
-    },
-    "darwin-arm64": {
-      "url": "https://.../addon-darwin-arm64.node.gz",
-      "sha256": "...",
-    },
-    "win32-x64": {
-      "url": "https://.../addon-win32-x64.node.gz",
-      "sha256": "...",
+    "win32": {
+      "x64": { "url": "https://.../addon-win32-x64.node.gz", "sha256": "..." },
+      "arm64": {
+        "url": "https://.../addon-win32-arm64.node.gz",
+        "sha256": "...",
+      },
     },
   },
 }
 ```
 
-Keys use Node's `${process.platform}-${process.arch}` (`linux|darwin|win32`
-× `x64|arm64`). Installer reads
-`manifest.addons[${process.platform}-${process.arch}]` directly.
+Outer keys are Node's `process.platform` (`darwin | linux | win32` — the
+Electron-supported set); inner keys are `process.arch`
+(`x64 | arm64 | arm | ia32`; `process.arch` reports `arm` for Electron's
+`armv7l` builds). Nesting avoids listing the cartesian product and scopes
+the schema to the Electron matrix. Installer reads
+`manifest.addons[process.platform]?.[process.arch]`.
+
+The `$schema` URL is a version marker matched by exact string equality —
+the verifier never fetches it. See "Publishing the schema" below for the
+v1 → v2 bump policy.
+
+### Publishing the schema
+
+Zod schemas in `package/src/schemas.ts` are the single source of truth;
+JSON Schemas are pure build output, regenerated on every build and
+written straight into `package/docs/schema/` (no repo-root `schema/`
+dir, no check-in). Zod 4's built-in `z.toJSONSchema()` handles the
+conversion — no extra runtime dep.
+
+Schemas to export are registered by their target filename:
+
+```typescript
+// package/src/schemas.ts (excerpt)
+export const PublishedSchemas = {
+  "slsa-manifest.v1.json": SlsaManifestSchemaV1,
+  // future: "slsa-manifest.v2.json": SlsaManifestSchemaV2,
+} as const;
+```
+
+A helper script iterates the registry and writes each schema:
+
+```typescript
+// package/scripts/generate-schemas.ts
+import { mkdirSync, writeFileSync } from "node:fs";
+import { z } from "zod";
+import { PublishedSchemas } from "../src/schemas.ts";
+
+const outDir = new URL("../docs/schema/", import.meta.url);
+mkdirSync(outDir, { recursive: true });
+for (const [name, schema] of Object.entries(PublishedSchemas)) {
+  const json = z.toJSONSchema(schema, { target: "draft-7" });
+  writeFileSync(new URL(name, outDir), JSON.stringify(json, null, 2) + "\n");
+}
+```
+
+Wired into the package `build` script after docs are generated:
+
+```json
+"build": "vite build && typedoc && node scripts/generate-schemas.ts"
+```
+
+No runner dep — the build runs on latest Node, which executes
+TypeScript natively. Resulting URL:
+`https://vadimpiven.github.io/node-addon-slsa/schema/<file>.json`.
+
+Versioning is explicit in the registry key. An incompatible change
+means adding a new entry (`slsa-manifest.v2.json`) alongside the frozen
+`SlsaManifestSchemaV1`, so the v1 file keeps regenerating identically
+and old manifests keep validating against the same URL. The verifier
+is taught to accept both `$schema` URLs manually — the generator
+doesn't decide when to bump.
 
 ## `publish-attested` action
 
@@ -217,9 +280,9 @@ declared URLs _before_ calling this action.
 inputs:
   addons:
     description: >
-      JSON object keyed by `${platform}-${arch}` (Node's process.platform /
-      process.arch values). Each value is the URL where the binary is
-      already hosted.
+      Nested JSON object: `{ [platform]: { [arch]: url } }` using Node's
+      `process.platform` / `process.arch` values. Each leaf is the URL
+      where the binary is already hosted.
     required: true
   tarball:
     description: Path to the input .tgz (already packed).
@@ -235,19 +298,24 @@ inputs:
 No outputs. The action's externally-observable effect is `npm publish`
 itself.
 
-Input Zod schema:
+Input Zod schema — identical key-shape to the manifest output. The caller
+provides URLs they've already uploaded; `sha256` is computed by the
+action itself, so it is not part of the input:
 
 ```typescript
-const AddonsInputSchema = z.record(
-  z.string().regex(/^(linux|darwin|win32)-(x64|arm64)$/),
-  z.string().url(),
+// Re-used from package/src/verify/schemas.ts:
+//   PlatformSchema, ArchSchema, Platform, Arch
+const AddonUrlMapSchema = z.record(
+  PlatformSchema,
+  z.record(ArchSchema, z.string().url()),
 );
+export type AddonUrlMap = z.infer<typeof AddonUrlMapSchema>;
 ```
 
 ### Behaviour
 
 ```typescript
-// Pseudocode. addons: Record<`${platform}-${arch}`, string>
+// Pseudocode. `addons` is the parsed AddonUrlMap input.
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -255,8 +323,10 @@ import {
   sha256Hex,
   githubRepo,
   runInvocationURI,
+  assertWithinDir,
+  type AddonEntry,
+  type AddonInventory,
 } from "node-addon-slsa";
-import { assertWithinDir } from "node-addon-slsa/internal";
 
 const MAX_BINARY_BYTES = 256 * 1024 * 1024; // 256 MB
 
@@ -269,28 +339,34 @@ const runURI = runInvocationURI(
 
 // 1. Per URL: fetch (size-capped), hash, verify Rekor entry from THIS run.
 //    Fails loud on wrong upload, stale cache, oversize, or missing Rekor.
-const addonsOut: Record<string, { url: string; sha256: string }> = {};
-for (const [key, url] of Object.entries(addons)) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${key}: ${url} → ${res.status}`);
-  const declared = Number(res.headers.get("content-length") ?? "0");
-  if (declared > MAX_BINARY_BYTES) {
-    throw new Error(`${key}: Content-Length ${declared} exceeds 256 MB`);
+//    Key-shape is preserved 1:1 from input to output; only the sha256 is
+//    added, so there is no pivot or remapping.
+const verifiedAddons: AddonInventory = {};
+for (const [platform, byArch] of Object.entries(addons)) {
+  for (const [arch, url] of Object.entries(byArch ?? {})) {
+    const label = `${platform}/${arch}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${label}: ${url} → ${res.status}`);
+    const declared = Number(res.headers.get("content-length") ?? "0");
+    if (declared > MAX_BINARY_BYTES) {
+      throw new Error(`${label}: Content-Length ${declared} exceeds 256 MB`);
+    }
+    const bytes = await readWithCap(res.body, MAX_BINARY_BYTES); // aborts mid-stream
+    const sha256 = sha256Hex(createHash("sha256").update(bytes).digest("hex"));
+    await verifyAttestation({ sha256, runInvocationURI: runURI, repo });
+    const entry: AddonEntry = { url, sha256 };
+    (verifiedAddons[platform] ??= {})[arch] = entry;
   }
-  const bytes = await readWithCap(res.body, MAX_BINARY_BYTES); // aborts mid-stream
-  const digest = sha256Hex(createHash("sha256").update(bytes).digest("hex"));
-  await verifyAttestation({ sha256: digest, runInvocationURI: runURI, repo });
-  addonsOut[key] = { url, sha256: digest };
 }
 
-// 2. Build manifest.
-const manifest = {
-  schemaVersion: 1,
+// 2. Build manifest — fields match the schema 1:1; no reshaping.
+const manifest: SlsaManifest = {
+  $schema: SLSA_MANIFEST_V1_SCHEMA_URL,
   runInvocationURI: runURI,
   sourceRepo: process.env.GITHUB_REPOSITORY,
   sourceCommit: process.env.GITHUB_SHA,
   sourceRef: process.env.GITHUB_REF,
-  addons: addonsOut,
+  addons: verifiedAddons,
 };
 const manifestJson = JSON.stringify(manifest, null, 2);
 
@@ -351,8 +427,9 @@ Env vars read: `GITHUB_REPOSITORY`, `GITHUB_RUN_ID`, `GITHUB_RUN_ATTEMPT`,
 - **Minimal input surface.** `addons` + `tarball` are required; `access` /
   `tag` have pit-of-success defaults. Repo / run ID / commit / ref are
   ambient env — making them inputs would invite stale-value overrides
-  that break Rekor cross-check. Input keys `${platform}-${arch}` mirror
-  the manifest output shape; uniqueness is structural.
+  that break Rekor cross-check. `addons` key-shape is identical to the
+  manifest's `AddonInventory`; only `sha256` (computed by the action)
+  is added, so there is no mid-flight remapping.
 - **Typed `access` / `tag` instead of `publish-args`.** Both vary per
   publish and are orthogonal to provenance (access gates _download_, not
   verification; tag is registry-side metadata). Structurally blocks
@@ -392,28 +469,70 @@ Existing OIDs: `OID_ISSUER_V1` (`.1.1`), `OID_ISSUER_V2` (`.1.8`),
 Fulcio registry:
 `https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md`.
 
-### `schemas.ts` — `SlsaManifestSchema`
+### `schemas.ts` — manifest schema + domain types
 
-Zod validation for the manifest:
+Single source of truth for the manifest shape. All types are named and
+exported so both the verifier and `publish-attested` consume the same
+concepts under the same names.
 
-- `schemaVersion === 1`
-- `runInvocationURI` parses via `runInvocationURI()` type guard
-- `sourceRepo` matches `owner/repo` (reuse `githubRepo` validator)
-- `sourceCommit` is 40-hex
-- `sourceRef` starts with `refs/tags/` or `refs/heads/`
-- `addons` values have sha256 hex (64 chars) and https url
+```typescript
+export const SLSA_MANIFEST_V1_SCHEMA_URL =
+  "https://vadimpiven.github.io/node-addon-slsa/schema/slsa-manifest.v1.json";
+
+export const PlatformSchema = z.enum(["darwin", "linux", "win32"]);
+export const ArchSchema = z.enum(["x64", "arm64", "arm", "ia32"]);
+export type Platform = z.infer<typeof PlatformSchema>;
+export type Arch = z.infer<typeof ArchSchema>;
+
+export const AddonEntrySchema = z.object({
+  url: z.string().url().startsWith("https://"),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+});
+export type AddonEntry = z.infer<typeof AddonEntrySchema>;
+
+export const AddonInventorySchema = z.record(
+  PlatformSchema,
+  z.record(ArchSchema, AddonEntrySchema),
+);
+export type AddonInventory = z.infer<typeof AddonInventorySchema>;
+
+export const SlsaManifestSchema = z.object({
+  $schema: z.literal(SLSA_MANIFEST_V1_SCHEMA_URL),
+  runInvocationURI: RunInvocationURISchema,
+  sourceRepo: GitHubRepoSchema,
+  sourceCommit: z.string().regex(/^[0-9a-f]{40}$/),
+  sourceRef: z.string().regex(/^refs\/(tags|heads)\//),
+  addons: AddonInventorySchema,
+});
+export type SlsaManifest = z.infer<typeof SlsaManifestSchema>;
+```
+
+Validation rules, in prose:
+
+- `$schema` equals `SLSA_MANIFEST_V1_SCHEMA_URL` exactly (no network).
+- `runInvocationURI`, `sourceRepo` reuse the existing branded validators.
+- `sourceCommit` is 40-hex; `sourceRef` starts with `refs/tags/` or
+  `refs/heads/`.
+- `addons` keys are closed under the Electron-supported platform/arch
+  set; unknown keys reject.
 
 ### `certificates.ts` — `verifyCertificateOIDs`
 
 ```typescript
-verifyCertificateOIDs(cert, repo, {
-  sourceCommit, // exact match against OID_SOURCE_REPO_DIGEST
-  sourceRef, // regex match against OID_SOURCE_REPO_REF
-  runInvocationURI, // exact match against OID_RUN_INVOCATION_URI
-});
+export type CertificateOIDExpectations = {
+  sourceCommit: SourceCommitSha; // exact match against OID_SOURCE_REPO_DIGEST
+  sourceRef: SourceRef; // regex match against OID_SOURCE_REPO_REF
+  runInvocationURI: RunInvocationURI; // exact match against OID_RUN_INVOCATION_URI
+};
+
+export function verifyCertificateOIDs(
+  cert: X509Certificate,
+  repo: GitHubRepo,
+  expect: CertificateOIDExpectations,
+): void;
 ```
 
-All three options required. Helpers reused: `getExtensionValue(cert, oid)`,
+All three fields required. Helpers reused: `getExtensionValue(cert, oid)`,
 `extractCertFromBundle(bundle)`.
 
 ### `verify.ts` — `verifyPackageManifest`
@@ -422,45 +541,49 @@ Sole entry point for package verification. Returns `PackageProvenance`
 with `verifyAddon({ sha256 })`.
 
 ```typescript
+export type VerifyPackageManifestOptions = VerifyOptions & {
+  /** Installed package to verify (resolved from the caller's node_modules). */
+  packageName: PackageName;
+  /** Expected source repository; cross-checked against the manifest. */
+  repo: GitHubRepo;
+  /**
+   * Expected tag/branch ref pattern. Defaults to
+   * `^refs/tags/v?<escaped-package-version>$`, which pins a consumer
+   * install to the exact tag that produced it. Override for monorepo
+   * prefixes (`pkg-v1.2.3`), scoped tags, or release branches.
+   */
+  refPattern?: RegExp;
+};
+
 export async function verifyPackageManifest(
-  options: {
-    packageName: PackageName; // required
-    repo: GitHubRepo; // required; caller-asserted expected repo
-    refPattern?: RegExp; // default: /^refs\/tags\/v?<escaped-version>$/
-    manifestPath?: string; // advanced override: tests, unusual layouts
-  } & VerifyOptions,
-): Promise<PackageProvenance> {
-  // 1. Read `${packageName}/package.json`; get `version` and `addon.manifest`.
-  // 2. Resolve manifest: `options.manifestPath` ?? `addon.manifest` relative
-  //    to package root (default DEFAULT_MANIFEST_PATH).
-  // 3. Load + zod-parse manifest.
-  // 4. Assert manifest.sourceRepo equals options.repo (case-insensitive).
-  // 5. Resolve refPattern: `options.refPattern` ??
-  //    `new RegExp(`^refs/tags/v?${escapeRegExp(version)}$`)`.
-  // 6. Assert manifest.sourceRef matches refPattern.
-  // 7. Return PackageProvenance whose verifyAddon() does:
-  //    a. Rekor lookup on sha256 (reuse verifyRekorAttestations).
-  //    b. Cross-check each Rekor cert's OIDs against manifest:
-  //       issuer (OID_ISSUER_*), sourceRepo (OID_SOURCE_REPO_URI),
-  //       sourceCommit (OID_SOURCE_REPO_DIGEST),
-  //       sourceRef (OID_SOURCE_REPO_REF),
-  //       runInvocationURI (OID_RUN_INVOCATION_URI).
-}
+  options: VerifyPackageManifestOptions,
+): Promise<PackageProvenance>;
 ```
 
-Progressive-disclosure:
+Behaviour:
 
-- Common case trivial: `verifyPackageManifest({ packageName, repo })`.
-  Everything else defaults from the installed package's `package.json`.
-- Version-derived `refPattern` prevents cross-version ref substitution:
-  installing `@1.2.3` passes only for `refs/tags/1.2.3` or
-  `refs/tags/v1.2.3`. Explicit `refPattern` overrides for monorepo
-  prefixes (`pkg-v1.2.3`), scoped tags, release branches, etc.
-- `manifestPath` escape hatch for vitest fixtures (no enclosing
-  `package.json`). Not a documented common path.
+1. Read `${packageName}/package.json`; get `version` and `addon.manifest`.
+2. Load + zod-parse the manifest at `addon.manifest` (default
+   `DEFAULT_MANIFEST_PATH`) relative to the package root.
+3. Assert `manifest.sourceRepo` equals `options.repo` (case-insensitive).
+4. Assert `manifest.sourceRef` matches `options.refPattern`
+   (default derived from installed version).
+5. Return a `PackageProvenance` whose `verifyAddon({ sha256 })` does:
+   (a) Rekor lookup on `sha256`; (b) cross-check each Rekor cert's OIDs
+   against the manifest — issuer, `sourceRepo`, `sourceCommit`,
+   `sourceRef`, `runInvocationURI`.
 
-Sigstore cert verification happens inside `verifyRekorAttestations` per
-Rekor entry (Fulcio CAs + Rekor key via TUF).
+Progressive-disclosure notes:
+
+- Common case is `verifyPackageManifest({ packageName, repo })`;
+  everything else derives from the installed `package.json`.
+- No `manifestPath` option — the manifest location is an internal detail
+  resolved from `package.json`. Tests construct their own fixtures with
+  a valid enclosing `package.json`; they don't need a separate override
+  for the public API to be correct.
+- Sigstore cert verification happens inside `verifyRekorAttestations`
+  per Rekor entry (Fulcio CAs + Rekor key via TUF) — hidden from this
+  entry point.
 
 ### CLI — `commands.ts`
 
@@ -480,16 +603,22 @@ published with this toolkit.
 binary's Rekor entry without a manifest — used by `publish-attested`:
 
 ```typescript
+export type VerifyAttestationOptions = VerifyOptions & {
+  sha256: Sha256Hex;
+  runInvocationURI: RunInvocationURI;
+  repo: GitHubRepo;
+};
+
 export async function verifyAttestation(
-  options: {
-    sha256: Sha256Hex;
-    runInvocationURI: RunInvocationURI;
-    repo: GitHubRepo;
-  } & VerifyOptions,
+  options: VerifyAttestationOptions,
 ): Promise<void>;
 ```
 
 Wraps `verifyRekorAttestations` with trust-material loading and retry.
+
+`assertWithinDir` is re-exported from the top-level `node-addon-slsa`
+entry as a named helper (no `/internal` subpath — the publicly exposed
+surface is either public API or it isn't; there's no middle tier).
 
 ### Existing building blocks reused
 
@@ -549,9 +678,9 @@ already in public Rekor entries.
 - `package/src/verify/schemas.ts` — add `SlsaManifestSchema`
 - `package/src/verify/certificates.ts` — `verifyCertificateOIDs` takes
   required `sourceCommit` / `sourceRef` / `runInvocationURI`
-- `package/src/verify/verify.ts` — `verifyPackageManifest` +
-  `loadManifest` as primary entry points; `verifyAttestation` exported
-  for standalone binary verification
+- `package/src/verify/verify.ts` — `verifyPackageManifest` as primary
+  entry point; `verifyAttestation` exported for standalone binary
+  verification
 - `package/src/verify/index.ts` — export new symbols
 - `package/src/index.ts` — re-export
 - `package/src/commands.ts` — `slsa wget` calls
@@ -573,9 +702,11 @@ Inline under `if (import.meta.vitest)`.
 `SlsaManifestSchema`:
 
 - Valid manifest parses; branded types returned.
-- `schemaVersion !== 1` rejected.
+- `$schema` mismatch (wrong URL, missing field) rejected.
 - Each missing required field rejected (one test per field).
 - Non-hex sha256, non-https url, malformed `runInvocationURI` rejected.
+- Unknown `addons` platform key (e.g. `freebsd`) or arch key (e.g.
+  `riscv64`) rejected.
 
 `verifyCertificateOIDs`: one accept + one reject per field
 (`sourceCommit`, `sourceRef`, `runInvocationURI`). Mock `X509Certificate`
@@ -591,6 +722,8 @@ per `certificates.ts` precedent.
 - Version with regex metacharacters (`1.2.3-rc.1`, `1.2.3+build.1`)
   correctly escaped.
 - Explicit `refPattern` overrides derived default.
+- Fixtures construct a real package dir with `package.json` +
+  co-located `slsa-manifest.json`; no public override for manifest path.
 - Rekor cert's `sourceCommit` / `runInvocationURI` disagreement → throws.
 
 `publish-attested/index.ts` (real temp dir + fixtures):
@@ -620,8 +753,8 @@ No new Rekor network fixtures — `rekor.ts` tests cover that surface.
 2. `SlsaManifestSchema` in `verify/schemas.ts`.
 3. `verifyCertificateOIDs` signature change in `verify/certificates.ts`.
 4. Rename `verifyAddonProvenance` → `verifyAttestation` in
-   `verify/verify.ts`. Add `verifyPackageManifest` + `loadManifest`.
-   Update `verify/index.ts` and top-level `index.ts` exports.
+   `verify/verify.ts`. Add `verifyPackageManifest`. Update
+   `verify/index.ts` and top-level `index.ts` exports.
 5. `commands.ts` calls `verifyPackageManifest` directly.
 6. Delete `verify/npm.ts`, `NpmAttestationsSchema`,
    `verifyPackageProvenance`, `OID_SOURCE_REPO_VISIBILITY`.
