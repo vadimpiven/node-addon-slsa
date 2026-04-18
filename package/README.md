@@ -126,7 +126,7 @@ jobs:
       id-token: write # OIDC token for sigstore
       attestations: write # build provenance
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       # ... set up toolchain, build native addon ...
       - name: Compress binary for release
         run: npx slsa pack
@@ -135,7 +135,7 @@ jobs:
         with:
           subject-path: dist/my_addon-v*.node.gz
       - name: Upload binary to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           files: dist/my_addon-v*.node.gz
 
@@ -146,15 +146,16 @@ jobs:
       contents: read
       id-token: write # npm provenance via OIDC
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm publish --provenance --access public
 ```
 
-Pin the `attest-public` action to a commit SHA, not a mutable tag.
+Pin every third-party action to a commit SHA with a trailing `# vX.Y.Z`
+comment, not a mutable tag — SHAs are immutable and audit-friendly.
 
 Each matrix runner produces a platform-specific binary. The `{platform}`
 and `{arch}` placeholders resolve to `process.platform` and `process.arch`
