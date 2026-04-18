@@ -1,23 +1,79 @@
-# Plan: unified addon provenance
+# Unified addon provenance
 
-`npm publish --provenance` rejects bundles from internal/private GitHub
-repos (server-side policy). This plan delivers one provenance flow for
-every repo visibility, with no per-visibility branches in publisher or
-verifier. Two mechanisms carry the trust:
+`npm publish --provenance` rejects bundles from internal/private GitHub repos (server-side
+policy). This design delivers one provenance flow for every repo visibility, entered via a
+single `uses:` of a reusable workflow that attests binaries and publishes the tarball.
 
-- **Per-binary attestations come from a reusable workflow** at
-  `vadimpiven/node-addon-slsa/.github/workflows/attest.yaml`. The Fulcio
-  cert's Build Signer URI (OID `.1.9`) pins attestations to that path;
-  the caller's publish job — which holds `id-token: write` for npm
-  trusted publishing — carries the caller's workflow path in its own
-  cert and cannot forge a passing attestation.
-- **npm trusted publishing (OIDC)** replaces long-lived
-  `NODE_AUTH_TOKEN`. Consumer trust in the tarball flows from npm's
-  `dist.integrity` (TUF-backed), not the publish job's identity.
+Two mechanisms carry the trust:
 
-## Usage
+- **Per-binary attestations** via `actions/attest-build-provenance` run inside the reusable
+  workflow at `vadimpiven/node-addon-slsa/.github/workflows/publish.yaml`. The Fulcio cert's
+  Build Signer URI (OID `.1.9`) pins attestations to that workflow path — no other workflow
+  can mint a matching cert.
+- **npm trusted publishing (OIDC)** replaces long-lived `NODE_AUTH_TOKEN`. npm validates the
+  caller's top-level `workflow_ref` (not the reusable's `job_workflow_ref`), so each publisher
+  registers their own release workflow as the trusted publisher on npmjs. Consumer trust in
+  the tarball flows from npm's `dist.integrity` (TUF-backed).
 
-### Publisher `package.json`
+Scope: GitHub (public or private) → npmjs.org. Non-GitHub CI and non-npmjs registries
+(Verdaccio, GitHub Packages, Artifactory) are out of scope.
+
+## Flow
+
+```text
+     build matrix ──▶ upload binaries as GH artifacts (no id-token)
+     pack step    ──▶ upload .tgz as GH artifact (no id-token)
+     upload step  ──▶ push binaries to declared URLs (S3 / CDN / Releases)
+
+                      ┌────────────────────────────────────────────────┐
+     caller's    ──▶  │ vadimpiven/node-addon-slsa/.github/            │
+     publish          │   workflows/publish.yaml@<sha>                 │
+     job              │   (id-token: write; attestations: write)       │
+                      │                                                │
+                      │   ├─ attest-build-provenance ──▶ Rekor         │
+                      │   ├─ fetch URLs, verify Rekor + signer pin     │
+                      │   ├─ build manifest, inject into .tgz          │
+                      │   └─ npm publish  (trusted publishing)         │
+                      └────────────────────────────────────────────────┘
+
+     install: read manifest → download url → verify sha256 → Rekor lookup
+              → cross-check cert OIDs → assert manifest.packageName matches
+                installed package.json.name
+```
+
+## Trust model
+
+Trusts: GitHub Actions (build env), Sigstore public-good (Fulcio CA and Rekor), npmjs (TUF
+root and registry). Compromise of any of these breaks verification.
+
+Each row: **attack** _(caught at)_ — defence.
+
+- **Wrong bytes uploaded to a declared URL** _(publish)_ — `publish-attested` fetches and
+  Rekor-verifies each URL before `npm publish`.
+- **Swapped `.node` on CDN/S3 after publish** _(install)_ — Rekor miss (no entry for the
+  tampered sha256).
+- **Swapped npm tarball** _(install)_ — `dist.integrity` sha512 mismatch.
+- **Binary from unrelated legit run** _(publish + install)_ — Rekor cert's `sourceRepo`
+  and `runInvocationURI` must match the current run.
+- **Fake run URI in manifest** _(install)_ — no Rekor entry matches URI + hash.
+- **`workflow_dispatch` on feature branch** _(schema + install)_ — schema rejects
+  non-`refs/tags/` `sourceRef`; installer `refPattern` derived from version.
+- **Attestation minted by an unrelated workflow** _(publish + install)_ — Build Signer URI
+  pin rejects certs whose URI is not the reusable `publish.yaml` workflow path.
+- **Monorepo sibling binary laundered into a different package** _(install)_ —
+  `manifest.packageName === package.json.name` catches it (Fulcio has no npm-name claim;
+  `sourceRef` + `sourceRepo` don't disambiguate siblings).
+- **Caller pins reusable workflow at a mutable tag** _(publish + install)_ —
+  `DEFAULT_ATTEST_SIGNER_PATTERN` is SHA-only (`@<40-hex>`); tag-pinned `uses:` mints
+  certs that fail the pattern.
+
+Privacy: the reusable workflow logs to public Rekor. The Sigstore cert reveals `owner/repo`,
+commit SHA, workflow path, ref. Internal/private-repo publishers accept this by opting in;
+the manifest restates what's already in public Rekor entries.
+
+## Publisher
+
+### `package.json`
 
 ```json
 {
@@ -36,17 +92,18 @@ verifier. Two mechanisms carry the trust:
 }
 ```
 
-- `addon.path` — install location in the consumer's `node_modules`
-  (consumer-side; not covered by provenance).
-- `addon.manifest` — embedded manifest location inside the published
-  tarball. Optional; defaults to `./slsa-manifest.json` at package root.
-  Read by both the action and the verifier.
+- `addon.path` — the `.node` binary. Input for `slsa pack`; also the consumer-side install
+  location under `node_modules/<pkg>/`.
+- `addon.manifest` — embedded manifest location inside the tarball. Optional; default
+  `./slsa-manifest.json` at package root. Read by both the publish action and the verifier.
 
-Binary URLs are not in `package.json`; they live in
-`manifest.addons[platform][arch].url`, filled by `publish-attested`
-from its `addons` input.
+`slsa pack [output]` gzips `addon.path`. Default output is `{addon.path}.gz`. The publisher
+uploads the gzipped file anywhere; filename is not covered by provenance (bytes are hashed,
+URLs live in the manifest).
 
-### Publisher CI workflow
+Binary URLs are filled in the manifest by the reusable workflow from its `addons` input.
+
+### CI workflow
 
 ```yaml
 jobs:
@@ -59,155 +116,124 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       # ... build the native addon ...
-      - run: npx slsa pack
+      - run: npx slsa pack # writes ./dist/my_addon.node.gz
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: addon-${{ matrix.os }}
-          path: dist/my_addon-v*.node.gz
+          path: dist/my_addon.node.gz
 
-  # Attestation runs in this repo's reusable workflow. Its Fulcio cert's
-  # Build Signer URI pins the identity; the caller's publish job cannot
-  # mint a matching one.
-  attest:
-    needs: build-addon
-    uses: vadimpiven/node-addon-slsa/.github/workflows/attest.yaml@<sha>
-    with:
-      artifact-pattern: "addon-*"
-      subject-pattern: "my_addon-v*.node.gz"
-
-  # Publish: id-token: write only to mint the npm trusted-publishing
-  # OIDC token.
-  publish:
-    needs: attest
+  # Pack tarball once; upload as artifact for the reusable workflow to pick up.
+  pack-tarball:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write # npm trusted publishing
+    permissions: { contents: read }
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
-        with: { registry-url: https://registry.npmjs.org }
       - run: npm ci
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with: { path: ./artifacts }
-
-      # Upload before publish — `publish-attested` refuses to publish if
-      # any URL serves bytes without a matching Rekor entry from this
-      # run signed by the reusable attest workflow.
-      - run: |
-          aws s3 cp ./artifacts/addon-ubuntu-24.04/my_addon-v1.0.0-linux-x64.node.gz \
-                    s3://.../v1.0.0/my_addon-v1.0.0-linux-x64.node.gz
-          # ... etc per platform
-
       - working-directory: packages/node
         run: pnpm pack # or npm pack / yarn pack
-
-      - uses: vadimpiven/node-addon-slsa/publish-attested@<sha>
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          tarball: packages/node/my-native-addon-1.0.0.tgz
-          addons: |
-            {
-              "linux":  {
-                "x64":   "https://.../v1.0.0/my_addon-v1.0.0-linux-x64.node.gz",
-                "arm64": "https://.../v1.0.0/my_addon-v1.0.0-linux-arm64.node.gz"
-              },
-              "darwin": {
-                "arm64": "https://.../v1.0.0/my_addon-v1.0.0-darwin-arm64.node.gz"
-              }
-            }
-          # No NODE_AUTH_TOKEN — npm ≥ 11.5 exchanges the job's OIDC
-          # token for a short-lived publish token.
+          name: tarball
+          path: packages/node/my-native-addon-*.tgz
+
+  # Push binaries to declared URLs. No id-token — this job is arbitrary caller code.
+  # The reusable workflow re-fetches and verifies bytes before publishing.
+  upload-binaries:
+    needs: build-addon
+    runs-on: ubuntu-latest
+    permissions: { contents: read }
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with: { path: ./artifacts }
+      - run: |
+          aws s3 cp ./artifacts/addon-ubuntu-24.04/dist/my_addon.node.gz \
+                    s3://.../v1.0.0/my_addon-v1.0.0-linux-x64.node.gz
+          # ... etc per platform. S3 key naming is the caller's choice — bytes are
+          # attested, not filenames.
+
+  # One uses: attests binaries, builds manifest, publishes via npm trusted publishing.
+  # Reusable workflows cannot elevate their own permissions — caller grants them here.
+  publish:
+    needs: [build-addon, pack-tarball, upload-binaries]
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing + Sigstore OIDC
+      attestations: write # GitHub Attestations UI (optional)
+    uses: vadimpiven/node-addon-slsa/.github/workflows/publish.yaml@<sha>
+    with:
+      artifact-pattern: "addon-*"
+      subject-pattern: "my_addon.node.gz"
+      tarball-artifact: "tarball"
+      addons: |
+        {
+          "linux":  {
+            "x64":   "https://.../v1.0.0/my_addon-v1.0.0-linux-x64.node.gz",
+            "arm64": "https://.../v1.0.0/my_addon-v1.0.0-linux-arm64.node.gz"
+          },
+          "darwin": {
+            "arm64": "https://.../v1.0.0/my_addon-v1.0.0-darwin-arm64.node.gz"
+          }
+        }
+      # No NODE_AUTH_TOKEN — npm ≥ 11.5 exchanges the OIDC token for a short-lived
+      # publish token. npm validates the caller's top-level workflow_ref, so the
+      # publisher registers *this* workflow (release.yaml) on npmjs as the trusted
+      # publisher — not the reusable.
 ```
 
-### Consumer install
+The caller MUST pin `publish.yaml@<sha>` by commit SHA. Tag/branch pins fail
+`DEFAULT_ATTEST_SIGNER_PATTERN` and the verifier rejects the attestation.
+
+## Consumer
+
+### Install
 
 `npm install my-native-addon` runs `slsa wget` via `postinstall`:
 
-1. Read the embedded manifest at `package.json.addon.manifest` (default
-   `./slsa-manifest.json`). Trust: npm's `dist.integrity` sha512 covers
-   the tarball before `postinstall` runs; `dist.signatures` is
-   TUF-backed via npm keys. Reading the manifest is therefore equivalent
-   to trusting `dist.integrity`.
-2. Look up `manifest.addons[process.platform]?.[process.arch]`;
-   download from `url`, verify sha256.
-3. Rekor lookup on sha256; cross-check cert OIDs against the manifest
-   (issuer, `sourceRepo`, `sourceCommit`, `sourceRef`,
-   `runInvocationURI`, Build Signer URI).
+1. Read `${pkgRoot}/${addon.manifest}` (default `slsa-manifest.json`). Trust: npm's
+   `dist.integrity` (sha512) covers the tarball before `postinstall` runs; `dist.signatures`
+   is TUF-backed via npm keys. Reading the manifest is equivalent to trusting
+   `dist.integrity`.
+2. Look up `manifest.addons[process.platform]?.[process.arch]`; download from `url`; verify
+   sha256.
+3. Rekor lookup on sha256; cross-check cert OIDs against the manifest (issuer, `sourceRepo`,
+   `sourceCommit`, `sourceRef`, `runInvocationURI`, Build Signer URI).
 4. Assert `manifest.packageName === package.json.name`.
 
 Any failure aborts install with `SECURITY`.
 
-### Programmatic verification
+### Programmatic
 
 ```typescript
-import { verifyPackage, sha256Hex, githubRepo } from "node-addon-slsa";
+import { verifyPackage } from "node-addon-slsa";
 
 const provenance = await verifyPackage({
   packageName: "my-native-addon",
-  repo: githubRepo("owner/repo"),
+  repo: "owner/repo",
 });
-await provenance.verifyAddon({ sha256: sha256Hex(hex) });
+
+// Verify a binary you've already hashed:
+await provenance.verifyAddon({ sha256: hex });
+
+// Or point at a file and let the library hash it:
+await provenance.verifyAddon({ filePath: "/path/to/addon.node.gz" });
+
+// Inspect verified provenance (all readable after verifyPackage resolves):
+provenance.packageName; // "my-native-addon"
+provenance.sourceRepo; // "owner/repo"
+provenance.sourceCommit; // 40-hex
+provenance.sourceRef; // "refs/tags/v1.2.3"
+provenance.runInvocationURI; // "https://github.com/..."
 ```
 
-No `version` input: the manifest is read from the installed tarball, so
-version is implicit. `packageName` is resolved via
-`createRequire(process.cwd() + "/")`. Callers with custom layouts (PnP,
-test fixtures) can pass `packageRoot` (absolute path) instead.
-
-## Flow
-
-```text
-     build matrix  ──▶ upload binaries as GH artifacts (no id-token)
-
-                      ┌────────────────────────────────────────────┐
-     reusable    ──▶  │ vadimpiven/node-addon-slsa/.github/         │
-     attest           │   workflows/attest.yaml@<sha>                │──▶ Rekor
-     workflow         │   (id-token: write; pins Build Signer URI)   │
-                      └────────────────────────────────────────────┘
-
-     caller uploads binaries to their declared URLs (S3 / CDN / Releases)
-
-                      ┌───────────────────┐
-     publish job  ──▶ │ publish-attested  │──▶ fetch URLs, verify Rekor +
-     (id-token        └───────────────────┘    Build Signer URI, build
-      for npm                                  manifest, inject, npm publish
-      OIDC)                                    (trusted publishing)
-
-     install:  read manifest → download url → verify sha256 → Rekor lookup
-               → cross-check cert OIDs (repo, commit, ref, runInvocationURI,
-                 Build Signer URI) → assert manifest.packageName matches
-                 installed package.json.name
-```
-
-## Trust model
-
-Trusts GitHub Actions (build environment) and Sigstore public-good
-(Fulcio CA, Rekor). Compromise of either breaks verification.
-
-| Attack                                                     | Caught at              | By                                                                                                                       |
-| ---------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Wrong bytes uploaded to a declared URL                     | Publish time           | `publish-attested` fetches + Rekor-verifies each URL before `npm publish`                                                |
-| Swapped `.node` on CDN/S3 after publish                    | Install time           | Rekor miss (no entry for tampered sha256)                                                                                |
-| Swapped npm tarball                                        | Install time           | `dist.integrity` sha512 mismatch                                                                                         |
-| Binary from unrelated legit run                            | Publish + install time | Rekor cert's `sourceRepo` + `runInvocationURI` must match current run                                                    |
-| Fake run URI in manifest                                   | Install time           | No Rekor entry matches URI + hash                                                                                        |
-| `workflow_dispatch` on feature branch                      | Schema + install time  | Schema rejects non-`refs/tags/` `sourceRef`; installer `refPattern` derived from version                                 |
-| Compromised publish runner forging binary attestations     | Publish + install time | Build Signer URI pin rejects certs whose URI is not the reusable `attest.yaml` workflow path                             |
-| Monorepo sibling binary laundered into a different package | Install time           | `manifest.packageName === package.json.name` (Fulcio has no npm-name claim; `sourceRef`+`sourceRepo` don't disambiguate) |
-| Caller pins reusable attest workflow at malicious tag      | Not caught             | **Residual.** Mitigation: pin by commit SHA, not tag, in the caller's `uses:` (README guidance)                          |
-
-### Privacy
-
-The reusable attest workflow logs to public Rekor. Its Sigstore cert
-reveals `owner/repo`, commit SHA, workflow path, ref. Internal/private-
-repo publishers accept this by opting into the flow; the manifest adds
-no new leakage — it restates what's already in public Rekor entries.
+Plain strings at the public boundary — validated internally. No branded-type wrappers to
+import. No `version` input: the manifest is read from the installed tarball, so version is
+implicit. `packageName` is resolved via `createRequire(process.cwd() + "/")`. OnP / test
+fixture escape hatch: `verifyPackageAt(packageRoot, options)` from `node-addon-slsa/internal`.
 
 ## Manifest schema
 
-Embedded in the npm tarball at `package.json.addon.manifest` (default
-`./slsa-manifest.json`). Single authoritative copy per release, covered
-by `dist.integrity` regardless of location.
+Embedded in the npm tarball at `${addon.manifest}`. Single authoritative copy per release,
+covered by `dist.integrity`.
 
 ```jsonc
 {
@@ -220,13 +246,8 @@ by `dist.integrity` regardless of location.
   "addons": {
     "linux": {
       "x64": { "url": "https://.../addon-linux-x64.node.gz", "sha256": "..." },
-      "arm64": {
-        "url": "https://.../addon-linux-arm64.node.gz",
-        "sha256": "...",
-      },
     },
     "darwin": {
-      "x64": { "url": "https://.../addon-darwin-x64.node.gz", "sha256": "..." },
       "arm64": {
         "url": "https://.../addon-darwin-arm64.node.gz",
         "sha256": "...",
@@ -234,33 +255,26 @@ by `dist.integrity` regardless of location.
     },
     "win32": {
       "x64": { "url": "https://.../addon-win32-x64.node.gz", "sha256": "..." },
-      "arm64": {
-        "url": "https://.../addon-win32-arm64.node.gz",
-        "sha256": "...",
-      },
     },
   },
 }
 ```
 
-- `packageName` closes the monorepo co-tagged-siblings swap: sibling
-  packages from the same repo+tag share every Fulcio OID (Fulcio has no
-  npm-name claim). Without this field a compromised publish job could
-  reference package A's attested binary from package B's manifest and
-  both `dist.integrity` and Rekor would verify.
-- Outer `addons` keys are `process.platform` (`darwin | linux | win32`);
-  inner keys are `process.arch` (`x64 | arm64 | arm | ia32`; Electron
-  reports `arm` for `armv7l`). Nesting scopes the schema to the
-  Electron matrix and avoids the cartesian product.
-- `$schema` is matched by exact string equality — the verifier never
-  fetches it. Version bumps are explicit via the registry key below.
+- `packageName` closes the monorepo co-tagged-sibling swap: sibling packages from the same
+  `repo+tag` share every Fulcio OID (Fulcio has no npm-name claim). Without it, a compromised
+  publish job could reference package A's attested binary from package B's manifest and both
+  `dist.integrity` and Rekor would verify.
+- `addons` outer keys are `process.platform` (`darwin | linux | win32`); inner keys are
+  `process.arch` (`x64 | arm64 | arm | ia32`; Electron reports `arm` for `armv7l`). Nesting
+  scopes the schema to the Electron matrix and avoids the cartesian product.
+- `$schema` is matched by exact string equality — the verifier never fetches it. Version
+  bumps are explicit via the registry below.
 
 ### Publishing the schema
 
-Zod schemas in `package/src/schemas.ts` are the single source of truth.
-JSON Schemas are pure build output, regenerated into
-`package/docs/schema/` on every build (no check-in).
-Zod 4's `z.toJSONSchema()` handles the conversion — no runtime dep.
+Zod schemas in `package/src/schemas.ts` are the single source of truth. JSON Schemas are
+build output, regenerated into `package/docs/schema/` on every build (no check-in). Zod 4's
+`z.toJSONSchema()` handles the conversion — no runtime dep.
 
 ```typescript
 // package/src/schemas.ts (excerpt)
@@ -274,13 +288,21 @@ export const PublishedSchemas = {
 // package/scripts/generate-schemas.ts
 import { mkdirSync, writeFileSync } from "node:fs";
 import { z } from "zod";
+import { BRAND_PAGES_BASE } from "../src/verify/brand.ts";
 import { PublishedSchemas } from "../src/schemas.ts";
 
 const outDir = new URL("../docs/schema/", import.meta.url);
 mkdirSync(outDir, { recursive: true });
 for (const [name, schema] of Object.entries(PublishedSchemas)) {
   const json = z.toJSONSchema(schema, { target: "draft-7" });
-  writeFileSync(new URL(name, outDir), JSON.stringify(json, null, 2) + "\n");
+  // Zod's toJSONSchema() does not emit $id or top-level $schema; inject them so the
+  // published file self-describes with the URL the verifier pins (exact-string match).
+  const withIds = {
+    $schema: "http://json-schema.org/draft-07/schema#",
+    $id: `${BRAND_PAGES_BASE}/schema/${name}`,
+    ...json,
+  };
+  writeFileSync(new URL(name, outDir), JSON.stringify(withIds, null, 2) + "\n");
 }
 ```
 
@@ -289,133 +311,125 @@ for (const [name, schema] of Object.entries(PublishedSchemas)) {
 "build": "vite build && typedoc && node scripts/generate-schemas.ts"
 ```
 
-Build runs on latest Node (native TypeScript execution). Result:
-`https://vadimpiven.github.io/node-addon-slsa/schema/<file>.json`
-(already served by the existing Pages deploy in
-`.github/workflows/release.yaml`).
+Built on latest Node (native TypeScript execution). Served at
+`https://vadimpiven.github.io/node-addon-slsa/schema/<file>.json` via the existing Pages
+deploy in `.github/workflows/release.yaml`.
 
-An incompatible change adds a new registry entry
-(`slsa-manifest.v2.json`) alongside the frozen `SlsaManifestSchemaV1`,
-so the v1 file keeps regenerating identically and old manifests keep
-validating. The verifier is taught to accept both `$schema` URLs
-manually — the generator doesn't decide when to bump.
+Incompatible change → new registry entry (`slsa-manifest.v2.json`) alongside frozen
+`SlsaManifestSchemaV1`. The v1 file keeps regenerating identically; old manifests keep
+validating. The verifier is taught to accept both `$schema` URLs manually — the generator
+doesn't decide when to bump.
 
-## `attest.yaml` reusable workflow
+## `publish.yaml` reusable workflow
 
-Location: `.github/workflows/attest.yaml`. Invoked as
-`jobs.<id>.uses: vadimpiven/node-addon-slsa/.github/workflows/attest.yaml@<sha>`.
+Location: `.github/workflows/publish.yaml`. Invoked as
+`jobs.<id>.uses: vadimpiven/node-addon-slsa/.github/workflows/publish.yaml@<sha>`.
 
-A reusable workflow gets its own `job_workflow_ref` in the Fulcio cert,
-pinned to this repo's workflow path. A composite action would inherit
-the caller's `job_workflow_ref` instead, letting the publish job (which
-needs `id-token: write` for trusted publishing) mint certs with
-identical OIDs. Reusable-workflow identity is what makes the URI pin
-work.
+Single-job workflow: downloads binary artifacts and the pre-packed tarball, runs
+`actions/attest-build-provenance` to attest binaries, then runs the internal
+`publish-attested` action to re-fetch declared URLs, verify Rekor, inject the manifest,
+and `npm publish`.
+
+A reusable workflow gets its own `job_workflow_ref` in the Fulcio cert, pinned to this
+repo's workflow path. That's what makes the Build Signer URI pin work — no workflow outside
+this repo can mint certs that match `DEFAULT_ATTEST_SIGNER_PATTERN`.
+
+### Interface
 
 ```yaml
-# Interface
 on:
   workflow_call:
     inputs:
       artifact-pattern:
-        description: Glob for GH artifact names uploaded by the caller's build matrix.
+        description: Glob for GH artifact names holding per-platform binaries.
         required: true
         type: string
       subject-pattern:
         description: Glob for files within each downloaded artifact to attest.
         required: true
         type: string
+      tarball-artifact:
+        description: Name of the GH artifact holding the pre-packed .tgz.
+        required: true
+        type: string
+      addons:
+        description: >
+          Nested JSON: `{ [platform]: { [arch]: url } }` using Node's `process.platform` /
+          `process.arch`. Each leaf is a URL the caller has already uploaded to.
+        required: true
+        type: string
+      access:
+        description: >
+          npm publish --access (public|restricted). Omit to use npm's own default
+          (restricted for scoped, public for unscoped).
+        required: false
+        type: string
+      tag:
+        description: npm dist-tag. Omitted → npm defaults to `latest`.
+        required: false
+        type: string
+      max-binary-bytes:
+        description: >
+          Per-binary size cap (bytes). Enforced on Content-Length and mid-stream.
+          Default: 268435456 (256 MiB).
+        required: false
+        type: string
 ```
 
+### Body
+
 ```yaml
-# Body
 jobs:
-  attest:
+  publish:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # required for Sigstore OIDC
+      id-token: write # Sigstore OIDC + npm trusted publishing
       attestations: write # GitHub Attestations UI (optional)
     steps:
       - uses: actions/download-artifact@<sha>
         with:
           pattern: ${{ inputs.artifact-pattern }}
           path: ./artifacts
+      - uses: actions/download-artifact@<sha>
+        with:
+          name: ${{ inputs.tarball-artifact }}
+          path: ./tarball
       - uses: actions/attest-build-provenance@<sha>
         with:
           subject-path: ./artifacts/**/${{ inputs.subject-pattern }}
-          # Sigstore public-good is required so the attestation is
-          # verifiable from internal/private repos; GitHub's default
-          # sigstore instance is scoped per-repo.
+          # Sigstore public-good is required so the attestation is verifiable from
+          # internal/private repos; GitHub's default sigstore instance is scoped per-repo.
+      - uses: vadimpiven/node-addon-slsa/publish-attested@<sha>
+        with:
+          tarball-dir: ./tarball
+          addons: ${{ inputs.addons }}
+          access: ${{ inputs.access }}
+          tag: ${{ inputs.tag }}
+          max-binary-bytes: ${{ inputs.max-binary-bytes }}
 ```
 
-One call → one Rekor entry covering all matched subjects (each
-binary's sha256 is a subject). Consumer lookup by sha256 returns the
-entry; `verifyRekorAttestations` confirms the queried sha256 is in the
-subjects list.
+`actions/attest-build-provenance` produces one Rekor entry covering all matched subjects
+(each binary's sha256 is a subject). Consumer lookup by sha256 returns the entry;
+`verifyRekorAttestations` confirms the queried sha256 is in the subjects list.
 
-- **No custom wrapper.** Uses `actions/attest-build-provenance`
-  directly; the workflow file is plain YAML + pinned action SHAs.
-- **Single attest job.** The security boundary is the reusable
-  workflow's `job_workflow_ref`, not per-OS scoping.
+No per-OS scoping — the security boundary is the reusable workflow's `job_workflow_ref`,
+not job granularity.
 
-## `publish-attested` action
+Tag-only publishing: the caller's workflow must be triggered by a tag (`on: push: tags:`);
+`sourceRef` must start with `refs/tags/` so the default consumer `refPattern` (derived from
+installed version) always has a base case. `npm publish` ≥ 11.5 exchanges the OIDC token
+for a short-lived registry token when the caller's top-level workflow is configured as a
+trusted publisher on npmjs. No `NODE_AUTH_TOKEN` is set or read.
 
-Location: `publish-attested/` at repo root. Packaging: `action.yaml`,
-`index.ts`, `dist/index.js`, `node24` runtime, `@vercel/ncc` bundling,
-dev deps via pnpm `catalog:`, runtime dep `node-addon-slsa`
-(`workspace:*`).
+### Internal `publish-attested` action
 
-Fetches each declared URL, verifies the bytes have a Rekor entry from
-the current run signed by the reusable attest workflow, builds the
-manifest, injects it into a pre-packed `.tgz`, and runs `npm publish
-<tgz>` via npm trusted publishing. Caller uploads binaries to the
-declared URLs before calling this action.
+Implementation detail of the reusable workflow. Lives at `publish-attested/` in this repo
+(`action.yaml`, `index.ts`, `dist/index.js` committed, `node24` runtime, `@vercel/ncc`
+bundled). Never invoked directly by publishers — `publish.yaml` is the only advertised
+entry point.
 
-### Interface
-
-```yaml
-inputs:
-  addons:
-    description: >
-      Nested JSON: `{ [platform]: { [arch]: url } }` using Node's
-      `process.platform` / `process.arch`. Each leaf is a URL the
-      caller has already uploaded to.
-    required: true
-  tarball:
-    description: Path to the input .tgz (already packed).
-    required: true
-  access:
-    description: >
-      npm publish --access value (public|restricted). Omit to use npm's
-      own default (restricted for scoped, public for unscoped) —
-      safer for private-org publishers.
-    required: false
-  tag:
-    description: npm dist-tag. Omitted → npm defaults to `latest`.
-    required: false
-  attest-signer-pattern:
-    description: >
-      Regex (as string) matched against the Fulcio cert's Build Signer
-      URI for each Rekor entry. Override only if using a fork of this
-      repo's attest reusable workflow. Default:
-      `DEFAULT_ATTEST_SIGNER_PATTERN`.
-    required: false
-```
-
-No outputs; the side effect is `npm publish`.
-
-Tag-only publishing: `sourceRef` must start with `refs/tags/` so the
-default consumer `refPattern` (derived from installed version) always
-has a base case.
-
-The calling job must hold `id-token: write`. `npm publish` ≥ 11.5
-exchanges the OIDC token for a short-lived registry token when a
-trusted publisher is configured on npm. No `NODE_AUTH_TOKEN` is set or
-read.
-
-Input Zod schema — identical key-shape to the manifest; `sha256` is
-computed by the action, not input:
+Input Zod schema — identical key-shape to the manifest; `sha256` is computed, not input:
 
 ```typescript
 // Re-uses PlatformSchema, ArchSchema from package/src/verify/schemas.ts.
@@ -426,23 +440,22 @@ const AddonUrlMapSchema = z.record(
 export type AddonUrlMap = z.infer<typeof AddonUrlMapSchema>;
 ```
 
-### Behaviour
+Pseudocode:
 
 ```typescript
-// Pseudocode. `addons` is the parsed AddonUrlMap input.
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import type { AddonEntry, AddonInventory } from "node-addon-slsa";
+// workspace-internal consumer: imports constructors + helpers from /internal
 import {
   sha256Hex,
   githubRepo,
   runInvocationURI,
-  type AddonEntry,
-  type AddonInventory,
-} from "node-addon-slsa";
-import { verifyAttestation, assertWithinDir } from "node-addon-slsa/internal";
+  verifyAttestation,
+  assertWithinDir,
+} from "node-addon-slsa/internal";
 
-const MAX_BINARY_BYTES = 256 * 1024 * 1024; // 256 MB
-
+const MAX_BINARY_BYTES = Number(inputs.maxBinaryBytes ?? 256 * 1024 * 1024);
 const repo = githubRepo(process.env.GITHUB_REPOSITORY);
 const runURI = runInvocationURI(
   `https://github.com/${process.env.GITHUB_REPOSITORY}` +
@@ -450,12 +463,10 @@ const runURI = runInvocationURI(
     `/attempts/${process.env.GITHUB_RUN_ATTEMPT}`,
 );
 
-// 1. Per URL: fetch (size-capped), hash, Rekor-verify. `verifyAttestation`
-//    also cross-checks Build Signer URI against DEFAULT_ATTEST_SIGNER_PATTERN,
-//    rejecting certs signed by the caller's publish job (the id-token-
-//    forgery path introduced by trusted publishing).
-//    Key-shape in verifiedAddons is preserved 1:1 from input; only
-//    sha256 is added, so there is no mid-flight remapping.
+// 1. Per URL: fetch (size-capped), hash, Rekor-verify.
+//    verifyAttestation cross-checks Build Signer URI against DEFAULT_ATTEST_SIGNER_PATTERN,
+//    rejecting attestations not minted by our reusable workflow.
+//    Key-shape in verifiedAddons is preserved 1:1 from input; only sha256 is added.
 const verifiedAddons: AddonInventory = {};
 for (const [platform, byArch] of Object.entries(addons)) {
   for (const [arch, url] of Object.entries(byArch ?? {})) {
@@ -464,23 +475,27 @@ for (const [platform, byArch] of Object.entries(addons)) {
     if (!res.ok) throw new Error(`${label}: ${url} → ${res.status}`);
     const declared = Number(res.headers.get("content-length") ?? "0");
     if (declared > MAX_BINARY_BYTES) {
-      throw new Error(`${label}: Content-Length ${declared} exceeds 256 MB`);
+      throw new Error(`${label}: Content-Length ${declared} exceeds cap`);
     }
-    const bytes = await readWithCap(res.body, MAX_BINARY_BYTES); // aborts mid-stream
+    const bytes = await readWithCap(res.body, MAX_BINARY_BYTES);
     const sha256 = sha256Hex(createHash("sha256").update(bytes).digest("hex"));
     await verifyAttestation({ sha256, runInvocationURI: runURI, repo });
-    const entry: AddonEntry = { url, sha256 };
-    (verifiedAddons[platform] ??= {})[arch] = entry;
+    (verifiedAddons[platform] ??= {})[arch] = {
+      url,
+      sha256,
+    } satisfies AddonEntry;
   }
 }
 
-// 2. Unpack tarball so we can read package.json for `packageName`.
+// 2. Resolve tarball (there must be exactly one .tgz in tarball-dir) and unpack for
+//    package.json access.
+const tarball = await singleTgzIn(tarballDir);
 const work = await mkdtemp(join(tmpdir(), "publish-attested-"));
 execSync(`tar -xzf "${tarball}" -C "${work}"`);
 const pkgRoot = `${work}/package`;
 const pkg = JSON.parse(await readFile(`${pkgRoot}/package.json`, "utf8"));
 
-// 3. Build manifest — fields match the schema 1:1.
+// 3. Build manifest.
 const manifest: SlsaManifest = {
   $schema: SLSA_MANIFEST_V1_SCHEMA_URL,
   packageName: pkg.name,
@@ -490,7 +505,6 @@ const manifest: SlsaManifest = {
   sourceRef: process.env.GITHUB_REF, // must start with refs/tags/
   addons: verifiedAddons,
 };
-const manifestJson = JSON.stringify(manifest, null, 2);
 
 // 4. Resolve manifest path; reject traversal and overwrite.
 const manifestRel = pkg.addon?.manifest ?? DEFAULT_MANIFEST_PATH;
@@ -503,13 +517,13 @@ assertWithinDir({
 if (await pathExists(manifestAbs)) {
   throw new Error(
     `refusing to overwrite existing ${manifestRel} inside the tarball; ` +
-      `the pre-packed .tgz must not ship a manifest. Check "files"/"npmignore".`,
+      `pre-packed .tgz must not ship a manifest. Check "files"/"npmignore".`,
   );
 }
 
 // 5. Embed, repack, publish via npm trusted publishing.
 await mkdir(dirname(manifestAbs), { recursive: true });
-await writeFile(manifestAbs, manifestJson);
+await writeFile(manifestAbs, JSON.stringify(manifest, null, 2));
 const out = `${tarball}.with-manifest.tgz`;
 execSync(`tar -czf "${out}" -C "${work}" package`);
 
@@ -519,69 +533,58 @@ if (tag) args.push("--tag", tag);
 execSync(`npm ${args.map((a) => `"${a}"`).join(" ")}`, { stdio: "inherit" });
 ```
 
-Env vars read: `GITHUB_REPOSITORY`, `GITHUB_RUN_ID`, `GITHUB_RUN_ATTEMPT`,
-`GITHUB_SHA`, `GITHUB_REF`. Fail fast if any is missing. Reference:
-<https://docs.github.com/en/actions/learn-github-actions/variables>.
+Env read: `GITHUB_REPOSITORY`, `GITHUB_RUN_ID`, `GITHUB_RUN_ATTEMPT`, `GITHUB_SHA`,
+`GITHUB_REF`. Fail fast if any is missing.
+(<https://docs.github.com/en/actions/learn-github-actions/variables>)
 
 ### Design notes
 
-- **URL is the source of truth.** The manifest records what the
-  installer will see. The action hashes the served bytes, so typos in
-  S3 keys, stale CDN caches, and wrong-bucket uploads fail at publish
-  before any customer sees them.
-- **Shared verification code.** `verifyAttestation` imports from
-  `node-addon-slsa` (workspace link; ncc inlines). One copy of
-  Rekor/Fulcio logic, same trust anchors, same ~30s retry for Rekor
-  ingestion lag.
-- **Caller packs, action repacks.** Pre-packed `.tgz` input keeps the
-  action package-manager-agnostic. Local tarball bit-stability doesn't
-  matter: `dist.integrity` is computed by `npm publish` over whatever
-  bytes we hand it. The `package/` entry prefix is the npm convention.
-- **Minimal input surface.** `addons` + `tarball` required; `access` /
-  `tag` optional. Repo / run / commit / ref are ambient env — making
-  them inputs would invite stale-value overrides that break Rekor
-  cross-check. `addons` key-shape matches `AddonInventory`; only
-  `sha256` is added.
-- **Typed `access` / `tag`, not free-form `publish-args`.** Both are
-  orthogonal to provenance; a typed surface structurally blocks
-  `--provenance` smuggling. `--registry` / auth belong in `.npmrc` via
-  `setup-node`.
-- **Privilege separation via Build Signer URI.** The publish job holds
-  `id-token: write` for trusted publishing, so it _can_ mint Sigstore
-  certs — but those certs carry the caller's workflow path. Rekor
-  entries signed by the publish job fail the verifier's URI pin;
-  attestations must come from the reusable attest workflow.
-- **Residual risk.** A caller pinning the reusable workflow at a
-  compromised ref would accept malicious attestations. Mitigation:
-  pin by commit SHA (`@<40-hex>`), not tag (documented in README).
+- **URL is the source of truth.** The manifest records what the installer will see. The
+  action hashes served bytes, so typos, stale CDN caches, and wrong-bucket uploads fail at
+  publish before any customer sees them.
+- **Caller packs, action repacks.** Pre-packed `.tgz` input keeps the action
+  package-manager-agnostic. Local tarball bit-stability doesn't matter — `dist.integrity`
+  is computed by `npm publish` over whatever bytes we hand it.
+- **Typed `access` / `tag`, not free-form `publish-args`.** A typed surface structurally
+  blocks `--provenance` smuggling. Registry / auth config is not an input — trusted
+  publishing to `registry.npmjs.org` needs none.
+- **Caller never directly holds `id-token: write`.** All OIDC-consuming steps run inside
+  the reusable workflow. The caller's other jobs (build / pack / upload) are unprivileged.
+  npm trusted publishing still works because npm validates the caller's top-level
+  `workflow_ref`, which is the publisher's own `release.yaml` — exactly what they'd
+  register on npmjs as the trusted publisher.
+- **No `attest-signer-pattern` override input.** A fork that moves the reusable workflow
+  ships its own rebuilt default — runtime override serves no real publish-side use case
+  and would invite accidental widening of the pin. The matching knob lives on the
+  _verifier_ (`VerifyOptions.attestSignerPattern`) for the legitimate niche: a cross-fork
+  consumer verifying a package programmatically.
+- **SHA-pinned caller `uses:` is enforced, not advisory.** The default signer pattern
+  requires `@<40-hex>` in the Build Signer URI; tag/branch pins fail the verifier.
 - **Hardening.**
-  - **Public URLs only.** No auth flow, no presigned URLs (expire
-    before consumers install). Private-bucket publishers use a public
-    CDN.
-  - **256 MB per-binary cap.** Enforced on `Content-Length` (fail
-    fast) and mid-stream (abort on absent/lying header).
-  - **Path traversal rejected** via `assertWithinDir`
-    (`package/src/util/fs.ts`).
-  - **No overwrite** of pre-existing manifest in the tarball.
+  - **Public URLs only.** No auth flow, no presigned URLs (expire before consumers install).
+    Private-bucket publishers use a public CDN.
+  - **Per-binary size cap** (default 256 MiB, override via `max-binary-bytes`). Enforced on
+    `Content-Length` (fail fast) and mid-stream (abort on absent/lying header).
+  - **Path traversal rejected** via `assertWithinDir` (`package/src/util/fs.ts`).
+  - **No overwrite** of a pre-existing manifest in the tarball.
 
 ## Verifier
 
 ### `brand.ts` — fork-configurable constants
 
-Every fork-editable value lives here. Forks edit this file (and nothing
-else) to rebrand. Downstream constants derive from these, so
-`pnpm build` regenerates schema files, signer patterns, and docs URLs
-consistently.
+Every fork-editable value lives here. Forks edit this file (and nothing else) to rebrand.
+Downstream constants derive from these, so `pnpm build` regenerates schema files, signer
+patterns, and docs URLs consistently.
 
 ```typescript
-/** GitHub owner/repo hosting this library and the reusable attest workflow. */
+/** GitHub owner/repo hosting this library and the reusable publish workflow. */
 export const BRAND_REPO = "vadimpiven/node-addon-slsa";
 
 /** GitHub Pages origin for published schemas. */
 export const BRAND_PAGES_BASE = "https://vadimpiven.github.io/node-addon-slsa";
 
-/** Path to the reusable attest workflow within `BRAND_REPO`. */
-export const BRAND_ATTEST_WORKFLOW_PATH = ".github/workflows/attest.yaml";
+/** Path to the reusable publish workflow within BRAND_REPO. */
+export const BRAND_PUBLISH_WORKFLOW_PATH = ".github/workflows/publish.yaml";
 ```
 
 ### `constants.ts`
@@ -590,7 +593,7 @@ export const BRAND_ATTEST_WORKFLOW_PATH = ".github/workflows/attest.yaml";
 import {
   BRAND_REPO,
   BRAND_PAGES_BASE,
-  BRAND_ATTEST_WORKFLOW_PATH,
+  BRAND_PUBLISH_WORKFLOW_PATH,
 } from "./brand.ts";
 
 /** Default manifest path; overridden by package.json's `addon.manifest`. */
@@ -603,31 +606,29 @@ export const OID_SOURCE_REPO_DIGEST = "1.3.6.1.4.1.57264.1.13";
 /** Fulcio OID for source repository ref (e.g. "refs/tags/v1.2.3"). */
 export const OID_SOURCE_REPO_REF = "1.3.6.1.4.1.57264.1.14";
 
-/** Escape a string for safe interpolation into a RegExp source. */
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
- * Default Build Signer URI pattern. Derived from `brand.ts`. Pins
- * per-binary attestations to this repo's reusable attest workflow at
- * a signed tag. Override via `VerifyOptions.attestSignerPattern` for
- * cross-fork programmatic use (e.g., consumer verifying a package
- * published under a different fork).
+ * SHA-only pin: tags are mutable and a retagged publish.yaml could re-mint attestations
+ * that pass a tag-based pin. GitHub populates `job_workflow_ref` with the literal ref
+ * from the caller's `uses:` line, so a SHA-pinned `uses:` produces `@<40-hex>` in the
+ * Fulcio cert. Override via VerifyOptions.attestSignerPattern for cross-fork programmatic
+ * use (e.g. consumer verifying a package published under a different fork).
  */
 export const DEFAULT_ATTEST_SIGNER_PATTERN = new RegExp(
-  `^${escapeRegExp(`${BRAND_REPO}/${BRAND_ATTEST_WORKFLOW_PATH}`)}@` +
-    String.raw`refs/tags/v\d+\.\d+\.\d+(?:[-+][\w.-]+)?$`,
+  `^${escapeRegExp(`${BRAND_REPO}/${BRAND_PUBLISH_WORKFLOW_PATH}`)}@` +
+    String.raw`[0-9a-f]{40}$`,
 );
 ```
 
-Existing: `OID_ISSUER_V1` (`.1.1`), `OID_ISSUER_V2` (`.1.8`),
-`OID_SOURCE_REPO_URI` (`.1.12`), `OID_RUN_INVOCATION_URI` (`.1.21`).
-Registry:
+Existing OIDs: `OID_ISSUER_V1` (`.1.1`), `OID_ISSUER_V2` (`.1.8`), `OID_SOURCE_REPO_URI`
+(`.1.12`), `OID_RUN_INVOCATION_URI` (`.1.21`). Registry:
 <https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md>.
 
 ### `schemas.ts` — manifest schema + domain types
 
-Single source of truth; both verifier and `publish-attested` consume
-these names.
+Single source of truth; both the verifier and the internal `publish-attested` action
+consume these names.
 
 ```typescript
 import { BRAND_PAGES_BASE } from "./brand.ts";
@@ -663,13 +664,8 @@ export const SlsaManifestSchema = z.object({
 export type SlsaManifest = z.infer<typeof SlsaManifestSchema>;
 ```
 
-- `$schema` equals `SLSA_MANIFEST_V1_SCHEMA_URL` exactly (no network).
-- `packageName` is a valid npm package name (branded `PackageNameSchema`).
-- `runInvocationURI`, `sourceRepo` reuse the existing branded validators.
-- `sourceCommit` is 40-hex; `sourceRef` must start with `refs/tags/`
-  (tag-only publishing).
-- `addons` keys are closed under the Electron platform/arch set;
-  unknown keys reject.
+`sourceRef` is tag-only (pairs with the SHA-only signer pin for tamper-resistance). `addons`
+keys are closed under the Electron platform/arch set; unknown keys reject.
 
 ### `certificates.ts` — `verifyCertificateOIDs`
 
@@ -688,46 +684,37 @@ export function verifyCertificateOIDs(
 ): void;
 ```
 
-All four fields required. `attestSignerPattern` rejects Rekor entries
-whose Build Signer URI doesn't match, regardless of other OIDs — this
-is what prevents the caller's publish job from forging attestations.
-Helpers reused: `getExtensionValue(cert, oid)`,
-`extractCertFromBundle(bundle)`.
+All four fields required. `attestSignerPattern` rejects Rekor entries whose Build Signer URI
+doesn't match, regardless of other OIDs — this is the pin that binds attestations to the
+reusable workflow.
 
 ### `verify.ts` — `verifyPackage`
 
-Sole block-facing entry point. Returns `PackageProvenance` with
-`verifyAddon({ sha256 })`.
+Sole block-facing entry point.
 
 ```typescript
 export type VerifyPackageOptions = VerifyOptions & {
   /**
    * Installed package to verify. Resolved via
-   * `createRequire(process.cwd() + "/").resolve(packageName +
-   * "/package.json")`; the parent dir is the package root. Mutually
-   * exclusive with `packageRoot`.
+   * `createRequire(process.cwd() + "/").resolve(packageName + "/package.json")`;
+   * the parent dir is the package root.
    */
-  packageName?: string;
+  packageName: string;
   /**
-   * Absolute path to the package root (dir containing `package.json`).
-   * Escape hatch for PnP, test fixtures, custom resolvers. Mutually
-   * exclusive with `packageName`. Exactly one of `packageName` /
-   * `packageRoot` must be provided.
+   * Expected source repository (e.g. `"owner/repo"`). Cross-checked against the manifest;
+   * case-insensitive. Plain string — no constructor ceremony.
    */
-  packageRoot?: string;
-  /** Expected source repository; cross-checked against the manifest. */
-  repo: GitHubRepo;
+  repo: string;
   /**
-   * Expected tag ref pattern. Default:
-   * `^refs/tags/v?<escaped-package-version>$` (pins a consumer to the
-   * exact tag that produced the installed version). Override for
-   * monorepo prefixes (`pkg-v1.2.3`) or scoped tags.
+   * Expected tag ref pattern. Default: `^refs/tags/v?<escaped-package-version>$` (pins a
+   * consumer to the exact tag that produced the installed version). Override for monorepo
+   * prefixes (`pkg-v1.2.3`) or scoped tags.
    */
   refPattern?: RegExp;
   /**
-   * Regex against the Fulcio cert's Build Signer URI for each Rekor
-   * entry. Default: `DEFAULT_ATTEST_SIGNER_PATTERN`. Override only if
-   * using a fork of this repo's attest reusable workflow.
+   * Regex against the Fulcio cert's Build Signer URI for each Rekor entry.
+   * Default: DEFAULT_ATTEST_SIGNER_PATTERN. Override only to verify a package produced by
+   * a different fork's publish workflow (cross-fork programmatic use).
    */
   attestSignerPattern?: RegExp;
 };
@@ -735,51 +722,47 @@ export type VerifyPackageOptions = VerifyOptions & {
 export async function verifyPackage(
   options: VerifyPackageOptions,
 ): Promise<PackageProvenance>;
+
+/** Shape returned by `verifyPackage`. All fields populated after resolve. */
+export interface PackageProvenance {
+  readonly packageName: string;
+  readonly sourceRepo: string; // "owner/repo"
+  readonly sourceCommit: string; // 40-hex
+  readonly sourceRef: string; // "refs/tags/v1.2.3"
+  readonly runInvocationURI: string;
+  /**
+   * Verify a single native-addon binary belongs to this provenance.
+   * Accepts either a pre-computed sha256 (hex) or a file path the library will hash.
+   * Exactly one of `sha256` / `filePath` required.
+   */
+  verifyAddon(input: { sha256: string } | { filePath: string }): Promise<void>;
+}
 ```
 
 Behaviour:
 
-1. Resolve the package root: either `packageRoot` (as given) or resolve
-   `packageName` via `createRequire`.
+1. Resolve `packageName` via `createRequire(process.cwd() + "/")`.
 2. Read `${root}/package.json`; get `name`, `version`, `addon.manifest`.
-3. Load + zod-parse the manifest at `addon.manifest` (default
-   `DEFAULT_MANIFEST_PATH`) relative to the root.
-4. Assert `manifest.packageName === package.json.name` (monorepo
-   sibling-swap defence).
-5. Assert `manifest.sourceRepo` equals `options.repo`
-   (case-insensitive).
-6. Assert `manifest.sourceRef` matches `options.refPattern` (default
-   derived from installed version).
-7. Return a `PackageProvenance` whose `verifyAddon({ sha256 })`
-   does (a) Rekor lookup on `sha256`; (b) cross-check each cert's
-   OIDs — issuer, `sourceRepo`, `sourceCommit`, `sourceRef`,
-   `runInvocationURI`, Build Signer URI.
+3. Load + zod-parse the manifest at `addon.manifest` (default `DEFAULT_MANIFEST_PATH`).
+4. Assert `manifest.packageName === package.json.name` (monorepo sibling-swap defence).
+5. Assert `manifest.sourceRepo` equals `options.repo` (case-insensitive).
+6. Assert `manifest.sourceRef` matches `options.refPattern` (default derived from version).
+7. Return a `PackageProvenance` whose `verifyAddon(...)` does: (a) hash the file if
+   `filePath` was given; (b) Rekor lookup on the sha256; (c) cross-check each cert's OIDs
+   — issuer, `sourceRepo`, `sourceCommit`, `sourceRef`, `runInvocationURI`, Build Signer URI.
 
-Notes:
+Escape hatch for OnP / test fixtures / custom resolvers:
+`verifyPackageAt(packageRoot: string, options)` in `node-addon-slsa/internal`. Not exported
+from the top level — keeps the block-facing surface to one entry point per Chollet/Keras
+"non-proliferation of concepts".
 
-- Common case: `verifyPackage({ packageName, repo })`; everything else
-  derives from `package.json`.
-- Exactly one of `packageName` / `packageRoot` must be provided; zod
-  union validates. Error message lists both forms.
-- Sigstore cert verification happens inside `verifyRekorAttestations`
-  per entry (Fulcio CAs + Rekor key via TUF).
+Sigstore cert verification happens inside `verifyRekorAttestations` per entry (Fulcio CAs
+and Rekor key via TUF).
 
-### CLI — `commands.ts`
+### Internal API — `/internal`
 
-```typescript
-const provenance = await verifyPackage({ packageRoot, repo, ... });
-await provenance.verifyAddon({ sha256 });
-```
-
-`slsa wget` already has `packageDir` — it passes it through as
-`packageRoot` (bypasses resolution). A package with no `addon.manifest`
-and no `slsa-manifest.json` at the default location fails loud (wasn't
-published with this toolkit).
-
-### Internal API — `verifyAttestation`
-
-Not exported from `node-addon-slsa`. Exposed at `node-addon-slsa/internal`
-for use by `publish-attested` (workspace-internal consumer).
+Not exported from `node-addon-slsa`. Exposed at `node-addon-slsa/internal` for
+workspace-internal consumers (publish-attested, CLI).
 
 ```typescript
 // node-addon-slsa/internal
@@ -787,125 +770,76 @@ export type VerifyAttestationOptions = VerifyOptions & {
   sha256: Sha256Hex;
   runInvocationURI: RunInvocationURI;
   repo: GitHubRepo;
-  /** Build Signer URI pin; defaults to `DEFAULT_ATTEST_SIGNER_PATTERN`. */
+  /** Build Signer URI pin; defaults to DEFAULT_ATTEST_SIGNER_PATTERN. */
   attestSignerPattern?: RegExp;
 };
 
 export async function verifyAttestation(
   options: VerifyAttestationOptions,
 ): Promise<void>;
+
+export function verifyPackageAt(
+  packageRoot: string,
+  options: Omit<VerifyPackageOptions, "packageName">,
+): Promise<PackageProvenance>;
+
+export { assertWithinDir } from "../util/fs.ts";
+// Branded-type constructors (kept internal; block-facing API takes plain strings):
+export {
+  sha256Hex,
+  semVerString,
+  githubRepo,
+  runInvocationURI,
+} from "../types.ts";
 ```
 
-Wraps `verifyRekorAttestations` with trust-material loading and retry.
-The Build Signer URI check runs here, so `publish-attested` inherits
-the same pin as the consumer verifier.
+`verifyAttestation` wraps `verifyRekorAttestations` with trust-material loading and retry
+(~30s for Rekor ingestion lag) plus the Build Signer URI check — so `publish-attested`
+inherits the same pin as the consumer verifier.
 
-`assertWithinDir` is also exported from `node-addon-slsa/internal` —
-not from the top level. Block-facing consumers don't need a
-path-traversal guard as public API.
+Top-level exports: `verifyPackage`, `PackageProvenance`, `VerifyOptions`, manifest types
+(`SlsaManifest`, `AddonEntry`, `AddonInventory`, `Platform`, `Arch`), and branded-type
+_types_ (`Sha256Hex`, `GitHubRepo`, …) — constructors live in `/internal`.
 
-### Existing building blocks reused
+### CLI
 
-- `package/src/verify/rekor.ts` — `verifyRekorAttestations(...)`.
-- `package/src/util/fs.ts` — `assertWithinDir({ baseDir, target, label })`.
-- `package/src/types.ts` — branded types + validators (`sha256Hex`,
-  `semVerString`, `githubRepo`, `runInvocationURI`).
-- `package/src/cli.ts`, `package/src/commands.ts` — CLI entry.
-- Tests: inline under `if (import.meta.vitest)` per
-  `package/src/verify/certificates.ts`.
+`slsa wget` calls `verifyPackageAt(packageDir, options)` from `node-addon-slsa/internal` —
+the CLI already has a resolved dir and shouldn't re-do package-name resolution.
 
-## Forking this repo
+A package with no `addon.manifest` and no `slsa-manifest.json` at the default location fails
+loud (wasn't published with this toolkit).
 
-Enterprise forks are a supported mode: a rebranded fork publishes its
-own `@yourorg/node-addon-slsa` to an internal registry; internal
-consumers depend on the fork directly and inherit the fork's defaults
-without runtime configuration.
+## Forking
 
-Fork checklist (one edit retargets the whole toolchain):
+Enterprise forks are a supported mode: a rebranded fork publishes its own
+`@yourorg/node-addon-slsa` to npmjs.org (public or scoped-private). Consumers depend on the
+fork directly and inherit the fork's defaults without runtime configuration. Publishing to
+an internal registry (Verdaccio, GitHub Packages, Artifactory) is not supported — the
+install-time trust story depends on npm's TUF-backed `dist.signatures`, an npmjs feature.
 
-1. **Edit `package/src/verify/brand.ts`**. Update `BRAND_REPO` (e.g.
-   `acmecorp/node-addon-slsa`), `BRAND_PAGES_BASE` (your Pages URL or
-   equivalent), and — if you moved the reusable workflow —
-   `BRAND_ATTEST_WORKFLOW_PATH`. `DEFAULT_ATTEST_SIGNER_PATTERN` and
+Checklist (one edit retargets the whole toolchain):
+
+1. **Edit `package/src/verify/brand.ts`.** Update `BRAND_REPO` (e.g.
+   `acmecorp/node-addon-slsa`), `BRAND_PAGES_BASE`, and — if you moved the reusable
+   workflow — `BRAND_PUBLISH_WORKFLOW_PATH`. `DEFAULT_ATTEST_SIGNER_PATTERN` and
    `SLSA_MANIFEST_V1_SCHEMA_URL` regenerate from these.
-2. **Run `pnpm build`.** Schemas regenerate to `package/docs/schema/`
-   with the fork's URL baked in; signer pattern matches the fork's
-   workflow path.
-3. **Configure GitHub Pages** on the fork to serve `package/docs/`
-   (or host the schemas wherever `BRAND_PAGES_BASE` points).
-4. **Set up npm trusted publishing** for the fork's package on your
-   registry (public or internal).
-5. **Republish as `@yourorg/node-addon-slsa`.** Internal consumers
-   depend on the fork; their `postinstall: slsa wget` runs the fork's
-   CLI with the fork's defaults.
+2. **Run `pnpm build`.** Schemas regenerate with the fork's URL baked in; signer pattern
+   matches the fork's workflow path.
+3. **Configure GitHub Pages** to serve `package/docs/` (or host the schemas wherever
+   `BRAND_PAGES_BASE` points).
+4. **Set up npm trusted publishing** for the fork's package on npmjs.org.
+5. **Republish as `@yourorg/node-addon-slsa`** to npmjs. Consumers depend on the fork;
+   their `postinstall: slsa wget` runs the fork's CLI with the fork's defaults.
 
-What NOT to do: don't try to make the CLI multi-tenant (read consumer
-root config, merge signer patterns). That path opens hoisting edge
-cases and weakens the trust root (consumer-writable allow-list).
-Rebranding is the simpler and safer model.
+Don't make the CLI multi-tenant (read consumer root config, merge signer patterns). That
+opens hoisting edge cases and weakens the trust root (consumer-writable allow-list).
+Rebranding is simpler and safer.
 
-Cross-fork programmatic use remains supported via
-`VerifyOptions.attestSignerPattern` — a consumer of package A
-(vadimpiven fork) can still verify package B (acmecorp fork) by
+Cross-fork programmatic use is supported via `VerifyOptions.attestSignerPattern` — a
+consumer of package A (vadimpiven fork) can still verify package B (acmecorp fork) by
 passing acmecorp's pattern explicitly.
 
-## Implementation
-
-### New files
-
-- `.github/workflows/attest.yaml` — reusable workflow (plain YAML).
-  Steps: `actions/download-artifact` → `actions/attest-build-provenance`
-  (public-good Sigstore).
-- `package/src/verify/brand.ts` — centralized fork-editable constants
-  (`BRAND_REPO`, `BRAND_PAGES_BASE`, `BRAND_ATTEST_WORKFLOW_PATH`).
-- `publish-attested/action.yaml`
-- `publish-attested/index.ts`
-- `publish-attested/package.json` — runtime dep `node-addon-slsa`
-  (`workspace:*`); devDeps `@actions/core`, `@types/node`,
-  `@vercel/ncc`, `typescript`, `zod` via `catalog:`.
-- `publish-attested/tsconfig.json`
-- `publish-attested/dist/index.js` (generated by `ncc`, committed)
-
-### Modified files
-
-- `pnpm-workspace.yaml` — register `publish-attested`; drop
-  `attest-public`.
-- `package/src/verify/constants.ts` — `DEFAULT_MANIFEST_PATH`,
-  `OID_BUILD_SIGNER_URI`, `OID_SOURCE_REPO_DIGEST`,
-  `OID_SOURCE_REPO_REF`, `DEFAULT_ATTEST_SIGNER_PATTERN` (derived
-  from `brand.ts`).
-- `package/src/verify/schemas.ts` — add `SlsaManifestSchema` (with
-  `packageName`); tighten `sourceRef` to `^refs/tags/`;
-  `SLSA_MANIFEST_V1_SCHEMA_URL` derived from `BRAND_PAGES_BASE`.
-- `package/src/verify/certificates.ts` — `verifyCertificateOIDs` takes
-  required `sourceCommit` / `sourceRef` / `runInvocationURI` /
-  `attestSignerPattern`.
-- `package/src/verify/verify.ts` — `verifyPackage` primary entry
-  (takes `packageName` or `packageRoot`); `verifyAttestation` with
-  `attestSignerPattern` (internal).
-- `package/src/verify/index.ts` — export block-facing symbols
-  (`verifyPackage`, `PackageProvenance`, `VerifyOptions`, manifest
-  types).
-- `package/src/internal.ts` — NEW: export `verifyAttestation`,
-  `assertWithinDir`, branded-type constructors, raw schemas.
-- `package/package.json` — add `"./internal"` subpath to `exports`.
-- `package/src/index.ts` — re-export block-facing symbols only.
-- `package/src/commands.ts` — `slsa wget` calls `verifyPackage`
-  with its existing `packageDir` as `packageRoot`.
-- `README.md`, `package/README.md` — unified flow, reusable attest
-  workflow, commit-SHA pinning guidance, npm trusted publishing setup.
-
-### Deletions
-
-- `attest-public/` — entire directory (replaced by reusable workflow +
-  `actions/attest-build-provenance`).
-- `package/src/verify/npm.ts` (no `fetchNpmAttestations` consumer).
-- `NpmAttestationsSchema` from `schemas.ts`.
-- `verifyPackageProvenance` from `verify.ts` (`verifyAddonProvenance`
-  → `verifyAttestation`, same wrapper).
-- `OID_SOURCE_REPO_VISIBILITY` (no code path asserts it).
-
-### Testing
+## Testing
 
 Inline under `if (import.meta.vitest)`.
 
@@ -913,10 +847,10 @@ Inline under `if (import.meta.vitest)`.
 
 - `SLSA_MANIFEST_V1_SCHEMA_URL` starts with `BRAND_PAGES_BASE`.
 - `DEFAULT_ATTEST_SIGNER_PATTERN.source` contains the escaped
-  `${BRAND_REPO}/${BRAND_ATTEST_WORKFLOW_PATH}` prefix.
-- Rebranding test: with `brand.ts` values patched (via module mock) to
-  `acmecorp/...`, derived constants re-derive to the `acmecorp` forms.
-  This pins the "forks only edit `brand.ts`" invariant.
+  `${BRAND_REPO}/${BRAND_PUBLISH_WORKFLOW_PATH}` prefix and a 40-hex SHA suffix; tag-pinned
+  URIs (`@refs/tags/v1.2.3`) are rejected.
+- Rebranding: with `brand.ts` module-mocked to `acmecorp/...`, derived constants re-derive
+  to the `acmecorp` forms (pins the "forks only edit `brand.ts`" invariant).
 
 `SlsaManifestSchema`:
 
@@ -924,97 +858,56 @@ Inline under `if (import.meta.vitest)`.
 - `$schema` mismatch (wrong URL, missing field) rejected.
 - Each missing required field rejected (one test per field).
 - Non-hex sha256, non-https url, malformed `runInvocationURI` rejected.
-- Unknown `addons` platform key (e.g. `freebsd`) or arch key (e.g.
-  `riscv64`) rejected.
+- Unknown `addons` platform (`freebsd`) or arch (`riscv64`) rejected.
 
-`verifyCertificateOIDs`: one accept + one reject per field
-(`sourceCommit`, `sourceRef`, `runInvocationURI`, Build Signer URI).
-Mock `X509Certificate` per `certificates.ts` precedent. Specifically:
-attestation signed by the reusable workflow passes; attestation whose
-Build Signer URI is the caller's publish-job workflow path rejects
-(covers the trusted-publishing forgery scenario).
+`verifyCertificateOIDs`: one accept + one reject per field (`sourceCommit`, `sourceRef`,
+`runInvocationURI`, Build Signer URI). Mock `X509Certificate` per `certificates.ts`
+precedent. Attestation signed by the reusable workflow passes; attestation whose Build
+Signer URI points at an unrelated workflow path rejects.
 
 `verifyPackage`:
 
-- Happy path via mocked `verifyRekorAttestations`, using
-  `packageRoot` (fixture-friendly path).
-- `packageName` resolution: fixture installed under `node_modules/`
-  of a tmpdir cwd; `packageName` resolves via `createRequire`.
-- Neither `packageName` nor `packageRoot` → input-validation error.
-- Both provided → input-validation error.
-- `manifest.packageName` mismatch with `package.json.name` →
-  `ProvenanceError` (monorepo sibling-swap).
+- Happy path via mocked `verifyRekorAttestations`, through internal `verifyPackageAt`
+  (fixture-friendly path).
+- `packageName` resolution through public `verifyPackage`: fixture installed under
+  `node_modules/` of a tmpdir cwd; resolves via `createRequire`.
+- Invalid `repo` string (not `owner/repo`) → input-validation error (no constructor needed
+  caller-side).
+- `verifyAddon({ filePath })` hashes the file and succeeds; tampered file throws
+  `ProvenanceError`.
+- `verifyAddon` with both / neither of `sha256` / `filePath` → input-validation error.
+- `manifest.packageName` mismatch with `package.json.name` → `ProvenanceError`.
 - `manifest.sourceRepo` mismatch → `ProvenanceError`.
 - `manifest.sourceRef` fails `refPattern` → throws.
-- Version `1.2.3` accepts `refs/tags/1.2.3` and `refs/tags/v1.2.3`;
-  rejects `refs/tags/v1.2.4` and `refs/heads/main` (latter also
-  schema-rejected).
-- Versions with regex metacharacters (`1.2.3-rc.1`, `1.2.3+build.1`)
-  correctly escaped.
+- Version `1.2.3` accepts `refs/tags/1.2.3` and `refs/tags/v1.2.3`; rejects
+  `refs/tags/v1.2.4` and `refs/heads/main` (latter also schema-rejected).
+- Versions with regex metacharacters (`1.2.3-rc.1`, `1.2.3+build.1`) correctly escaped.
 - Explicit `refPattern` / `attestSignerPattern` override defaults.
-- Fixtures: tmpdir `packageRoot` with `package.json` + co-located
-  `slsa-manifest.json`.
-- Rekor cert's `sourceCommit` / `runInvocationURI` / Build Signer URI
-  disagreement → throws.
+- Rekor cert OID disagreement (`sourceCommit`, `runInvocationURI`, Build Signer URI)
+  throws.
 
 `publish-attested/index.ts` (real temp dir + fixtures):
 
 - Happy path (mocked `fetch` + `verifyAttestation`).
-- Wrong URL bytes → `verifyAttestation` rejects → fails before
-  `npm publish`.
+- Wrong URL bytes → `verifyAttestation` rejects before `npm publish`.
 - Rekor ingestion-lag: first call rejects, retry resolves.
-- `Content-Length` > 256 MB → reject before body read.
-- Stream past 256 MB without declared length → mid-stream abort.
+- `Content-Length` > cap → reject before body read.
+- Stream past cap without declared length → mid-stream abort.
+- `max-binary-bytes` input overrides the default.
 - Non-2xx HTTP → error with URL + status.
 - Manifest construction from `GITHUB_*` env + verified hashes.
-- Round-trip with default `addon.manifest` (output contains
-  `package/slsa-manifest.json`).
-- Round-trip with nested `addon.manifest` (parent dirs created).
+- Round-trip with default / nested `addon.manifest` (parent dirs created).
 - `addon.manifest = "../escape.json"` → `assertWithinDir` rejects.
-- Pre-packed tarball already contains the manifest path → refuses to
-  overwrite.
+- Pre-packed tarball already contains the manifest path → refuses to overwrite.
 - Missing env var → actionable error (via `vi.stubEnv`).
 - `execSync` stubbed for `npm publish` (no registry call).
 
 No new Rekor network fixtures — `rekor.ts` tests cover that surface.
 
-### Steps
-
-1. Create `verify/brand.ts` with `BRAND_REPO`, `BRAND_PAGES_BASE`,
-   `BRAND_ATTEST_WORKFLOW_PATH`.
-2. `DEFAULT_MANIFEST_PATH`, 3 OIDs (including `OID_BUILD_SIGNER_URI`),
-   and `DEFAULT_ATTEST_SIGNER_PATTERN` (derived from `brand.ts`) in
-   `verify/constants.ts`.
-3. `SlsaManifestSchema` (with `packageName`, `refs/tags/`-only
-   `sourceRef`) in `verify/schemas.ts`; `SLSA_MANIFEST_V1_SCHEMA_URL`
-   derived from `BRAND_PAGES_BASE`.
-4. `verifyCertificateOIDs` signature change in `verify/certificates.ts`
-   (adds required `attestSignerPattern`).
-5. Rename `verifyAddonProvenance` → `verifyAttestation` in
-   `verify/verify.ts` (adds optional `attestSignerPattern`). Add
-   `verifyPackage` taking `packageName` or `packageRoot`. Create
-   `package/src/internal.ts` exporting `verifyAttestation` +
-   `assertWithinDir` + branded-type constructors + raw schemas.
-   Update `package/package.json` `exports` map with `./internal`
-   subpath. Top-level `index.ts` exports only block-facing surface.
-6. `commands.ts` passes its existing `packageDir` as `packageRoot` to
-   `verifyPackage`.
-7. Delete `verify/npm.ts`, `NpmAttestationsSchema`,
-   `verifyPackageProvenance`, `OID_SOURCE_REPO_VISIBILITY`.
-8. Delete `attest-public/` directory entirely.
-9. Create `.github/workflows/attest.yaml` reusable workflow.
-10. Add `publish-attested/` package to workspace.
-11. Inline tests per Testing above.
-12. Update `README.md` (root + package) for the unified flow, reusable
-    attest workflow, commit-SHA pinning guidance, npm trusted
-    publishing setup, and the fork playbook (editing `brand.ts`,
-    configuring Pages, republishing as `@yourorg/node-addon-slsa`).
-13. Release `v1.0.0` (breaking; no existing users).
-
 ## Out of scope
 
 - PyPI / maturin parallel (different trust infrastructure).
-- Non-GitHub CI providers. Manifest schema is GitHub-specific by
-  design.
-- Bundled attestation format (sigstore bundle inside the tarball).
-  Rejected in favour of Rekor-lookup-by-hash for simplicity.
+- Non-GitHub CI providers (manifest schema is GitHub-specific by design).
+- Non-npmjs registries (TUF-backed `dist.signatures` is an npmjs feature).
+- Bundled attestation format (sigstore bundle inside the tarball). Rejected in favour of
+  Rekor-lookup-by-hash for simplicity.
