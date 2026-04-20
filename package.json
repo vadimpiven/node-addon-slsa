@@ -8,13 +8,17 @@
     "test": "pnpm --recursive --if-present run test"
   },
   "devDependencies": {
+    "@codecov/vite-plugin": "catalog:",
     "husky": "catalog:",
     "markdownlint-cli2": "catalog:",
     "oxfmt": "catalog:",
-    "oxlint": "catalog:"
+    "oxlint": "catalog:",
+    "rollup-plugin-sbom": "catalog:",
+    "typedoc": "catalog:",
+    "typedoc-theme-oxide": "catalog:"
   },
   "engines": {
-    "node": "^20.19.0 || >=22.12.0",
+    "node": ">=22.12.0",
     "pnpm": "^10.26.0"
   },
   "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"

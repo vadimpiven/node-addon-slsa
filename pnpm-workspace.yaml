@@ -1,6 +1,7 @@
 packages:
-  - "package"
-  - "attest-public"
+  - "packages/*"
+  - ".github/actions/attest-addons"
+  - ".github/actions/verify-addons"
 
 blockExoticSubdeps: true
 
@@ -34,16 +35,12 @@ catalog:
 
 minimumReleaseAge: 1440
 
-minimumReleaseAgeExclude:
+minimumReleaseAgeExclude: []
 
 onlyBuiltDependencies: []
 
-overrides:
+overrides: {}
 
-# @sigstore/verify: export verifyCertificateChain and verifyTLogInclusion
-# for direct Rekor entry verification without reconstructing a full Bundle.
-# Track upstream: https://github.com/sigstore/sigstore-js/issues/XXX
-#
 # undici: remove AsyncResource from RequestHandler to prevent leaked
 # async_hooks handles in tests. Safe for Promise-based await request()
 # usage (Promise continuations preserve async context). Breaks
@@ -51,7 +48,6 @@ overrides:
 # not used by this project. Also exports MockInterceptor type.
 # Re-evaluate on undici upgrades.
 patchedDependencies:
-  '@sigstore/verify@3.1.0': patches/@sigstore__verify@3.1.0.patch
   undici@8.0.2: patches/undici@8.0.2.patch
 
 strictDepBuilds: true

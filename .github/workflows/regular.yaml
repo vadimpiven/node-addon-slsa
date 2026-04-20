@@ -36,7 +36,7 @@ jobs:
           persist-credentials: false
       - name: "Init"
         id: "init"
-        uses: "./.github/actions/init-workflow"
+        uses: "./.github/internal-actions/init-workflow"
   build-and-test:
     name: "Build and test"
     needs: "init"
@@ -53,7 +53,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: "Setup"
-        uses: "./.github/actions/setup"
+        uses: "./.github/internal-actions/setup"
         with:
           env: "${{ needs.init.outputs.env }}"
           cache-key: "${{ needs.init.outputs.cache-key }}"
@@ -63,7 +63,7 @@ jobs:
         run: "mise run --force ci-test"
       - name: "Upload reports"
         if: "!cancelled()"
-        uses: "./.github/actions/upload-reports"
+        uses: "./.github/internal-actions/upload-reports"
         with:
           test-coverage: "${{ needs.init.outputs.test-coverage }}"
           test-reports: "${{ needs.init.outputs.test-reports }}"

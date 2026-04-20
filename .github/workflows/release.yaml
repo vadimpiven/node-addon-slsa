@@ -38,7 +38,7 @@ jobs:
           esac
       - name: "Init"
         id: "init"
-        uses: "./.github/actions/init-workflow"
+        uses: "./.github/internal-actions/init-workflow"
   build:
     name: "Build"
     needs: "init"
@@ -56,7 +56,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: "Setup"
-        uses: "./.github/actions/setup"
+        uses: "./.github/internal-actions/setup"
         with:
           env: "${{ needs.init.outputs.env }}"
           cache-key: "${{ needs.init.outputs.cache-key }}"
@@ -64,28 +64,28 @@ jobs:
           mise-version: "${{ needs.init.outputs.mise-version }}"
       - name: "Build and pack package"
         run: |
-          pnpm -F "{package}" run bump-version "${GITHUB_REF_NAME#v}"
-          pnpm -F "{package}" run build
+          pnpm -F "{packages/node-addon-slsa}" run bump-version "${GITHUB_REF_NAME#v}"
+          pnpm -F "{packages/node-addon-slsa}" run build
       - name: "Attest build provenance"
-        uses: "./attest-public"
+        uses: "actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a" # v3.0.0
         with:
-          subject-path: "package/package.tar.gz"
+          subject-path: "packages/node-addon-slsa/package.tar.gz"
       - name: "Attest SBOM"
         uses: "actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26" # v4.1.0
         with:
-          subject-path: "package/package.tar.gz"
-          sbom-path: "package/dist/cyclonedx/bom.json"
+          subject-path: "packages/node-addon-slsa/package.tar.gz"
+          sbom-path: "packages/node-addon-slsa/dist/cyclonedx/bom.json"
       - name: "Upload docs artifact"
         uses: "actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9" # v5.0.0
         with:
-          path: "package/docs"
+          path: "packages/node-addon-slsa/docs"
       - name: "Create release"
         env:
           GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         run: >-
           gh release create "$GITHUB_REF_NAME"
-          package/package.tar.gz
-          package/dist/cyclonedx/bom.json
+          packages/node-addon-slsa/package.tar.gz
+          packages/node-addon-slsa/dist/cyclonedx/bom.json
           --generate-notes
   publish:
     name: "Publish"

@@ -1,0 +1,203 @@
+name: "Publish attested native addon"
+on:
+  workflow_call:
+    inputs:
+      addons:
+        description: >-
+          Nested JSON: `{ [platform]: { [arch]: url } }` using Node's
+          process.platform / process.arch. Each leaf is a public URL the
+          caller has already uploaded the `.node.gz` addon to.
+        required: true
+        type: string
+      tarball-artifact:
+        description: "Name of the GH artifact holding the pre-packed .tgz."
+        required: false
+        default: "slsa-tarball"
+        type: string
+      access:
+        description: "npm publish --access (public|restricted)."
+        required: false
+        type: string
+      tag:
+        description: "npm dist-tag. Omit → latest."
+        required: false
+        type: string
+      max-binary-bytes:
+        description: "Per-binary size cap (bytes)."
+        required: false
+        default: 268435456
+        type: number
+      max-binary-seconds:
+        description: "Per-binary fetch timeout (seconds)."
+        required: false
+        default: 300
+        type: number
+      retry-count:
+        description: "Retries per addon URL, covering CDN propagation after upload."
+        required: false
+        default: 10
+        type: number
+permissions: {}
+jobs:
+  publish:
+    name: "Publish"
+    runs-on: "ubuntu-24.04"
+    timeout-minutes: 20
+    permissions:
+      contents: "read"
+      id-token: "write" # Sigstore OIDC + npm trusted publishing
+      attestations: "write" # @actions/attest writes to the GitHub Attestations API
+    steps:
+      - name: "Resolve this workflow's repo from its ref"
+        id: "self-repo"
+        env:
+          WORKFLOW_REF: "${{ github.workflow_ref }}"
+        # `github.workflow_ref` is `owner/repo/.github/workflows/file.yaml@ref`;
+        # strip `/.github/...` onward for `owner/repo`. Ref uses
+        # `github.workflow_sha` directly (immutable).
+        shell: "bash"
+        run: 'echo "repo=${WORKFLOW_REF%%/.github/*}" >>"$GITHUB_OUTPUT"'
+      - name: "Checkout reusable workflow repo at its commit"
+        uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
+        with:
+          repository: "${{ steps.self-repo.outputs.repo }}"
+          ref: "${{ github.workflow_sha }}"
+          fetch-depth: 1
+          persist-credentials: false
+      - name: "Attest addons (public-good sigstore)"
+        # Runs early — only needs `addons` and the checked-out repo. Failing
+        # here skips the tarball download and Node setup. The Fulcio cert's
+        # Build Signer URI records this reusable workflow's ref, which is
+        # what `verifyPackage` enforces via `DEFAULT_ATTEST_SIGNER_PATTERN`.
+        uses: "./.github/actions/attest-addons"
+        with:
+          addons: "${{ inputs.addons }}"
+          max-binary-bytes: "${{ inputs.max-binary-bytes }}"
+          max-binary-seconds: "${{ inputs.max-binary-seconds }}"
+          retry-count: "${{ inputs.retry-count }}"
+      - name: "Download pre-packed tarball"
+        uses: "actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53" # v6.0.0
+        with:
+          name: "${{ inputs.tarball-artifact }}"
+          path: "./tarball"
+      - name: "Set up Node.js + npm registry for trusted publishing"
+        # Pinned to a Node LTS major (not `latest`) for reproducibility: the
+        # bundled npm version is only a starting point — we upgrade it below.
+        # `registry-url` writes the .npmrc that directs `npm publish` at
+        # npmjs.org with OIDC auth.
+        uses: "actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f" # v6.3.0
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+      - name: "Upgrade npm to a trusted-publishing-capable release"
+        # OIDC trusted publishing requires npm ≥ 11.5.1; GHA Node LTS images
+        # ship an older bundled npm. We track `@latest` so fixes land
+        # automatically — an exact pin would need dependabot churn.
+        shell: "bash"
+        run: "npm install -g npm@latest"
+      - name: "Extract pre-packed tarball"
+        id: "extract"
+        shell: "bash"
+        # Exactly one .tgz must be present; fail loudly otherwise. Extract
+        # into $RUNNER_TEMP; subsequent steps reach the workdir via
+        # `dirname(package-dir)`.
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          tgz_files=(./tarball/*.tgz)
+          if [[ ${#tgz_files[@]} -ne 1 ]]; then
+            echo "expected exactly one .tgz in ./tarball; found ${#tgz_files[@]}" >&2
+            exit 1
+          fi
+          workdir="$RUNNER_TEMP/slsa-publish-$$"
+          mkdir -p "$workdir"
+          tar -xzf "${tgz_files[0]}" -C "$workdir"
+          echo "package-dir=$workdir/package" >>"$GITHUB_OUTPUT"
+      - name: "Read name and manifest path from package.json"
+        id: "pkg"
+        shell: "bash"
+        env:
+          PACKAGE_DIR: "${{ steps.extract.outputs.package-dir }}"
+        # The default `slsa-manifest.json` matches `DEFAULT_MANIFEST_PATH`
+        # in node-addon-slsa's constants.ts — the consumer-side loader
+        # falls back on the same string, so drifting it here would silently
+        # break installation of any package that doesn't set
+        # `addon.manifest` explicitly.
+        run: |
+          set -euo pipefail
+          pkg_json="$PACKAGE_DIR/package.json"
+          name=$(jq -r '.name' "$pkg_json")
+          manifest_rel=$(jq -r '.addon.manifest // "slsa-manifest.json"' "$pkg_json")
+          echo "name=$name" >>"$GITHUB_OUTPUT"
+          echo "manifest-rel=$manifest_rel" >>"$GITHUB_OUTPUT"
+      - name: "Verify addons (Rekor) and build SLSA manifest"
+        id: "verify"
+        uses: "./.github/actions/verify-addons"
+        with:
+          package-name: "${{ steps.pkg.outputs.name }}"
+          addons: "${{ inputs.addons }}"
+          max-binary-bytes: "${{ inputs.max-binary-bytes }}"
+          max-binary-seconds: "${{ inputs.max-binary-seconds }}"
+      - name: "Embed SLSA manifest"
+        shell: "bash"
+        env:
+          MANIFEST: "${{ steps.verify.outputs.manifest }}"
+          MANIFEST_REL: "${{ steps.pkg.outputs.manifest-rel }}"
+          PACKAGE_DIR: "${{ steps.extract.outputs.package-dir }}"
+        # Two guards before writing:
+        #   1. Traversal: `realpath -m` canonicalises the target (even if it
+        #      doesn't exist yet); it must stay inside the canonical package
+        #      dir. Blocks `addon.manifest: "../escape.json"`.
+        #   2. Overwrite: pre-packed tarballs must not ship a manifest
+        #      (fix caller's "files"/"npmignore" if this fires).
+        run: |
+          set -euo pipefail
+          pkg_abs=$(realpath "$PACKAGE_DIR")
+          manifest_abs=$(realpath -m "$pkg_abs/$MANIFEST_REL")
+          case "$manifest_abs/" in
+            "$pkg_abs"/*) ;;
+            *) echo "addon.manifest escapes package dir: $MANIFEST_REL" >&2; exit 1 ;;
+          esac
+          if [[ -e "$manifest_abs" ]]; then
+            echo "refusing to overwrite existing $manifest_abs" >&2
+            exit 1
+          fi
+          mkdir -p "$(dirname "$manifest_abs")"
+          printf '%s\n' "$MANIFEST" > "$manifest_abs"
+      - name: "Repack tarball deterministically"
+        id: "repack"
+        shell: "bash"
+        env:
+          PACKAGE_DIR: "${{ steps.extract.outputs.package-dir }}"
+        # Deterministic flags (GNU tar on GHA runners) → identical inputs
+        # produce byte-identical tarballs, so auditors can reproduce the
+        # published artifact. `npm publish` re-hashes for `dist.integrity`,
+        # so determinism here is defense-in-depth rather than load-bearing.
+        run: |
+          set -euo pipefail
+          workdir=$(dirname "$PACKAGE_DIR")
+          out="$workdir/package.tgz"
+          tar \
+            --format=ustar \
+            --sort=name \
+            --mtime=@1 \
+            --owner=0 \
+            --group=0 \
+            --numeric-owner \
+            -czf "$out" \
+            -C "$workdir" \
+            package
+          echo "tarball=$out" >>"$GITHUB_OUTPUT"
+      - name: "npm publish (trusted publishing via OIDC)"
+        shell: "bash"
+        env:
+          TARBALL: "${{ steps.repack.outputs.tarball }}"
+          ACCESS: "${{ inputs.access }}"
+          TAG: "${{ inputs.tag }}"
+        run: |
+          set -euo pipefail
+          args=(publish "$TARBALL")
+          [[ -n "$ACCESS" ]] && args+=(--access "$ACCESS")
+          [[ -n "$TAG"    ]] && args+=(--tag    "$TAG")
+          npm "${args[@]}"

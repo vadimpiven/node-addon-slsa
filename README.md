@@ -79,10 +79,13 @@ await provenance.verifyAddon({ sha256: sha256Hex(hexHash) });
 ```
 
 Setup guide, threat model, and full API reference:
-**[`package/README.md`](package/README.md)**
+**[`packages/node-addon-slsa/README.md`](packages/node-addon-slsa/README.md)**
 
-The publishable npm package lives in the [`package/`](package/)
-directory. Source code, tests, and full documentation are there.
+The published npm package lives in
+[`packages/node-addon-slsa/`](packages/node-addon-slsa/); workspace-internal
+primitives live in [`packages/internal/`](packages/internal/) as
+`@node-addon-slsa/internal`. See [`packages/README.md`](packages/README.md)
+for the layout.
 
 ## Contributing
 

@@ -1,0 +1,54 @@
+name: "Upload Reports"
+description: "Expands globs and uploads coverage and test reports to Codecov"
+inputs:
+  test-coverage:
+    description: "Globs for coverage reports"
+    required: true
+  test-reports:
+    description: "Globs for test reports"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: "Install latest Node.js"
+      uses: "actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f" # v6.3.0
+      with:
+        node-version: "latest"
+        check-latest: true
+        package-manager-cache: false
+    - name: "Expand globs"
+      id: "expand"
+      shell: "bash"
+      env:
+        COVERAGE_PATTERN: "${{ inputs.test-coverage }}"
+        REPORTS_PATTERN: "${{ inputs.test-reports }}"
+      run: |
+        node << "EOF" >> "$GITHUB_OUTPUT"
+        const fs = require("node:fs");
+
+        const expand = (input) => {
+          return input.split(",")
+            .map(p => p.trim())
+            .filter(Boolean)
+            .flatMap(p => fs.globSync(p))
+            .filter(f => fs.statSync(f).isFile())
+            .join(",");
+        };
+
+        console.log("coverage=%s", expand(process.env.COVERAGE_PATTERN));
+        console.log("reports=%s", expand(process.env.REPORTS_PATTERN));
+        EOF
+    - name: "Upload coverage reports to Codecov"
+      if: "steps.expand.outputs.coverage != ''"
+      uses: "codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2" # v6.0.0
+      with:
+        use_oidc: true
+        report_type: "coverage"
+        files: "${{ steps.expand.outputs.coverage }}"
+    - name: "Upload test results to Codecov"
+      if: "steps.expand.outputs.reports != ''"
+      uses: "codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2" # v6.0.0
+      with:
+        use_oidc: true
+        report_type: "test_results"
+        files: "${{ steps.expand.outputs.reports }}"

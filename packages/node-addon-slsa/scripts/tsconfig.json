@@ -1,0 +1,10 @@
+{
+  "extends": "../../../.github/actions/tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node", "vitest/importMeta"],
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "rootDir": "../../.."
+  },
+  "include": ["./*.ts"]
+}

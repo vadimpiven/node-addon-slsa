@@ -1,0 +1,31 @@
+name: "Verify addons and build SLSA manifest"
+description: >-
+  Trust-critical verification step. For each declared addon URL: re-fetch
+  under a size cap, SHA-256 the body, and `verifyAttestation` against
+  Rekor (signer pinned to this workflow via
+  `DEFAULT_ATTEST_SIGNER_PATTERN`). On success, emits the SLSA manifest
+  as a JSON string; the caller resolves the target path and writes the
+  file. Callers (publish.yaml) own tar extract/repack, manifest write,
+  path-traversal guard, and `npm publish` so the non-cryptographic
+  plumbing stays readable in the workflow.
+inputs:
+  package-name:
+    description: "The `name` field from the pre-packed tarball's package.json (read by the caller via jq)."
+    required: true
+  addons:
+    description: "JSON map of verified addon URLs, shape `{ [platform]: { [arch]: url } }`."
+    required: true
+  max-binary-bytes:
+    description: "Hard size cap per addon URL in bytes. Requests exceeding this fail before verification. Default 256 MiB."
+    required: false
+    default: "268435456"
+  max-binary-seconds:
+    description: "Per-addon fetch timeout in seconds (applies to both total and stall timers)."
+    required: false
+    default: "300"
+outputs:
+  manifest:
+    description: "Serialized SLSA manifest JSON (pretty-printed). Caller writes it to the `addon.manifest` path inside the package dir."
+runs:
+  using: "node24"
+  main: "dist/index.js"

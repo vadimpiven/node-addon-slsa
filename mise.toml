@@ -46,33 +46,16 @@ run = [
   "corepack enable pnpm",
   "pnpm install --frozen-lockfile --prefer-offline",
 ]
-sources = ["pnpm-lock.yaml", "pnpm-workspace.yaml", "package.json", "package/package.json"]
+sources = [
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+  "package.json",
+  "packages/*/package.json",
+]
 
 # ============================================================================
 # LINT & CHECK/FIX TASKS - Verify and fix code quality and security
 # ============================================================================
-
-# --- action dist ---
-[tasks."fix:action"]
-description = "Rebuild the attest-public GitHub Action dist"
-hide = true
-wait_for = ["setup"]
-run = 'pnpm -F "{attest-public}" run build'
-sources = [
-  "attest-public/index.ts",
-  "attest-public/package.json",
-  "attest-public/tsconfig.json",
-  "pnpm-workspace.yaml",
-  "pnpm-lock.yaml",
-  "mise.toml",
-]
-outputs = ["attest-public/dist/"]
-
-[tasks."check:action"]
-description = "Verify action dist is up to date"
-hide = true
-depends = ["fix:action"]
-run = "git diff --exit-code attest-public/dist/"
 
 # --- oxlint (JS/TS) ---
 [tasks."check:oxlint"]
@@ -80,14 +63,20 @@ description = "Check JS/TS with oxlint"
 hide = true
 wait_for = ["setup"]
 run = "pnpm -w exec oxlint . --deny-warnings"
-sources = ["package/{src,tests,bin}/**/*.{ts,js,mts,mjs}", "attest-public/**/*.ts"]
+sources = [
+  "packages/*/{src,tests,bin}/**/*.{ts,js,mts,mjs}",
+  ".github/actions/*/*.ts",
+]
 
 [tasks."fix:oxlint"]
 description = "Fix JS/TS with oxlint"
 hide = true
 wait_for = ["setup"]
 run = "pnpm -w exec oxlint . --fix"
-sources = ["package/{src,tests,bin}/**/*.{ts,js,mts,mjs}", "attest-public/**/*.ts"]
+sources = [
+  "packages/*/{src,tests,bin}/**/*.{ts,js,mts,mjs}",
+  ".github/actions/*/*.ts",
+]
 
 # --- oxfmt (JS/TS/JSON) ---
 [tasks."check:oxfmt"]
@@ -97,8 +86,8 @@ wait_for = ["setup"]
 run = "pnpm -w exec oxfmt --check ."
 sources = [
   "*.{json,jsonc}",
-  "package/{src,tests,bin}/**/*.{ts,js,mts,mjs,json,jsonc}",
-  "attest-public/**/*.{ts,json,jsonc}",
+  "packages/*/{src,tests,bin}/**/*.{ts,js,mts,mjs,json,jsonc}",
+  ".github/actions/*/*.{ts,json,jsonc}",
   ".oxfmtrc.json",
 ]
 
@@ -109,8 +98,8 @@ wait_for = ["setup"]
 run = "pnpm -w exec oxfmt --write ."
 sources = [
   "*.{json,jsonc}",
-  "package/{src,tests,bin}/**/*.{ts,js,mts,mjs,json,jsonc}",
-  "attest-public/**/*.{ts,json,jsonc}",
+  "packages/*/{src,tests,bin}/**/*.{ts,js,mts,mjs,json,jsonc}",
+  ".github/actions/*/*.{ts,json,jsonc}",
   ".oxfmtrc.json",
 ]
 
@@ -133,14 +122,14 @@ description = "Check Markdown files"
 hide = true
 wait_for = ["setup"]
 run = "pnpm -w exec markdownlint-cli2 ."
-sources = ["*.md", "package/*.md", ".markdownlint-cli2.jsonc"]
+sources = ["*.md", "packages/*.md", "packages/*/*.md", ".markdownlint-cli2.jsonc"]
 
 [tasks."fix:markdownlint"]
 description = "Fix Markdown files"
 hide = true
 wait_for = ["setup"]
 run = "pnpm -w exec markdownlint-cli2 --fix ."
-sources = ["*.md", "package/*.md", ".markdownlint-cli2.jsonc"]
+sources = ["*.md", "packages/*.md", "packages/*/*.md", ".markdownlint-cli2.jsonc"]
 
 # --- yamlfmt (YAML) ---
 [tasks."check:yamlfmt"]
@@ -163,7 +152,7 @@ run = "typos ."
 run_windows = "exit 0"
 sources = [
   "*.{md,toml,json,yaml,yml}",
-  "{.github,package/src,package/tests,package/bin}/**/*.{ts,js,mts,mjs,md,toml,json,yaml,yml}",
+  "{.github,packages}/**/*.{ts,js,mts,mjs,md,toml,json,yaml,yml}",
 ]
 
 [tasks."fix:typos"]
@@ -173,7 +162,7 @@ run = "typos . -w"
 run_windows = "exit 0"
 sources = [
   "*.{md,toml,json,yaml,yml}",
-  "{.github,package/src,package/tests,package/bin}/**/*.{ts,js,mts,mjs,md,toml,json,yaml,yml}",
+  "{.github,packages}/**/*.{ts,js,mts,mjs,md,toml,json,yaml,yml}",
 ]
 
 # --- gitleaks (secret detection) ---
@@ -231,7 +220,6 @@ description = "Verify code quality"
 alias = "c"
 depends = [
   "setup",
-  "check:action",
   "check:oxlint",
   "check:oxfmt",
   "check:taplo",
@@ -249,7 +237,6 @@ description = "Auto-fix code issues"
 alias = "f"
 depends = [
   "setup",
-  "fix:action",
   "fix:oxlint",
   "fix:oxfmt",
   "fix:taplo",
@@ -273,26 +260,89 @@ sources = ["mise.toml"]
 # BUILD & TEST TASKS - Build and test the project
 # ============================================================================
 
-[tasks.build]
+[tasks."build:package"]
 description = "Compile the package"
-alias = "b"
+hide = true
 depends = ["setup"]
-run = 'pnpm -F "{package}" --if-present run build'
+run = 'pnpm -F "{packages/*}" --if-present run build'
+
+[tasks."build:actions"]
+description = "Build bundled GitHub Action dists"
+hide = true
+# Actions bundle @node-addon-slsa/internal via its dist, so internal must be
+# built before we invoke ncc.
+depends = ["setup", "build:package"]
+run = [
+  'pnpm -F "{.github/actions/attest-addons}" run build',
+  'pnpm -F "{.github/actions/verify-addons}" run build',
+]
+sources = [
+  ".github/actions/attest-addons/index.ts",
+  ".github/actions/attest-addons/package.json",
+  ".github/actions/attest-addons/tsconfig.json",
+  ".github/actions/verify-addons/index.ts",
+  ".github/actions/verify-addons/package.json",
+  ".github/actions/verify-addons/tsconfig.json",
+  ".github/actions/tsconfig.base.json",
+  "packages/internal/src/**/*.ts",
+  "pnpm-workspace.yaml",
+  "pnpm-lock.yaml",
+]
+outputs = [".github/actions/attest-addons/dist/", ".github/actions/verify-addons/dist/"]
+
+[tasks.build]
+description = "Compile package and actions"
+alias = "b"
+depends = ["build:package", "build:actions"]
+
+[tasks."test:package"]
+description = "Run package tests"
+hide = true
+depends = ["fix"]
+run = 'pnpm -F "{packages/*}" --if-present run test'
+
+[tasks."test:actions"]
+description = "Run actions tests"
+hide = true
+depends = ["fix"]
+run = [
+  'pnpm -F "{.github/actions/attest-addons}" --if-present run test',
+  'pnpm -F "{.github/actions/verify-addons}" --if-present run test',
+]
 
 [tasks.test]
 description = "Run all tests"
 alias = "t"
-depends = ["fix"]
-run = 'pnpm -F "{package}" --if-present run test'
+depends = ["test:package", "test:actions"]
+
+[tasks."ci-build:package"]
+description = "Build package for CI"
+hide = true
+depends = ["setup"]
+run = 'pnpm -F "{packages/*}" --if-present run ci-build'
+
+[tasks."ci-build:actions"]
+description = "Build actions for CI"
+hide = true
+depends = ["ci-build:package", "build:actions"]
 
 [tasks."ci-build"]
 description = "Build for CI"
 hide = true
-depends = ["setup"]
-run = 'pnpm -F "{package}" --if-present run ci-build'
+depends = ["ci-build:package", "ci-build:actions"]
+
+[tasks."ci-test:package"]
+description = "Run package CI tests"
+hide = true
+depends = ["check"]
+run = 'pnpm -F "{packages/*}" --if-present run ci-test'
+
+[tasks."ci-test:actions"]
+description = "Verify actions compile for CI"
+hide = true
+depends = ["build:actions"]
 
 [tasks."ci-test"]
 description = "Run CI tests"
 hide = true
-depends = ["check"]
-run = 'pnpm -F "{package}" --if-present run ci-test'
+depends = ["ci-test:package", "ci-test:actions"]

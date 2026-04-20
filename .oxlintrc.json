@@ -1,5 +1,5 @@
 {
-  "ignorePatterns": ["attest-public/dist"],
+  "ignorePatterns": ["**/dist"],
   "rules": {
     "typescript/no-deprecated": "error"
   }
