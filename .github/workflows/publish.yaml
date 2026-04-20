@@ -11,8 +11,7 @@ on:
         type: string
       tarball-artifact:
         description: "Name of the GH artifact holding the pre-packed .tgz or .tar.gz."
-        required: false
-        default: "slsa-tarball"
+        required: true
         type: string
       access:
         description: "npm publish --access (public|restricted)."
