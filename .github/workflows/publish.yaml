@@ -10,7 +10,7 @@ on:
         required: true
         type: string
       tarball-artifact:
-        description: "Name of the GH artifact holding the pre-packed .tgz."
+        description: "Name of the GH artifact holding the pre-packed .tgz or .tar.gz."
         required: false
         default: "slsa-tarball"
         type: string
@@ -99,20 +99,22 @@ jobs:
       - name: "Extract pre-packed tarball"
         id: "extract"
         shell: "bash"
-        # Exactly one .tgz must be present; fail loudly otherwise. Extract
-        # into $RUNNER_TEMP; subsequent steps reach the workdir via
-        # `dirname(package-dir)`.
+        # Exactly one gzipped tarball must be present; fail loudly
+        # otherwise. Accepts both `.tgz` (npm/pnpm default) and `.tar.gz`
+        # (common build-script convention) so callers don't have to
+        # rename their artifact before upload. Extract into $RUNNER_TEMP;
+        # subsequent steps reach the workdir via `dirname(package-dir)`.
         run: |
           set -euo pipefail
           shopt -s nullglob
-          tgz_files=(./tarball/*.tgz)
-          if [[ ${#tgz_files[@]} -ne 1 ]]; then
-            echo "expected exactly one .tgz in ./tarball; found ${#tgz_files[@]}" >&2
+          tarballs=(./tarball/*.tgz ./tarball/*.tar.gz)
+          if [[ ${#tarballs[@]} -ne 1 ]]; then
+            echo "expected exactly one .tgz/.tar.gz in ./tarball; found ${#tarballs[@]}" >&2
             exit 1
           fi
           workdir="$RUNNER_TEMP/slsa-publish-$$"
           mkdir -p "$workdir"
-          tar -xzf "${tgz_files[0]}" -C "$workdir"
+          tar -xzf "${tarballs[0]}" -C "$workdir"
           echo "package-dir=$workdir/package" >>"$GITHUB_OUTPUT"
       - name: "Read name and manifest path from package.json"
         id: "pkg"
