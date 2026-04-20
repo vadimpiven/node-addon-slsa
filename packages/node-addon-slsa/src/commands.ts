@@ -17,6 +17,7 @@ import { randomBytes } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, readFile, rename } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
+import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createGunzip, createGzip } from "node:zlib";
 
@@ -153,31 +154,37 @@ export async function wget(packageDir: string, options?: VerifyOptions): Promise
     const DECOMPRESSION_RATIO_LIMIT = 8;
     const maxDecompressedBytes = maxBytes * DECOMPRESSION_RATIO_LIMIT;
     let seenPlain = 0;
-    await pipeline(
-      response.body,
-      async function* (source: AsyncIterable<Buffer>) {
-        for await (const chunk of source) {
-          seenWire += chunk.length;
-          if (seenWire > maxBytes) {
-            throw new Error(`download exceeds size cap: seen=${seenWire} cap=${maxBytes}`);
-          }
-          yield chunk;
+    const wireCap = new Transform({
+      transform(chunk: Buffer, _enc, cb) {
+        seenWire += chunk.length;
+        if (seenWire > maxBytes) {
+          cb(new Error(`download exceeds size cap: seen=${seenWire} cap=${maxBytes}`));
+          return;
         }
+        cb(null, chunk);
       },
-      hashStream,
-      createGunzip(),
-      async function* (source: AsyncIterable<Buffer>) {
-        for await (const chunk of source) {
-          seenPlain += chunk.length;
-          if (seenPlain > maxDecompressedBytes) {
-            throw new Error(
+    });
+    const plainCap = new Transform({
+      transform(chunk: Buffer, _enc, cb) {
+        seenPlain += chunk.length;
+        if (seenPlain > maxDecompressedBytes) {
+          cb(
+            new Error(
               `decompressed payload exceeds cap: seen=${seenPlain} cap=${maxDecompressedBytes}` +
                 ` (possible zip-bomb; compressed=${seenWire})`,
-            );
-          }
-          yield chunk;
+            ),
+          );
+          return;
         }
+        cb(null, chunk);
       },
+    });
+    await pipeline(
+      response.body,
+      wireCap,
+      hashStream,
+      createGunzip(),
+      plainCap,
       createWriteStream(tmpPath, { mode: 0o755, flags: "wx" }),
       options?.signal ? { signal: options.signal } : {},
     );
