@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+    "outDir": "./dist",
+    "rootDir": "../.."
+  },
+  "include": [
+    "./src/**/*.ts",
+    "./tests/**/*.ts",
+    "../../.github/actions/attest-addons/*.ts",
+    "../../.github/actions/verify-addons/*.ts"
+  ]
+}

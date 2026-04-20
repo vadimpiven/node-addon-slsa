@@ -1,0 +1,44 @@
+{
+  "name": "@node-addon-slsa/internal",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Workspace-internal primitives for node-addon-slsa and its GitHub Actions — not published",
+  "license": "Apache-2.0 OR MIT",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "prebuild": "pnpm run type-check",
+    "build": "vite build",
+    "pretest": "pnpm run build",
+    "test": "vitest run --coverage",
+    "ci-build": "pnpm run build",
+    "ci-test": "pnpm run test"
+  },
+  "devDependencies": {
+    "@sigstore/bundle": "catalog:",
+    "@sigstore/core": "catalog:",
+    "@sigstore/tuf": "catalog:",
+    "@sigstore/verify": "catalog:",
+    "@types/node": "catalog:",
+    "@vitest/coverage-istanbul": "catalog:",
+    "dedent": "catalog:",
+    "sigstore": "catalog:",
+    "typescript": "catalog:",
+    "undici": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-dts": "catalog:",
+    "vitest": "catalog:",
+    "zod": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

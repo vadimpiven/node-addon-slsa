@@ -1,0 +1,15 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["./src/index.ts"],
+  "out": "docs",
+  "plugin": ["typedoc-theme-oxide"],
+  "theme": "oxide",
+  "name": "node-addon-slsa",
+  "includeVersion": true,
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "readme": "README.md",
+  "sourceLinkTemplate": "https://github.com/vadimpiven/node-addon-slsa/blob/{gitRevision}/{path}#L{line}",
+  "treatWarningsAsErrors": true,
+  "treatValidationWarningsAsErrors": true
+}

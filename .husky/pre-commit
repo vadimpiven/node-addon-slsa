@@ -1,4 +1,5 @@
 #!/bin/sh
 mise run fix
-git add attest-public/dist/
+mise run build:actions
+git add .github/actions/attest-addons/dist/ .github/actions/verify-addons/dist/
 git update-index --again

@@ -1,0 +1,81 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+/** `{key}` placeholder substitution for URL templates (Rekor entry URL, addon artifact URL). */
+
+/**
+ * Substitute `{key}` placeholders with `vars[key]`. Throws if any placeholder
+ * remains unresolved — catches typos at call sites instead of producing broken URLs.
+ */
+export function evalTemplate<T extends Record<string, string>>(template: string, vars: T): string {
+  let result = template;
+  for (const [key, value] of Object.entries(vars)) {
+    result = result.replaceAll(`{${key}}`, value);
+  }
+  const unresolved = result.match(/\{[a-zA-Z_]\w*\}/g);
+  if (unresolved) {
+    const available = Object.keys(vars)
+      .map((k) => `{${k}}`)
+      .join(", ");
+    throw new Error(
+      `unresolved template placeholders: ${unresolved.join(", ")}. Available: ${available}`,
+    );
+  }
+  return result;
+}
+
+if (import.meta.vitest) {
+  const { describe, it } = import.meta.vitest;
+
+  describe("evalTemplate", () => {
+    it("substitutes all variables", ({ expect }) => {
+      const result = evalTemplate("name-v{version}-{platform}-{arch}.gz", {
+        version: "1.0.0",
+        platform: "linux",
+        arch: "x64",
+      });
+      expect(result).toBe("name-v1.0.0-linux-x64.gz");
+    });
+
+    it("substitutes empty string values", ({ expect }) => {
+      const result = evalTemplate("{version}-{platform}-{arch}", {
+        version: "1.0.0",
+        platform: "",
+        arch: "",
+      });
+      expect(result).toBe("1.0.0--");
+    });
+
+    it("throws on unresolved placeholders", ({ expect }) => {
+      expect(() => evalTemplate("{version}-{libc}", { version: "1.0.0" })).toThrow(
+        /unresolved template placeholders.*\{libc\}/,
+      );
+    });
+
+    it("returns empty string for empty template", ({ expect }) => {
+      const result = evalTemplate("", {
+        version: "1.0.0",
+        platform: "linux",
+        arch: "x64",
+      });
+      expect(result).toBe("");
+    });
+
+    it("handles special characters in values", ({ expect }) => {
+      const result = evalTemplate("{version}", {
+        version: "1.0.0-beta+build.123",
+        platform: "linux",
+        arch: "x64",
+      });
+      expect(result).toBe("1.0.0-beta+build.123");
+    });
+
+    it("replaces multiple occurrences of the same key", ({ expect }) => {
+      const result = evalTemplate("{version}/{version}", {
+        version: "2.0.0",
+        platform: "linux",
+        arch: "x64",
+      });
+      expect(result).toBe("2.0.0/2.0.0");
+    });
+  });
+}

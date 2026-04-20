@@ -83,9 +83,6 @@ catalogs:
       version: 4.3.6
 
 patchedDependencies:
-  '@sigstore/verify@3.1.0':
-    hash: ead7e03de97054fccf2b59f533bfbd6d817cd4521724b1cd5d75d601f4d5d4ea
-    path: patches/@sigstore__verify@3.1.0.patch
   undici@8.0.2:
     hash: b3d3916d68e5961fc0bea5fa0e2e49e69a539a5fe5bc463f8044bd1d667286b0
     path: patches/undici@8.0.2.patch
@@ -94,6 +91,9 @@ importers:
 
   .:
     devDependencies:
+      '@codecov/vite-plugin':
+        specifier: 'catalog:'
+        version: 2.0.1(vite@8.0.8(@types/node@25.6.0)(yaml@2.8.3))
       husky:
         specifier: 'catalog:'
         version: 9.1.7
@@ -106,8 +106,17 @@ importers:
       oxlint:
         specifier: 'catalog:'
         version: 1.60.0
+      rollup-plugin-sbom:
+        specifier: 'catalog:'
+        version: 3.1.0(ajv-formats@3.0.1(ajv@8.18.0))(ajv@8.18.0)(vite@8.0.8(@types/node@25.6.0)(yaml@2.8.3))
+      typedoc:
+        specifier: 'catalog:'
+        version: 0.28.19(typescript@6.0.2)
+      typedoc-theme-oxide:
+        specifier: 'catalog:'
+        version: 0.3.0(typedoc@0.28.19(typescript@6.0.2))
 
-  attest-public:
+  .github/actions/attest-addons:
     devDependencies:
       '@actions/attest':
         specifier: 'catalog:'
@@ -115,6 +124,9 @@ importers:
       '@actions/core':
         specifier: 'catalog:'
         version: 3.0.0
+      '@node-addon-slsa/internal':
+        specifier: workspace:*
+        version: link:../../../packages/internal
       '@types/node':
         specifier: 'catalog:'
         version: 25.6.0
@@ -124,12 +136,36 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 6.0.2
-
-  package:
-    devDependencies:
-      '@codecov/vite-plugin':
+      undici:
         specifier: 'catalog:'
-        version: 2.0.1(vite@8.0.8(@types/node@25.6.0)(yaml@2.8.3))
+        version: 8.0.2(patch_hash=b3d3916d68e5961fc0bea5fa0e2e49e69a539a5fe5bc463f8044bd1d667286b0)
+
+  .github/actions/verify-addons:
+    devDependencies:
+      '@actions/core':
+        specifier: 'catalog:'
+        version: 3.0.0
+      '@node-addon-slsa/internal':
+        specifier: workspace:*
+        version: link:../../../packages/internal
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.0
+      '@vercel/ncc':
+        specifier: 'catalog:'
+        version: 0.38.4
+      dedent:
+        specifier: 'catalog:'
+        version: 1.7.2
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.2
+      undici:
+        specifier: 'catalog:'
+        version: 8.0.2(patch_hash=b3d3916d68e5961fc0bea5fa0e2e49e69a539a5fe5bc463f8044bd1d667286b0)
+
+  packages/internal:
+    devDependencies:
       '@sigstore/bundle':
         specifier: 'catalog:'
         version: 4.0.0
@@ -141,7 +177,7 @@ importers:
         version: 4.0.2
       '@sigstore/verify':
         specifier: 'catalog:'
-        version: 3.1.0(patch_hash=ead7e03de97054fccf2b59f533bfbd6d817cd4521724b1cd5d75d601f4d5d4ea)
+        version: 3.1.0
       '@types/node':
         specifier: 'catalog:'
         version: 25.6.0
@@ -151,18 +187,63 @@ importers:
       dedent:
         specifier: 'catalog:'
         version: 1.7.2
-      rollup-plugin-sbom:
-        specifier: 'catalog:'
-        version: 3.1.0(ajv-formats@3.0.1(ajv@8.18.0))(ajv@8.18.0)(vite@8.0.8(@types/node@25.6.0)(yaml@2.8.3))
       sigstore:
         specifier: 'catalog:'
         version: 4.1.0
-      typedoc:
+      typescript:
         specifier: 'catalog:'
-        version: 0.28.19(typescript@6.0.2)
-      typedoc-theme-oxide:
+        version: 6.0.2
+      undici:
         specifier: 'catalog:'
-        version: 0.3.0(typedoc@0.28.19(typescript@6.0.2))
+        version: 8.0.2(patch_hash=b3d3916d68e5961fc0bea5fa0e2e49e69a539a5fe5bc463f8044bd1d667286b0)
+      vite:
+        specifier: 'catalog:'
+        version: 8.0.8(@types/node@25.6.0)(yaml@2.8.3)
+      vite-plugin-dts:
+        specifier: 'catalog:'
+        version: 5.0.0-beta.6(@microsoft/api-extractor@7.57.6(@types/node@25.6.0))(typescript@6.0.2)(vite@8.0.8(@types/node@25.6.0)(yaml@2.8.3))
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.4(@types/node@25.6.0)(@vitest/coverage-istanbul@4.1.4)(vite@8.0.8(@types/node@25.6.0)(yaml@2.8.3))
+      zod:
+        specifier: 'catalog:'
+        version: 4.3.6
+
+  packages/node-addon-slsa:
+    devDependencies:
+      '@actions/attest':
+        specifier: 'catalog:'
+        version: 3.2.0(@octokit/core@7.0.6)
+      '@actions/core':
+        specifier: 'catalog:'
+        version: 3.0.0
+      '@node-addon-slsa/internal':
+        specifier: workspace:*
+        version: link:../internal
+      '@sigstore/bundle':
+        specifier: 'catalog:'
+        version: 4.0.0
+      '@sigstore/core':
+        specifier: 'catalog:'
+        version: 3.2.0
+      '@sigstore/tuf':
+        specifier: 'catalog:'
+        version: 4.0.2
+      '@sigstore/verify':
+        specifier: 'catalog:'
+        version: 3.1.0
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.6.0
+      '@vitest/coverage-istanbul':
+        specifier: 'catalog:'
+        version: 4.1.4(vitest@4.1.4)
+      dedent:
+        specifier: 'catalog:'
+        version: 1.7.2
+      sigstore:
+        specifier: 'catalog:'
+        version: 4.1.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.2
@@ -3039,7 +3120,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@sigstore/verify@3.1.0(patch_hash=ead7e03de97054fccf2b59f533bfbd6d817cd4521724b1cd5d75d601f4d5d4ea)':
+  '@sigstore/verify@3.1.0':
     dependencies:
       '@sigstore/bundle': 4.0.0
       '@sigstore/core': 3.2.0
@@ -4293,7 +4374,7 @@ snapshots:
       '@sigstore/protobuf-specs': 0.5.1
       '@sigstore/sign': 4.1.1
       '@sigstore/tuf': 4.0.2
-      '@sigstore/verify': 3.1.0(patch_hash=ead7e03de97054fccf2b59f533bfbd6d817cd4521724b1cd5d75d601f4d5d4ea)
+      '@sigstore/verify': 3.1.0
     transitivePeerDependencies:
       - supports-color
 
