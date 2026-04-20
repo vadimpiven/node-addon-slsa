@@ -63,22 +63,18 @@ npm install node-addon-slsa
 Programmatic API:
 
 ```typescript
-import {
-  verifyPackageProvenance,
-  semVerString,
-  githubRepo,
-} from "node-addon-slsa";
+import { verifyPackage } from "node-addon-slsa";
 
-const provenance = await verifyPackageProvenance({
+const provenance = await verifyPackage({
   packageName: "my-native-addon",
-  version: semVerString("1.0.0"),
-  repo: githubRepo("owner/repo"),
+  repo: "owner/repo",
 });
 
-await provenance.verifyAddon({ sha256: sha256Hex(hexHash) });
+await provenance.verifyAddonFromFile("/path/to/addon.node.gz");
 ```
 
-Setup guide, threat model, and full API reference:
+Setup guide, threat model, and full API reference (including
+`requireAddon`, options, error handling):
 **[`packages/node-addon-slsa/README.md`](packages/node-addon-slsa/README.md)**
 
 The published npm package lives in

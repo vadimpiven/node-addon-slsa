@@ -21,7 +21,6 @@ import {
 } from "@sigstore/verify";
 import { bundleFromJSON } from "@sigstore/bundle";
 import dedent from "dedent";
-import { setTimeout as sleep } from "node:timers/promises";
 
 import {
   githubRepo,
@@ -37,12 +36,12 @@ import {
 import { readPackageJson } from "../package.ts";
 import { errorMessage } from "../util/error.ts";
 import { createHashPassthrough } from "../util/hash.ts";
-import { log } from "../util/log.ts";
-import { ProvenanceError, isProvenanceError } from "../util/provenance-error.ts";
+import { ProvenanceError } from "../util/provenance-error.ts";
 import type { CertificateOIDExpectations } from "./certificates.ts";
 import { resolveConfig } from "./config.ts";
 import { DEFAULT_ATTEST_SIGNER_PATTERN, DEFAULT_MANIFEST_PATH } from "./constants.ts";
 import { verifyRekorAttestations } from "./rekor.ts";
+import { withRekorIngestionRetry } from "./retry.ts";
 import { SLSA_MANIFEST_V1_SCHEMA_URL, SlsaManifestSchemaV1, type SlsaManifest } from "./schemas.ts";
 
 /** Load sigstore trust material (Fulcio CAs, Rekor public keys) from the TUF repository. */
@@ -92,29 +91,6 @@ export function buildSignerPatternFromPrefix(prefix: string): RegExp {
 /** Default `refPattern` for a given installed package version. */
 function defaultRefPattern(version: string): RegExp {
   return new RegExp(`^refs/tags/v?${escapeRegExp(version)}$`);
-}
-
-/**
- * Sigstore Rekor's prod instance ingests with ~30s latency; retry briefly.
- * Delay schedule is caller-tunable via `VerifyOptions.rekorIngestionRetryDelays`.
- */
-async function withRekorIngestionRetry<T>(
-  fn: () => Promise<T>,
-  delays: readonly number[],
-  signal?: AbortSignal,
-): Promise<T> {
-  for (const delay of [...delays, null]) {
-    try {
-      return await fn();
-    } catch (err) {
-      // Retry only "no Rekor entry found" — the ingestion-lag case.
-      const retriable = isProvenanceError(err) && /No Rekor entry found/.test(err.message);
-      if (!retriable || delay === null) throw err;
-      log(`Rekor ingestion lag: retrying in ${delay}ms`);
-      await sleep(delay, undefined, signal ? { signal } : undefined);
-    }
-  }
-  throw new Error("unreachable");
 }
 
 /**
@@ -194,6 +170,14 @@ export type VerifyPackageOptions = VerifyOptions & {
    * raw RegExp would let a careless `.*` nullify the entire pin.
    */
   readonly attestSignerPattern?: string;
+  /**
+   * Directory to resolve `packageName` from. Defaults to `process.cwd()`.
+   * Programmatic callers that don't want to depend on ambient cwd (test
+   * harnesses, host processes that may `chdir`, long-running services)
+   * should pass this explicitly — typically the host's own
+   * `require.resolve('./package.json')` directory, or the project root.
+   */
+  readonly cwd?: string;
 };
 
 /** Provenance handle returned by {@link verifyPackage}. */
@@ -349,11 +333,8 @@ export async function verifyPackageAt(
  * @example
  * Heavy use — pre-build the verifier once and reuse across many packages:
  * ```typescript
- * import {
- *   verifyPackage,
- *   loadTrustMaterial,
- *   createBundleVerifier,
- * } from "node-addon-slsa";
+ * import { verifyPackage } from "node-addon-slsa";
+ * import { loadTrustMaterial, createBundleVerifier } from "node-addon-slsa/advanced";
  *
  * const verifier = createBundleVerifier(await loadTrustMaterial());
  *
@@ -368,18 +349,20 @@ export async function verifyPackageAt(
  * ```
  */
 export async function verifyPackage(options: VerifyPackageOptions): Promise<PackageProvenance> {
-  // Resolve the consumer's installed package from cwd — the trailing slash
-  // is required so createRequire treats cwd as a directory (without it,
-  // createRequire would treat cwd as a *module* and resolve ../ from it).
-  const require = createRequire(process.cwd() + "/");
+  // Resolution base: caller-supplied `cwd` for programmatic use, falling
+  // back to `process.cwd()` for CLI-style callers. The trailing slash is
+  // required so createRequire treats the path as a directory — without
+  // it, createRequire would treat it as a *module* and resolve ../ from it.
+  const cwd = options.cwd ?? process.cwd();
+  const require = createRequire(cwd + "/");
   let pkgJsonPath: string;
   try {
     pkgJsonPath = require.resolve(`${options.packageName}/package.json`);
   } catch (err) {
     throw new Error(
       dedent`
-      could not resolve ${options.packageName}/package.json from ${process.cwd()}.
-      Ensure the package is installed.
+      could not resolve ${options.packageName}/package.json from ${cwd}.
+      Ensure the package is installed, or pass { cwd } explicitly.
     `,
       { cause: err },
     );
@@ -531,38 +514,6 @@ if (import.meta.vitest) {
     });
   });
 
-  describe("verifyAttestation", () => {
-    it("retries on Rekor ingestion lag", async ({ expect }) => {
-      let calls = 0;
-      const stub = async () => {
-        calls++;
-        if (calls === 1) {
-          throw new ProvenanceError("No Rekor entry found for artifact hash deadbeef");
-        }
-      };
-      vi.useFakeTimers();
-      try {
-        const out = withRekorIngestionRetry(stub, [2_000]);
-        // First retry delay is 2000ms; advance the virtual clock past it.
-        await vi.advanceTimersByTimeAsync(2_000);
-        await out;
-      } finally {
-        vi.useRealTimers();
-      }
-      expect(calls).toBe(2);
-    });
-
-    it("does not retry on non-ingestion-lag errors", async ({ expect }) => {
-      let calls = 0;
-      const stub = async () => {
-        calls++;
-        throw new ProvenanceError("cert issuer mismatch");
-      };
-      await expect(withRekorIngestionRetry(stub, [2_000])).rejects.toThrow(/cert issuer/);
-      expect(calls).toBe(1);
-    });
-  });
-
   describe("verifyPackage", () => {
     it("throws when package cannot be resolved", async ({ expect }) => {
       await expect(
@@ -570,7 +521,7 @@ if (import.meta.vitest) {
       ).rejects.toThrow(/could not resolve/);
     });
 
-    it("resolves packageName via createRequire", async ({ expect }) => {
+    it("resolves packageName via createRequire from process.cwd()", async ({ expect }) => {
       await using tmpRoot = await tempDir();
       const nm = join(tmpRoot.path, "node_modules", "my-pkg");
       await mkdir(nm, { recursive: true });
@@ -586,6 +537,37 @@ if (import.meta.vitest) {
       const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(tmpRoot.path);
       try {
         const p = await verifyPackage({ packageName: "my-pkg", repo: "owner/repo" });
+        expect(p.sourceRepo).toBe("owner/repo");
+      } finally {
+        cwdSpy.mockRestore();
+      }
+    });
+
+    it("resolves packageName from explicit `cwd` without touching process.cwd()", async ({
+      expect,
+    }) => {
+      await using tmpRoot = await tempDir();
+      const nm = join(tmpRoot.path, "node_modules", "my-pkg");
+      await mkdir(nm, { recursive: true });
+      await writeFile(
+        join(nm, "package.json"),
+        JSON.stringify({
+          name: "my-pkg",
+          version: "1.2.3",
+          addon: { path: "./dist/my.node", manifest: "./slsa-manifest.json" },
+        }),
+      );
+      await writeFile(join(nm, "slsa-manifest.json"), JSON.stringify(BASE_MANIFEST));
+      // Point process.cwd() somewhere the package is NOT installed; the
+      // explicit `cwd` option must take precedence.
+      await using otherCwd = await tempDir();
+      const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(otherCwd.path);
+      try {
+        const p = await verifyPackage({
+          packageName: "my-pkg",
+          repo: "owner/repo",
+          cwd: tmpRoot.path,
+        });
         expect(p.sourceRepo).toBe("owner/repo");
       } finally {
         cwdSpy.mockRestore();

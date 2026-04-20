@@ -9,7 +9,11 @@
  */
 
 // Public-facing symbols re-exported by node-addon-slsa
-export { ProvenanceError, isProvenanceError } from "./util/provenance-error.ts";
+export {
+  ProvenanceError,
+  isProvenanceError,
+  type ProvenanceErrorKind,
+} from "./util/provenance-error.ts";
 export {
   verifyPackage,
   verifyPackageAt,

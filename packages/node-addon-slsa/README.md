@@ -240,6 +240,7 @@ await verifyPackage({
   packageName: "my-native-addon",
   repo: "owner/repo",
   // All below are optional:
+  cwd: process.cwd(), // resolution base; defaults to process.cwd()
   refPattern: /^refs\/tags\/v?1\./, // restrict accepted tag refs
   attestSignerPattern, // fork's publish-workflow URL prefix
   timeoutMs: 60_000, // per-request timeout (default: 30s)
@@ -252,7 +253,10 @@ await verifyPackage({
 #### Error handling
 
 - `ProvenanceError` — verification failed (tampered artifact, mismatched
-  provenance). Do not retry.
+  provenance). Do not retry. The `kind` field discriminates the failure
+  mode: `"rekor-not-found"` means no Rekor entry exists for the hash (the
+  publish-side path retries briefly for sigstore ingestion lag; install
+  side treats it as final), `"other"` covers any other mismatch.
 - `Error` — transient issue (network timeout, service unavailable).
   Safe to retry.
 
@@ -265,6 +269,22 @@ try {
   } else {
     // Transient — safe to retry
   }
+}
+```
+
+#### Advanced: `node-addon-slsa/advanced`
+
+Heavy callers verifying many packages in one process can preload trust
+material once and inject a verifier:
+
+```typescript
+import { verifyPackage } from "node-addon-slsa";
+import { loadTrustMaterial, createBundleVerifier } from "node-addon-slsa/advanced";
+
+const verifier = createBundleVerifier(await loadTrustMaterial());
+for (const name of packages) {
+  const p = await verifyPackage({ packageName: name, repo: "owner/repo", verifier });
+  await p.verifyAddonFromFile(`/path/to/${name}/dist/addon.node.gz`);
 }
 ```
 

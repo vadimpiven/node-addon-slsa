@@ -27,7 +27,11 @@
  * not covered by semver.
  */
 
-export { ProvenanceError, isProvenanceError } from "@node-addon-slsa/internal";
+export {
+  ProvenanceError,
+  isProvenanceError,
+  type ProvenanceErrorKind,
+} from "@node-addon-slsa/internal";
 
 export { verifyPackage } from "@node-addon-slsa/internal";
 export type { VerifyPackageOptions, PackageProvenance } from "@node-addon-slsa/internal";
@@ -36,14 +40,10 @@ export { requireAddon } from "./loader.ts";
 export type { RequireAddonOptions } from "./loader.ts";
 
 export type { VerifyOptions } from "@node-addon-slsa/internal";
+// Re-exported so consumers passing `options.dispatcher` don't need a
+// direct dependency on `undici`.
 export type { Dispatcher } from "undici";
 
-/**
- * Escape hatches for heavy callers verifying many packages in one process.
- * Load trust material once, wrap it in a verifier, and pass it as
- * `options.verifier` to each `verifyPackage` call — saves a TUF round-trip
- * per call and lets callers tune sigstore thresholds via the underlying
- * `@sigstore/verify.Verifier`.
- */
-export { loadTrustMaterial, createBundleVerifier } from "@node-addon-slsa/internal";
-export type { BundleVerifier, TrustMaterial } from "@node-addon-slsa/internal";
+// Advanced knobs (trust-material loading, custom BundleVerifier) live at
+// `node-addon-slsa/advanced` to keep this main entry focused on the
+// safety-critical surface that 99% of consumers use.

@@ -221,11 +221,14 @@ export async function verifyRekorAttestations(options: {
   const uuids = await searchRekorEntries(sha256, config);
 
   if (uuids.length === 0) {
-    throw new ProvenanceError(dedent`
-      No Rekor entry found for artifact hash ${sha256}.
-      The artifact may have been tampered with, or the publish workflow
-      did not attest it via the reusable publish.yaml.
-    `);
+    throw new ProvenanceError(
+      dedent`
+        No Rekor entry found for artifact hash ${sha256}.
+        The artifact may have been tampered with, or the publish workflow
+        did not attest it via the reusable publish.yaml.
+      `,
+      { kind: "rekor-not-found" },
+    );
   }
 
   // Rekor returns oldest-first. Take the newest N — most likely to match

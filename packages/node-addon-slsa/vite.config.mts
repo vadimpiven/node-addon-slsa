@@ -12,6 +12,7 @@ export default mergeConfig(
       lib: {
         entry: {
           index: resolve("src/index.ts"),
+          advanced: resolve("src/advanced.ts"),
           cli: resolve("src/cli.ts"),
         },
       },
