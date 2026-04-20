@@ -206,61 +206,42 @@ calls are a `stat` plus `require` — safe to invoke at module load.
 ### Programmatic API
 
 ```typescript
-import {
-  verifyPackageProvenance,
-  verifyAddonProvenance,
-  requireAddon,
-  isProvenanceError,
-  sha256Hex,
-  semVerString,
-  githubRepo,
+import { verifyPackage, requireAddon, isProvenanceError } from "node-addon-slsa";
+import type {
+  VerifyPackageOptions,
+  PackageProvenance,
+  VerifyOptions,
 } from "node-addon-slsa";
-import type { PackageProvenance, VerifyOptions } from "node-addon-slsa";
 
-// Verify npm package provenance via sigstore.
-// Returns { runInvocationURI, verifyAddon() }.
-const provenance: PackageProvenance = await verifyPackageProvenance({
+// Verify the installed package's manifest attestation via Sigstore/Rekor.
+// Returns a handle for verifying individual addon binaries.
+const provenance: PackageProvenance = await verifyPackage({
   packageName: "my-native-addon",
-  version: semVerString("1.0.0"),
-  repo: githubRepo("owner/repo"),
+  repo: "owner/repo",
 });
 
-// Verify the addon binary was produced by the same workflow run.
-await provenance.verifyAddon({ sha256: sha256Hex(hexHash) });
+// Verify a binary you've already hashed.
+await provenance.verifyAddonBySha256(hexHash);
 
-// Standalone binary verification when you already have a URI.
-await verifyAddonProvenance({
-  sha256: sha256Hex(hexHash),
-  runInvocationURI,
-  repo: githubRepo("owner/repo"),
-});
+// Or hash-and-verify a file in one call.
+await provenance.verifyAddonFromFile("/path/to/addon.node.gz");
 
 // Runtime loader: verify-on-demand, then require the addon.
 // Supply the addon's type as T (defaults to `unknown`).
 const addon = await requireAddon<MyAddon>();
 ```
 
-#### Types
-
-| Type               | Constructor               | Purpose                                  |
-| ------------------ | ------------------------- | ---------------------------------------- |
-| `GitHubRepo`       | `githubRepo(value)`       | GitHub `owner/repo` slug                 |
-| `SemVerString`     | `semVerString(value)`     | Strict semver (no `v` prefix)            |
-| `Sha256Hex`        | `sha256Hex(value)`        | Lowercase hex-encoded SHA-256 (64 chars) |
-| `RunInvocationURI` | `runInvocationURI(value)` | GitHub Actions run invocation URL        |
-
-Constructors validate at runtime and throw `TypeError` on invalid input.
-
 #### Options
 
 All options have sensible defaults. Pass only what you need:
 
 ```typescript
-await verifyPackageProvenance({
+await verifyPackage({
   packageName: "my-native-addon",
-  version: semVerString("1.0.0"),
-  repo: githubRepo("owner/repo"),
+  repo: "owner/repo",
   // All below are optional:
+  refPattern: /^refs\/tags\/v?1\./, // restrict accepted tag refs
+  attestSignerPattern, // fork's publish-workflow URL prefix
   timeoutMs: 60_000, // per-request timeout (default: 30s)
   retryCount: 5, // retries after first attempt (default: 2)
   trustMaterial, // pre-loaded via loadTrustMaterial()
@@ -277,7 +258,7 @@ await verifyPackageProvenance({
 
 ```typescript
 try {
-  await provenance.verifyAddon({ sha256 });
+  await provenance.verifyAddonBySha256(sha256);
 } catch (err) {
   if (isProvenanceError(err)) {
     // Security failure — do not use this package version
