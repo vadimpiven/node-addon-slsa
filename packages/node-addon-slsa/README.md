@@ -142,7 +142,7 @@ jobs:
       - name: Upload pre-packed tarball
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
-          name: slsa-tarball # must match publish.yaml's `tarball-artifact` input
+          name: my-tarball # any name; passed to publish.yaml below
           path: ./*.tgz
           if-no-files-found: error
           retention-days: 1
@@ -155,6 +155,7 @@ jobs:
       id-token: write # sigstore OIDC + npm trusted publishing
       attestations: write
     with:
+      tarball-artifact: my-tarball # must match the upload-artifact name
       addons: |
         {
           "linux":  { "x64":   "https://github.com/owner/repo/releases/download/v${{ github.ref_name }}/my_addon-v${{ github.ref_name }}-linux-x64.node.gz" },
@@ -196,12 +197,12 @@ calls are a `stat` plus `require` — safe to invoke at module load.
 
 ### CLI
 
-| Command / Option | Purpose                                        |
-| ---------------- | ---------------------------------------------- |
-| `slsa wget`      | Download, verify, and install the native addon |
-| `slsa pack`      | Gzip-compress the native addon for release     |
-| `--help`, `-h`   | Show usage information                         |
-| `SLSA_DEBUG=1`   | Debug logging to stderr                        |
+| Command / Option              | Purpose                                                                            |
+| ----------------------------- | ---------------------------------------------------------------------------------- |
+| `slsa wget`                   | Download, verify, and install the native addon                                     |
+| `slsa pack [output-template]` | Gzip-compress the native addon. Template tokens: `{version}`/`{platform}`/`{arch}` |
+| `--help`, `-h`                | Show usage information                                                             |
+| `SLSA_DEBUG=1`                | Debug logging to stderr                                                            |
 
 ### Programmatic API
 

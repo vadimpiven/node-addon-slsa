@@ -20,8 +20,14 @@ import { pack, wget } from "./commands.ts";
 const HELP = `Usage: slsa <command> [options]
 
 Commands:
-  wget          Download, verify, and install the native addon
-  pack          Gzip-compress the native addon for release
+  wget                      Download, verify, and install the native addon
+  pack [output-template]    Gzip-compress the native addon for release.
+                            Output defaults to \`{addon.path}.gz\`. An
+                            optional template (relative to the package
+                            directory) may substitute \`{version}\`,
+                            \`{platform}\`, and \`{arch}\` — useful when
+                            uploading per-platform binaries to a shared
+                            release.
 
 Options:
   -h, --help    Show this help message
@@ -76,9 +82,18 @@ export async function runSlsaInner(options?: RunOptions): Promise<{ exitCode: nu
 
   try {
     switch (command) {
-      case "pack":
-        await pack(packageDir, signal ? { signal } : undefined);
+      case "pack": {
+        const output = positionals[1];
+        if (positionals.length > 2) {
+          console.error(HELP);
+          return { exitCode: 1 };
+        }
+        await pack(packageDir, {
+          ...(signal && { signal }),
+          ...(output !== undefined && { output }),
+        });
         break;
+      }
       case "wget":
         await wget(packageDir, {
           ...(signal && { signal }),
