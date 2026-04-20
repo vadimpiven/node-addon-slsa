@@ -196,12 +196,12 @@ calls are a `stat` plus `require` — safe to invoke at module load.
 
 ### CLI
 
-| Command / Option | Purpose                                        |
-| ---------------- | ---------------------------------------------- |
-| `slsa wget`      | Download, verify, and install the native addon |
-| `slsa pack`      | Gzip-compress the native addon for release     |
-| `--help`, `-h`   | Show usage information                         |
-| `SLSA_DEBUG=1`   | Debug logging to stderr                        |
+| Command / Option              | Purpose                                                                            |
+| ----------------------------- | ---------------------------------------------------------------------------------- |
+| `slsa wget`                   | Download, verify, and install the native addon                                     |
+| `slsa pack [output-template]` | Gzip-compress the native addon. Template tokens: `{version}`/`{platform}`/`{arch}` |
+| `--help`, `-h`                | Show usage information                                                             |
+| `SLSA_DEBUG=1`                | Debug logging to stderr                                                            |
 
 ### Programmatic API
 

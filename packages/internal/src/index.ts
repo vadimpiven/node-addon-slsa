@@ -65,5 +65,6 @@ export { assertWithinDir, isEnoent, isEnotdir, safeUnlink, tempDir } from "./uti
 export { fetchAndHashAddon } from "./util/addon-fetch.ts";
 export type { FetchAndHashAddonOptions } from "./util/addon-fetch.ts";
 export { createHashPassthrough } from "./util/hash.ts";
+export { evalTemplate } from "./util/template.ts";
 export { log, warn } from "./util/log.ts";
 export { errorMessage } from "./util/error.ts";

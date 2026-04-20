@@ -67717,7 +67717,7 @@ __nccwpck_require__.d(__webpack_exports__, {
   oe: () => (/* binding */ Lg)
 });
 
-// UNUSED EXPORTS: AddonInventorySchema, ArchSchema, BRAND_PAGES_BASE, BRAND_PUBLISH_WORKFLOW_PATH, BRAND_REPO, DEFAULT_ATTEST_SIGNER_PATTERN, DEFAULT_MANIFEST_PATH, PlatformSchema, ProvenanceError, PublishedSchemas, SlsaManifestSchemaV1, assertWithinDir, buildSignerPatternFromPrefix, createBundleVerifier, createHashPassthrough, extractExpectedRepo, fetchWithRetry, isEnoent, isEnotdir, isProvenanceError, log, readPackageJson, safeUnlink, tempDir, verifyPackage, verifyPackageAt, warn
+// UNUSED EXPORTS: AddonInventorySchema, ArchSchema, BRAND_PAGES_BASE, BRAND_PUBLISH_WORKFLOW_PATH, BRAND_REPO, DEFAULT_ATTEST_SIGNER_PATTERN, DEFAULT_MANIFEST_PATH, PlatformSchema, ProvenanceError, PublishedSchemas, SlsaManifestSchemaV1, assertWithinDir, buildSignerPatternFromPrefix, createBundleVerifier, createHashPassthrough, evalTemplate, extractExpectedRepo, fetchWithRetry, isEnoent, isEnotdir, isProvenanceError, log, readPackageJson, safeUnlink, tempDir, verifyPackage, verifyPackageAt, warn
 
 // EXTERNAL MODULE: ../../../packages/internal/dist/chunk-CzB3-c9G.js
 var chunk_CzB3_c9G = __nccwpck_require__(149);

@@ -32,6 +32,7 @@ import {
   DEFAULT_MANIFEST_PATH,
   DEFAULT_MAX_BINARY_BYTES,
   DEFAULT_MAX_BINARY_SECONDS,
+  evalTemplate,
   extractExpectedRepo,
   fetchWithRetry,
   log,
@@ -49,6 +50,12 @@ import {
 export type PackOptions = {
   /** Cancellation for the gzip pipeline. Partial output is cleaned up on abort. */
   readonly signal?: AbortSignal | undefined;
+  /**
+   * Output path relative to `packageDir`, defaults to `{addon.path}.gz`.
+   * Tokens `{version}`, `{platform}`, `{arch}` are substituted from
+   * `package.json#version`, `process.platform`, `process.arch`.
+   */
+  readonly output?: string | undefined;
 };
 
 async function readManifestFile(packageDir: string, manifestRel: string): Promise<SlsaManifest> {
@@ -224,8 +231,28 @@ export async function pack(packageDir: string, options?: PackOptions): Promise<v
   const binaryPath = join(resolvedPkgDir, addon.path);
   assertWithinDir({ baseDir: resolvedPkgDir, target: binaryPath, label: "addon.path" });
 
-  const packedFile = join(dirname(binaryPath), `${basename(binaryPath)}.gz`);
+  let packedFile: string;
+  if (options?.output !== undefined) {
+    const platform = PlatformSchema.safeParse(process.platform);
+    const arch = ArchSchema.safeParse(process.arch);
+    if (!platform.success || !arch.success) {
+      throw new Error(`unsupported platform/arch: ${process.platform}/${process.arch}`);
+    }
+    const rendered = evalTemplate(options.output, {
+      version,
+      platform: platform.data,
+      arch: arch.data,
+    });
+    packedFile = resolve(resolvedPkgDir, rendered);
+  } else {
+    packedFile = join(dirname(binaryPath), `${basename(binaryPath)}.gz`);
+  }
   assertWithinDir({ baseDir: resolvedPkgDir, target: packedFile, label: "packed output" });
+  log(`output: ${packedFile}`);
+
+  // Custom templates may target a subdirectory that doesn't exist yet
+  // (e.g. `dist/gz/...`). `wget` does the same before streaming.
+  await mkdir(dirname(packedFile), { recursive: true });
 
   try {
     await pipeline(

@@ -271,4 +271,58 @@ describe("pack", () => {
     await writeFile(join(tmp.path, "package.json"), JSON.stringify(pkg));
     await expect(pack(tmp.path)).rejects.toThrow(/addon\.path must be a relative/);
   });
+
+  it("writes to a templated output path", async ({ expect }) => {
+    await using tmp = await tempDir();
+    const distDir = join(tmp.path, "dist");
+    await mkdir(distDir, { recursive: true });
+    await writeFile(join(distDir, "node_reqwest.node"), FAKE_BINARY);
+    await writeTestPkg(tmp.path, "1.2.3");
+
+    await pack(tmp.path, { output: "dist/node_reqwest-v{version}-{platform}-{arch}.node.gz" });
+
+    const expected = `node_reqwest-v1.2.3-${process.platform}-${process.arch}.node.gz`;
+    const compressed = await readFile(join(distDir, expected));
+    const decompressed = await gunzipAsync(compressed);
+    expect(decompressed).toEqual(FAKE_BINARY);
+  });
+
+  it("creates missing parent directories for templated output", async ({ expect }) => {
+    await using tmp = await tempDir();
+    const distDir = join(tmp.path, "dist");
+    await mkdir(distDir, { recursive: true });
+    await writeFile(join(distDir, "node_reqwest.node"), FAKE_BINARY);
+    await writeTestPkg(tmp.path, "1.0.0");
+
+    await pack(tmp.path, { output: "dist/gz/{platform}-{arch}/addon.node.gz" });
+
+    const out = join(distDir, "gz", `${process.platform}-${process.arch}`, "addon.node.gz");
+    const compressed = await readFile(out);
+    const decompressed = await gunzipAsync(compressed);
+    expect(decompressed).toEqual(FAKE_BINARY);
+  });
+
+  it("rejects output template escaping the package directory", async ({ expect }) => {
+    await using tmp = await tempDir();
+    const distDir = join(tmp.path, "dist");
+    await mkdir(distDir, { recursive: true });
+    await writeFile(join(distDir, "node_reqwest.node"), FAKE_BINARY);
+    await writeTestPkg(tmp.path, "1.0.0");
+
+    await expect(pack(tmp.path, { output: "../evil-{version}.gz" })).rejects.toThrow(
+      /packed output/,
+    );
+  });
+
+  it("rejects unknown template placeholders in output", async ({ expect }) => {
+    await using tmp = await tempDir();
+    const distDir = join(tmp.path, "dist");
+    await mkdir(distDir, { recursive: true });
+    await writeFile(join(distDir, "node_reqwest.node"), FAKE_BINARY);
+    await writeTestPkg(tmp.path, "1.0.0");
+
+    await expect(pack(tmp.path, { output: "dist/out-{libc}.gz" })).rejects.toThrow(
+      /unresolved template placeholders/,
+    );
+  });
 });
