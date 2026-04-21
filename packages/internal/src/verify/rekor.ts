@@ -46,6 +46,17 @@ import {
 const BUNDLE_V03_MEDIA_TYPE = "application/vnd.dev.sigstore.bundle.v0.3+json";
 const IN_TOTO_PAYLOAD_TYPE = "application/vnd.in-toto+json";
 
+/**
+ * Extract the HTTP status code from an error raised by `fetchRekorEntry`
+ * or `fetchWithRetry`, if present. Both paths attach `statusCode` on
+ * `err.cause` (see http.ts retry path and `fetchRekorEntry`'s throw).
+ * Returns `undefined` for network/timeout errors without a status.
+ */
+function fetchStatusCode(err: unknown): number | undefined {
+  const cause = (err as { cause?: { statusCode?: unknown } })?.cause;
+  return typeof cause?.statusCode === "number" ? cause.statusCode : undefined;
+}
+
 async function searchRekorEntries(sha256: Sha256Hex, config: ResolvedConfig): Promise<string[]> {
   const response = await fetchWithRetry(config.rekorSearchUrl, {
     ...config,
@@ -67,13 +78,26 @@ async function searchRekorEntries(sha256: Sha256Hex, config: ResolvedConfig): Pr
 
 async function fetchRekorEntry(uuid: string, config: ResolvedConfig): Promise<RekorLogEntry> {
   const url = evalTemplate(config.rekorEntryUrl, { uuid });
-  const response = await fetchWithRetry(url, config);
+  // Rekor's search index commits UUIDs faster than the per-entry endpoint
+  // replicates them: search returns a UUID while a subsequent GET /entries/
+  // still 404s for ~seconds. `retryOn404: true` absorbs that window through
+  // `fetchWithRetry`'s in-band backoff; longer lags are caught by the
+  // outer `withRekorIngestionRetry` which distinguishes lag (404) from
+  // server errors (5xx) on the aggregate below.
+  const response = await fetchWithRetry(url, { ...config, retryOn404: true });
   if (response.statusCode >= 400) {
     await response.body.dump();
-    throw new Error(dedent`
-      failed to fetch Rekor entry ${uuid}: ${response.statusCode}.
-      ${REKOR_NETWORK_ADVICE}
-    `);
+    // Attach statusCode on the cause so the aggregate can split lag (404)
+    // from server errors (5xx) without parsing the message.
+    const cause = new Error(`HTTP ${response.statusCode}`);
+    Object.assign(cause, { statusCode: response.statusCode });
+    throw new Error(
+      dedent`
+        failed to fetch Rekor entry ${uuid}: ${response.statusCode}.
+        ${REKOR_NETWORK_ADVICE}
+      `,
+      { cause },
+    );
   }
   const data = RekorLogEntrySchema.parse(
     await readJsonBounded(response.body, config.maxJsonResponseBytes),
@@ -243,7 +267,8 @@ export async function verifyRekorAttestations(options: {
         `is flooding the log with fake entries for this hash.`,
     );
   }
-  let fetchFailures = 0;
+  let lagFailures = 0; // 404 on the per-entry endpoint — ingestion lag.
+  let serverFailures = 0; // 5xx / network / other non-404 fetch errors.
   let verifyFailures = 0;
 
   for (const uuid of capped) {
@@ -251,7 +276,8 @@ export async function verifyRekorAttestations(options: {
     try {
       entry = await fetchRekorEntry(uuid, config);
     } catch (err) {
-      fetchFailures++;
+      if (fetchStatusCode(err) === 404) lagFailures++;
+      else serverFailures++;
       log(`Rekor entry ${uuid} fetch failed: ${errorMessage(err)}`);
       continue;
     }
@@ -284,15 +310,37 @@ export async function verifyRekorAttestations(options: {
   }
 
   const n = capped.length;
-  if (fetchFailures === n) {
-    throw new Error(dedent`
-      Failed to fetch ${n} Rekor transparency log entries for this artifact.
-      ${REKOR_NETWORK_ADVICE}
-    `);
+  if (lagFailures > 0) {
+    // At least one candidate UUID 404'd after exhausting in-band retries
+    // — matches the ingestion-lag shape. Must trigger even when some
+    // entries fetched and verify-failed: workflow re-runs produce multiple
+    // attestations for the same hash, and the new (correct) one may still
+    // be lagging while an older (mismatched-OID) one verify-fails. Surface
+    // as `rekor-not-found` so the outer `withRekorIngestionRetry` waits
+    // and retries.
+    throw new ProvenanceError(
+      dedent`
+        Failed to fetch ${lagFailures} of ${n} Rekor transparency log entries for this artifact (404, likely ingestion lag).
+        ${REKOR_NETWORK_ADVICE}
+      `,
+      { kind: "rekor-not-found" },
+    );
+  }
+  if (serverFailures > 0 && verifyFailures === 0) {
+    // Pure server/network unreachability — not a verification failure.
+    // Don't mislabel as `rekor-not-found` (would trigger 30s of retries
+    // under a wrong diagnosis); the outer layer already retried on 5xx.
+    throw new Error(
+      dedent`
+        Rekor unavailable: ${serverFailures} of ${n} entries failed to fetch (non-404).
+        ${REKOR_NETWORK_ADVICE}
+      `,
+    );
   }
 
+  const totalFailures = verifyFailures + serverFailures;
   const detail =
-    verifyFailures + fetchFailures === n
+    totalFailures === n
       ? dedent`
           All ${n} Rekor entries failed verification.
           This may indicate an outdated sigstore trust root, a tampered
@@ -519,7 +567,9 @@ if (import.meta.vitest) {
       ).rejects.toThrow(/No Rekor entry found/);
     });
 
-    it("throws fetch-failure error when all entries error", async ({ expect }) => {
+    it("throws `Rekor unavailable` when every entry fetch returns 5xx", async ({ expect }) => {
+      // 5xx is server-side, not ingestion lag. Must NOT be labelled
+      // `rekor-not-found` — that would trigger 30s of misleading retries.
       await using dispatcher = mockFetch((opts) => {
         if (opts.path.includes("/index/retrieve")) {
           return {
@@ -534,10 +584,10 @@ if (import.meta.vitest) {
           sha256: sha256Hex("a".repeat(64)),
           repo: "o/r",
           expect: expect_fixture,
-          config: resolveConfig({ dispatcher }),
+          config: resolveConfig({ dispatcher, retryBaseMs: 1 }),
           verifier: stubVerifier,
         }),
-      ).rejects.toThrow(/Failed to fetch/);
+      ).rejects.toThrow(/Rekor unavailable/);
     });
   });
 
@@ -566,6 +616,88 @@ if (import.meta.vitest) {
       await expect(
         fetchRekorEntry("asked-for-uuid", resolveConfig({ dispatcher })),
       ).rejects.toThrow(/Rekor response did not contain the requested entry asked-for-uuid/);
+    });
+
+    it("retries past transient 404s (propagation lag after upload)", async ({ expect }) => {
+      // Rekor search indexes a UUID before the per-entry endpoint serves it;
+      // without retryOn404, a freshly uploaded attestation 404s on GET for
+      // seconds and we give up on the first attempt.
+      const uuid = "deadbeef";
+      let calls = 0;
+      await using dispatcher = mockFetch(() => {
+        calls++;
+        if (calls < 3) return { statusCode: 404, data: "" };
+        return { statusCode: 200, data: JSON.stringify({ [uuid]: fixtureEntry() }) };
+      });
+      const entry = await fetchRekorEntry(
+        uuid,
+        resolveConfig({ dispatcher, retryBaseMs: 1, retryCount: 3 }),
+      );
+      expect(entry).toBeDefined();
+      expect(calls).toBe(3);
+    });
+  });
+
+  describe("verifyRekorAttestations ingestion-lag", () => {
+    it("reports `rekor-not-found` when every searched UUID fetch fails", async ({ expect }) => {
+      // Search returns UUIDs but the entry endpoint 404s every one of
+      // them — looks like ingestion lag, not a real mismatch. Surface as
+      // `rekor-not-found` so `withRekorIngestionRetry` waits and retries.
+      const uuids = ["a".repeat(80), "b".repeat(80)];
+      await using dispatcher = mockFetch(({ path }) => {
+        if (path?.includes("index/retrieve")) {
+          return { statusCode: 200, data: JSON.stringify(uuids) };
+        }
+        return { statusCode: 404, data: "" };
+      });
+      await expect(
+        verifyRekorAttestations({
+          sha256: ARTIFACT_SHA,
+          repo: "cli/cli",
+          expect: expect_fixture,
+          verifier: stubVerifier,
+          config: resolveConfig({ dispatcher, retryBaseMs: 1, retryCount: 0 }),
+        }),
+      ).rejects.toMatchObject({ kind: "rekor-not-found" });
+    });
+
+    it("reports `rekor-not-found` in the mixed case: some fetchable, some lagging", async ({
+      expect,
+    }) => {
+      // Workflow re-runs produce multiple Rekor entries for the same hash.
+      // The new (correct) attestation can still be 404ing while an older
+      // (OID-mismatch) entry fetches + verify-fails. We must still bubble
+      // up `rekor-not-found` so ingestion-retry waits for the new one.
+      const [uuidOld, uuidNew] = ["a".repeat(80), "b".repeat(80)];
+      await using dispatcher = mockFetch(({ path }) => {
+        if (path?.includes("index/retrieve")) {
+          return { statusCode: 200, data: JSON.stringify([uuidOld, uuidNew]) };
+        }
+        if (path?.includes(uuidOld)) {
+          // Entry exists and parses; the stub verifier below throws,
+          // simulating an OID mismatch from a rebuild or older release.
+          return {
+            statusCode: 200,
+            data: JSON.stringify({ [uuidOld]: fixtureEntry() }),
+          };
+        }
+        // uuidNew: ingestion lag → 404.
+        return { statusCode: 404, data: "" };
+      });
+      const mismatchVerifier: BundleVerifier = {
+        verify: () => {
+          throw new Error("OID mismatch (simulated)");
+        },
+      };
+      await expect(
+        verifyRekorAttestations({
+          sha256: ARTIFACT_SHA,
+          repo: "cli/cli",
+          expect: expect_fixture,
+          verifier: mismatchVerifier,
+          config: resolveConfig({ dispatcher, retryBaseMs: 1, retryCount: 0 }),
+        }),
+      ).rejects.toMatchObject({ kind: "rekor-not-found" });
     });
   });
 }

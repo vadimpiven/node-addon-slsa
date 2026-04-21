@@ -64445,6 +64445,10 @@ async function main() {
             sourceCommit: commit,
             sourceRef: ref,
             trustMaterial,
+            // Same dispatcher as fetchAndHashAddon: a proxy/mTLS operator
+            // override flows through one place, and Rekor traffic is visible
+            // to MockAgent-based end-to-end tests.
+            dispatcher,
         });
         return { platform, arch, entry: { url, sha256 } };
     }));
@@ -67711,10 +67715,10 @@ __nccwpck_require__.d(__webpack_exports__, {
   Wx: () => (/* binding */ lg),
   f9: () => (/* binding */ gg),
   gJ: () => (/* binding */ Op),
-  Oz: () => (/* binding */ Zg),
+  Oz: () => (/* binding */ Qg),
   ac: () => (/* binding */ hg),
-  ak: () => (/* binding */ Fg),
-  oe: () => (/* binding */ Vg)
+  ak: () => (/* binding */ Ig),
+  oe: () => (/* binding */ Hg)
 });
 
 // UNUSED EXPORTS: AddonInventorySchema, ArchSchema, BRAND_PAGES_BASE, BRAND_PUBLISH_WORKFLOW_PATH, BRAND_REPO, DEFAULT_ATTEST_SIGNER_PATTERN, DEFAULT_MANIFEST_PATH, PlatformSchema, ProvenanceError, PublishedSchemas, SlsaManifestSchemaV1, assertWithinDir, buildSignerPatternFromPrefix, createBundleVerifier, createHashPassthrough, evalTemplate, extractExpectedRepo, fetchWithRetry, isEnoent, isEnotdir, isProvenanceError, log, readPackageJson, safeUnlink, tempDir, verifyPackage, verifyPackageAt, warn
@@ -104051,7 +104055,11 @@ var _g = Z().min(1), vg = Z().regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/), yg = 
 	})).min(1),
 	predicateType: Z()
 }), Og = "application/vnd.dev.sigstore.bundle.v0.3+json", kg = "application/vnd.in-toto+json";
-async function Ag(e, t) {
+function Ag(e) {
+	let t = e?.cause;
+	return typeof t?.statusCode == "number" ? t.statusCode : void 0;
+}
+async function jg(e, t) {
 	let n = await zh(t.rekorSearchUrl, {
 		...t,
 		method: "POST",
@@ -104064,12 +104072,19 @@ async function Ag(e, t) {
     `);
 	return Sg.parse(await ig(n.body, t.maxJsonResponseBytes));
 }
-async function jg(e, t) {
-	let n = await zh(ag(t.rekorEntryUrl, { uuid: e }), t);
-	if (n.statusCode >= 400) throw await n.body.dump(), Error(D`
-      failed to fetch Rekor entry ${e}: ${n.statusCode}.
-      ${$h}
-    `);
+async function Mg(e, t) {
+	let n = await zh(ag(t.rekorEntryUrl, { uuid: e }), {
+		...t,
+		retryOn404: !0
+	});
+	if (n.statusCode >= 400) {
+		await n.body.dump();
+		let t = /* @__PURE__ */ Error(`HTTP ${n.statusCode}`);
+		throw Object.assign(t, { statusCode: n.statusCode }), Error(D`
+        failed to fetch Rekor entry ${e}: ${n.statusCode}.
+        ${$h}
+      `, { cause: t });
+	}
 	let r = wg.parse(await ig(n.body, t.maxJsonResponseBytes)), i = r[e];
 	if (!i) throw Error(D`
       Rekor response did not contain the requested entry ${e}.
@@ -104078,7 +104093,7 @@ async function jg(e, t) {
     `);
 	return i;
 }
-function Mg(e, t) {
+function Ng(e, t) {
 	let n = Buffer.from(e.body, "base64"), r = Tg.parse(JSON.parse(n.toString("utf8"))), i = r.spec.signatures[0];
 	if (!i) throw Error("Rekor DSSE entry has no signatures");
 	let a = Buffer.from(i.verifier, "base64").toString("utf8"), o = new external_node_crypto_.X509Certificate(a).raw.toString("base64"), s = JSON.parse(Buffer.from(e.attestation.data, "base64").toString("utf8")), c = Eg.parse(s), l = JSON.parse(Buffer.from(c.payload, "base64").toString("utf8")), u = Dg.parse(l), d = t.toLowerCase();
@@ -104128,10 +104143,10 @@ function Mg(e, t) {
 		cert: rg.X509Certificate.parse(a)
 	};
 }
-async function Ng(e) {
+async function Pg(e) {
 	let { sha256: t, repo: n, expect: r, config: i, verifier: a } = e;
 	jh(`searching Rekor for ${t}`);
-	let o = await Ag(t, i);
+	let o = await jg(t, i);
 	if (o.length === 0) throw new M(D`
         No Rekor entry found for artifact hash ${t}.
         The artifact may have been tampered with, or the publish workflow
@@ -104139,46 +104154,49 @@ async function Ng(e) {
       `, { kind: "rekor-not-found" });
 	let s = i.maxRekorEntries > 0 ? o.slice(-i.maxRekorEntries) : o;
 	o.length > s.length && Mh(`Rekor returned ${o.length} entries for ${t}; only checking the newest ${s.length}. If verification fails, this may indicate an attacker is flooding the log with fake entries for this hash.`);
-	let c = 0, l = 0;
+	let c = 0, l = 0, u = 0;
 	for (let e of s) {
 		let o;
 		try {
-			o = await jg(e, i);
+			o = await Mg(e, i);
 		} catch (t) {
-			c++, jh(`Rekor entry ${e} fetch failed: ${Op(t)}`);
+			Ag(t) === 404 ? c++ : l++, jh(`Rekor entry ${e} fetch failed: ${Op(t)}`);
 			continue;
 		}
 		try {
-			let { bundle: e, cert: i } = Mg(o, t);
+			let { bundle: e, cert: i } = Ng(o, t);
 			a.verify(e), cg(i, n, r);
 			return;
 		} catch (t) {
 			if (N(t)) {
-				l++, jh(`Rekor entry ${e} OID check failed: ${t.message}`);
+				u++, jh(`Rekor entry ${e} OID check failed: ${t.message}`);
 				continue;
 			}
-			l++, jh(`Rekor entry ${e} failed verification: ${Op(t)}`);
+			u++, jh(`Rekor entry ${e} failed verification: ${Op(t)}`);
 		}
 	}
-	let u = s.length;
-	throw c === u ? Error(D`
-      Failed to fetch ${u} Rekor transparency log entries for this artifact.
-      ${$h}
-    `) : new M(D`
+	let d = s.length;
+	throw c > 0 ? new M(D`
+        Failed to fetch ${c} of ${d} Rekor transparency log entries for this artifact (404, likely ingestion lag).
+        ${$h}
+      `, { kind: "rekor-not-found" }) : l > 0 && u === 0 ? Error(D`
+        Rekor unavailable: ${l} of ${d} entries failed to fetch (non-404).
+        ${$h}
+      `) : new M(D`
     Addon provenance verification failed.
-    ${l + c === u ? D`
-          All ${u} Rekor entries failed verification.
+    ${u + l === d ? D`
+          All ${d} Rekor entries failed verification.
           This may indicate an outdated sigstore trust root, a tampered
           attestation, or a wrong Build Signer URI pin.
         ` : D`
-          ${u} Rekor entries found, none matched the expected workflow run
+          ${d} Rekor entries found, none matched the expected workflow run
           (${r.runInvocationURI}) or signer pattern.
         `}
   `);
 }
 //#endregion
 //#region src/verify/retry.ts
-async function Pg(e, t, n) {
+async function Fg(e, t, n) {
 	for (let r of [...t, null]) try {
 		return await e();
 	} catch (e) {
@@ -104189,35 +104207,35 @@ async function Pg(e, t, n) {
 }
 //#endregion
 //#region src/verify/verify.ts
-async function Fg() {
+async function Ig() {
 	return (0, Ho.toTrustMaterial)(await (0, Vo.getTrustedRoot)());
 }
-function Ig(e) {
+function Lg(e) {
 	let t = new Ho.Verifier(e);
 	return { verify(e) {
 		t.verify((0, Ho.toSignedEntity)((0, Uo.bundleFromJSON)(e)));
 	} };
 }
-function Lg(e) {
+function Rg(e) {
 	return e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-function Rg(e) {
-	return e instanceof RegExp ? e : RegExp(`^${Lg(e)}$`);
-}
 function zg(e) {
-	return RegExp(`^${Lg(e)}@[0-9a-f]{40}$`);
+	return e instanceof RegExp ? e : RegExp(`^${Rg(e)}$`);
 }
 function Bg(e) {
-	return RegExp(`^refs/tags/v?${Lg(e)}$`);
+	return RegExp(`^${Rg(e)}@[0-9a-f]{40}$`);
 }
-async function Vg(e) {
-	let t = Go(e.sha256), n = Ko(e.repo), r = qo(e.runInvocationURI), i = Jo(e.sourceCommit), a = Yo(e.sourceRef), o = ng(e), s = o.verifier ?? Ig(o.trustMaterial ?? await Fg()), c = {
+function Vg(e) {
+	return RegExp(`^refs/tags/v?${Rg(e)}$`);
+}
+async function Hg(e) {
+	let t = Go(e.sha256), n = Ko(e.repo), r = qo(e.runInvocationURI), i = Jo(e.sourceCommit), a = Yo(e.sourceRef), o = ng(e), s = o.verifier ?? Lg(o.trustMaterial ?? await Ig()), c = {
 		sourceCommit: i,
 		sourceRef: a,
 		runInvocationURI: r,
-		attestSignerPattern: e.attestSignerPattern ? zg(e.attestSignerPattern) : tg
+		attestSignerPattern: e.attestSignerPattern ? Bg(e.attestSignerPattern) : tg
 	};
-	await Pg(() => Ng({
+	await Fg(() => Pg({
 		sha256: t,
 		repo: n,
 		expect: c,
@@ -104225,13 +104243,13 @@ async function Vg(e) {
 		verifier: s
 	}), o.rekorIngestionRetryDelays, e.signal);
 }
-async function Hg(e) {
+async function Ug(e) {
 	let { stream: t, digest: n } = kp();
 	return await h(o(e), t, async (e) => {
 		for await (let t of e);
 	}), n();
 }
-async function Ug(e, t) {
+async function Wg(e, t) {
 	let n = p(e, t), r;
 	try {
 		r = await c(n, "utf8");
@@ -104251,8 +104269,8 @@ async function Ug(e, t) {
     `);
 	}
 }
-async function Wg(e, t) {
-	let n = await Ep(e), r = await Ug(e, n.addon.manifest ?? "slsa-manifest.json");
+async function Gg(e, t) {
+	let n = await Ep(e), r = await Wg(e, n.addon.manifest ?? "slsa-manifest.json");
 	if (r.packageName !== n.name) throw new M(D`
       manifest.packageName does not match installed package.json name.
       manifest.packageName: ${r.packageName}
@@ -104269,15 +104287,15 @@ async function Wg(e, t) {
       manifest.sourceRepo: ${r.sourceRepo}
       expected:            ${i}
     `);
-	let a = Rg(t.refPattern ?? Bg(n.version));
+	let a = zg(t.refPattern ?? Vg(n.version));
 	if (!a.test(r.sourceRef)) throw new M(D`
       manifest.sourceRef does not match expected refPattern.
       manifest.sourceRef: ${r.sourceRef}
       pattern:            ${a.source}
     `);
-	let o = qo(r.runInvocationURI), s = t.attestSignerPattern ? zg(t.attestSignerPattern) : tg, c = async (e) => {
-		let n = ng(t), a = n.verifier ?? Ig(n.trustMaterial ?? await Fg());
-		await Ng({
+	let o = qo(r.runInvocationURI), s = t.attestSignerPattern ? Bg(t.attestSignerPattern) : tg, c = async (e) => {
+		let n = ng(t), a = n.verifier ?? Lg(n.trustMaterial ?? await Ig());
+		await Pg({
 			sha256: e,
 			repo: i,
 			expect: {
@@ -104297,10 +104315,10 @@ async function Wg(e, t) {
 		sourceRef: r.sourceRef,
 		runInvocationURI: r.runInvocationURI,
 		verifyAddonBySha256: async (e) => c(Go(e)),
-		verifyAddonFromFile: async (e) => c(await Hg(e))
+		verifyAddonFromFile: async (e) => c(await Ug(e))
 	};
 }
-async function Gg(e) {
+async function Kg(e) {
 	let t = e.cwd ?? process.cwd(), n = a(t + "/"), r;
 	try {
 		r = n.resolve(`${e.packageName}/package.json`);
@@ -104310,17 +104328,17 @@ async function Gg(e) {
       Ensure the package is installed, or pass { cwd } explicitly.
     `, { cause: n });
 	}
-	return Wg(d(r), e);
+	return Gg(d(r), e);
 }
 //#endregion
 //#region src/util/fs.ts
-function Kg(e) {
+function qg(e) {
 	return e instanceof Error && "code" in e && e.code === "ENOENT";
 }
-function qg(e) {
+function Jg(e) {
 	return e instanceof Error && "code" in e && e.code === "ENOTDIR";
 }
-async function Jg(e = "slsa-") {
+async function Yg(e = "slsa-") {
 	let t = await s(f(x(), e));
 	return {
 		path: t,
@@ -104330,7 +104348,7 @@ async function Jg(e = "slsa-") {
 		})
 	};
 }
-function Yg({ baseDir: e, target: t, label: n }) {
+function Xg({ baseDir: e, target: t, label: n }) {
 	let r = p(e), i = p(t);
 	if (!i.startsWith(r + m)) throw Error(D`
         ${n} escapes the package directory — possible path traversal.
@@ -104340,16 +104358,16 @@ function Yg({ baseDir: e, target: t, label: n }) {
         If you did not author this package, report this to the maintainer.
       `);
 }
-async function Xg(e, t) {
+async function Zg(e, t) {
 	try {
 		await u(e);
 	} catch (e) {
-		Kg(e) || Mh(`failed to clean up ${t}: ${e}`);
+		qg(e) || Mh(`failed to clean up ${t}: ${e}`);
 	}
 }
 //#endregion
 //#region src/util/addon-fetch.ts
-async function Zg(e, t) {
+async function Qg(e, t) {
 	let { statusCode: n, headers: r, body: i } = await zh(e, {
 		timeoutMs: t.maxBinaryMs,
 		stallTimeoutMs: t.maxBinaryMs,

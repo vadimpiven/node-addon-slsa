@@ -99,6 +99,10 @@ export async function main(): Promise<void> {
         sourceCommit: commit,
         sourceRef: ref,
         trustMaterial,
+        // Same dispatcher as fetchAndHashAddon: a proxy/mTLS operator
+        // override flows through one place, and Rekor traffic is visible
+        // to MockAgent-based end-to-end tests.
+        dispatcher,
       });
       return { platform, arch, entry: { url, sha256 } satisfies AddonEntry };
     }),
