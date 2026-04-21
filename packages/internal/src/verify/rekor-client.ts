@@ -189,7 +189,12 @@ if (import.meta.vitest) {
     it("maps a 404 to `unavailable` (lag applies to entries, not search)", async ({ expect }) => {
       const client = createRekorClient({
         http: fakeHttp(() => ({
-          error: new HttpError({ kind: "status", url: searchUrl, status: 404, message: "not found" }),
+          error: new HttpError({
+            kind: "status",
+            url: searchUrl,
+            status: 404,
+            message: "not found",
+          }),
         })),
         searchUrl,
         entryUrl,
