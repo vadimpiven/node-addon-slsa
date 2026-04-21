@@ -59,11 +59,14 @@ export type RekorClientOptions = {
 
 function mapHttpError(err: unknown, uuid?: string): RekorError {
   if (err instanceof HttpError) {
-    if (err.kind === "status" && err.status === 404) {
+    // 404 is only "lag" on the per-entry endpoint (replication catches
+    // up after ingestion). A 404 on search is a misconfigured URL or API
+    // drift — surface as unavailable so the label matches reality.
+    if (err.kind === "status" && err.status === 404 && uuid !== undefined) {
       return new RekorError({
         kind: "lag",
-        ...(uuid !== undefined && { uuid }),
-        message: `Rekor entry ${uuid ?? "(search)"} not yet replicated (HTTP 404). ${REKOR_NETWORK_ADVICE}`,
+        uuid,
+        message: `Rekor entry ${uuid} not yet replicated (HTTP 404). ${REKOR_NETWORK_ADVICE}`,
         cause: err,
       });
     }
@@ -174,6 +177,19 @@ if (import.meta.vitest) {
       const client = createRekorClient({
         http: fakeHttp(() => ({
           error: new HttpError({ kind: "status", url: searchUrl, status: 500, message: "boom" }),
+        })),
+        searchUrl,
+        entryUrl,
+      });
+      const err = await client.search(sha256Hex("a".repeat(64))).catch((e) => e as unknown);
+      expect(err).toBeInstanceOf(RekorError);
+      expect((err as RekorError).kind).toBe("unavailable");
+    });
+
+    it("maps a 404 to `unavailable` (lag applies to entries, not search)", async ({ expect }) => {
+      const client = createRekorClient({
+        http: fakeHttp(() => ({
+          error: new HttpError({ kind: "status", url: searchUrl, status: 404, message: "not found" }),
         })),
         searchUrl,
         entryUrl,

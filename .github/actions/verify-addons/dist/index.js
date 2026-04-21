@@ -103991,10 +103991,10 @@ var dg = $().min(1), fg = $().regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/), pg = 
 	}
 };
 function Cg(e, t) {
-	return e instanceof qc ? e.kind === "status" && e.status === 404 ? new Sg({
+	return e instanceof qc ? e.kind === "status" && e.status === 404 && t !== void 0 ? new Sg({
 		kind: "lag",
-		...t !== void 0 && { uuid: t },
-		message: `Rekor entry ${t ?? "(search)"} not yet replicated (HTTP 404). ${Zh}`,
+		uuid: t,
+		message: `Rekor entry ${t} not yet replicated (HTTP 404). ${Zh}`,
 		cause: e
 	}) : new Sg({
 		kind: "unavailable",
