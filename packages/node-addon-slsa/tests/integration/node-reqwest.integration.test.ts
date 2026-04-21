@@ -97,6 +97,7 @@ describe.skipIf(!LIVE)("node-reqwest@0.0.18 live integration", () => {
     await expect(
       verifyAttestation({
         sha256,
+        bundleUrl: `${TARGET.addon.url}.sigstore`,
         repo: TARGET.repo,
         runInvocationURI: TARGET.runInvocationURI,
         sourceCommit: TARGET.sourceCommit,

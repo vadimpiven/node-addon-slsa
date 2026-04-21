@@ -6,12 +6,19 @@
  * shape to build a custom publisher.
  *
  * Flow: fetch each declared addon URL (with CDN-propagation-aware
- * retries), SHA-256 the body under a size cap, then mint a single
- * build-provenance attestation on the public-good Sigstore instance.
+ * retries), SHA-256 the body under a size cap, mint one sigstore bundle
+ * covering all subjects on the public-good Sigstore instance, then
+ * serialize the bundle to disk at a predictable path so the caller's
+ * workflow can upload it as a sidecar release asset. Output `bundles` is
+ * a JSON array mapping each subject to its chosen `bundleUrl` and the
+ * on-disk path — the upload step consumes it.
+ *
  * Running inside the reusable workflow pins the Fulcio cert's Build
- * Signer URI to this repo's `publish.yaml`, which `verifyPackage`
- * enforces via `DEFAULT_ATTEST_SIGNER_PATTERN`.
+ * Signer URI to this workflow (via `DEFAULT_ATTEST_SIGNER_PATTERN`).
  */
+
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 import { attestProvenance, type Subject } from "@actions/attest";
 import { getInput, setFailed, setOutput } from "@actions/core";
@@ -35,11 +42,13 @@ function readNumberInput(name: string, fallback: number): number {
 
 /**
  * Entry point invoked by the action runner. Reads inputs, hashes every
- * addon, calls `attestProvenance`, and emits the attestation id.
+ * addon, mints one aggregated sigstore bundle, writes it to disk so the
+ * calling workflow can upload each copy to its configured `bundleUrl`.
  */
 export async function main(): Promise<void> {
   const addonsRaw = getInput("addons", { required: true });
   const token = getInput("github-token", { required: true });
+  const bundleDir = getInput("bundle-dir", { required: true });
   const maxBinaryBytes = readNumberInput("max-binary-bytes", DEFAULT_MAX_BINARY_BYTES);
   const maxBinaryMs = readNumberInput("max-binary-seconds", DEFAULT_MAX_BINARY_SECONDS) * 1000;
   const retryCount = readNumberInput("retry-count", 10);
@@ -52,8 +61,8 @@ export async function main(): Promise<void> {
 
   const http = createHttpClient({ dispatcher: getGlobalDispatcher() });
 
-  const subjects: Subject[] = await Promise.all(
-    entries.map(async ({ platform, arch, url }) => {
+  const hashed = await Promise.all(
+    entries.map(async ({ platform, arch, url, bundleUrl }) => {
       const sha256 = await fetchAndHashAddon(http, url, {
         maxBinaryBytes,
         maxBinaryMs,
@@ -61,12 +70,34 @@ export async function main(): Promise<void> {
         retryCount,
         retryOn404: true,
       });
-      return { name: url, digest: { sha256 } } satisfies Subject;
+      return { platform, arch, url, bundleUrl, sha256 };
     }),
   );
 
+  // One multi-subject attestation — single Fulcio + Rekor round-trip regardless
+  // of how many addons the release declares.
+  const subjects: Subject[] = hashed.map(({ url, sha256 }) => ({
+    name: url,
+    digest: { sha256 },
+  }));
   const result = await attestProvenance({ subjects, token, sigstore: "public-good" });
+
+  // Persist the bundle per-addon. The bundle JSON is identical across
+  // subjects (single multi-subject attestation); we write one copy per
+  // sidecar destination so the upload step is a straight mapping.
+  await mkdir(bundleDir, { recursive: true });
+  const bundleJson = JSON.stringify(result.bundle);
+  const records = await Promise.all(
+    hashed.map(async ({ platform, arch, url, bundleUrl, sha256 }) => {
+      const filename = `${platform}-${arch}-${sha256}.sigstore`;
+      const path = join(bundleDir, filename);
+      await writeFile(path, bundleJson);
+      return { platform, arch, url, bundleUrl, sha256, path };
+    }),
+  );
+
   setOutput("attestation-id", result.attestationID);
+  setOutput("bundles", JSON.stringify(records));
 }
 
 // Auto-run unless imported by a test harness (vitest sets VITEST=true).

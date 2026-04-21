@@ -6,9 +6,24 @@ description: >-
   public Rekor transparency log. Must run inside node-addon-slsa's
   reusable publish.yaml — wrapping ensures the Fulcio cert's Build Signer
   URI is pinned to this repo's workflow, which `verifyPackage` enforces.
+  The sigstore bundle is written to `bundle-dir`; the caller's workflow
+  uploads it to each addon's `bundleUrl` before the draft release is
+  finalized.
 inputs:
   addons:
-    description: "JSON map of addon URLs to attest, shape `{ [platform]: { [arch]: url } }`."
+    description: >-
+      JSON map of addon URL + sidecar bundle URL,
+      shape `{ [platform]: { [arch]: { url, bundleUrl } } }`.
+      `url` is the binary (`.node.gz`); `bundleUrl` is where the sigstore
+      bundle will be served at install time (required — sidecar
+      distribution avoids the GitHub Attestations API, which requires
+      auth for private source repos).
+    required: true
+  bundle-dir:
+    description: >-
+      Directory to write bundle files into. One file per addon; the
+      `bundles` output maps each `bundleUrl` to its on-disk path for the
+      caller's upload step.
     required: true
   github-token:
     description: "Token used to mint the Sigstore OIDC identity. Defaults to the workflow's github.token."
@@ -29,6 +44,11 @@ inputs:
 outputs:
   attestation-id:
     description: "Numeric ID of the created attestation."
+  bundles:
+    description: >-
+      JSON array of `{ platform, arch, url, bundleUrl, sha256, path }`
+      records — the caller's workflow reads this and uploads each
+      `path` to `bundleUrl` (typically `gh release upload`).
 runs:
   using: "node24"
   main: "dist/index.js"

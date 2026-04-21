@@ -5,13 +5,13 @@
  * of the reusable `publish.yaml` workflow. Fork authors can copy this
  * shape to build a custom verifier.
  *
- * Trust-critical: for each declared addon URL, fetch under a size cap,
- * hash, and `verifyAttestation` against Rekor with the Build Signer URI
- * pinned to this workflow (via `DEFAULT_ATTEST_SIGNER_PATTERN`). Emits
- * the SLSA manifest as a JSON string; the enclosing workflow resolves
- * the target path and writes the file. Pure in/out — no filesystem
- * reads or writes — so auditors can reason about the crypto-critical
- * code in isolation and tests don't need a temp dir.
+ * Trust-critical: for each declared addon URL, fetch the binary under a
+ * size cap, hash it, then fetch the sidecar sigstore bundle at the
+ * declared `bundleUrl`, run the full `@sigstore/verify` chain against
+ * TUF-backed trust material, and check the Fulcio cert's OIDs against
+ * this run's commit / ref / run-invocation-URI and the Build Signer
+ * pattern (`DEFAULT_ATTEST_SIGNER_PATTERN`). Emits the SLSA manifest as
+ * a JSON string; the enclosing workflow writes it into the tarball.
  */
 
 import { getInput, setFailed, setOutput } from "@actions/core";
@@ -78,12 +78,12 @@ export async function main(): Promise<void> {
   }
 
   const trustMaterial = await loadTrustMaterial();
-  // One HttpClient for addon fetches; Rekor traffic inside
-  // `verifyAttestation` builds its own from the passed `dispatcher`.
+  // One HttpClient for addon fetches + bundle fetches; `verifyAttestation`
+  // builds its own from the passed `dispatcher`.
   const http = createHttpClient({ dispatcher: getGlobalDispatcher() });
 
   const verified = await Promise.all(
-    entries.map(async ({ platform, arch, url }) => {
+    entries.map(async ({ platform, arch, url, bundleUrl }) => {
       const sha256 = await fetchAndHashAddon(http, url, {
         maxBinaryBytes,
         maxBinaryMs,
@@ -91,6 +91,7 @@ export async function main(): Promise<void> {
       });
       await verifyAttestation({
         sha256,
+        bundleUrl,
         repo,
         runInvocationURI: runURI,
         sourceCommit: commit,
@@ -98,7 +99,7 @@ export async function main(): Promise<void> {
         trustMaterial,
         dispatcher: getGlobalDispatcher(),
       });
-      return { platform, arch, entry: { url, sha256 } satisfies AddonEntry };
+      return { platform, arch, entry: { url, bundleUrl, sha256 } satisfies AddonEntry };
     }),
   );
 

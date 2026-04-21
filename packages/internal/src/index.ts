@@ -62,8 +62,6 @@ export type {
   HttpErrorKind,
   RetryDecision,
 } from "./http.ts";
-export { createRekorClient, RekorError } from "./verify/rekor-client.ts";
-export type { RekorClient, RekorClientOptions, RekorErrorKind } from "./verify/rekor-client.ts";
 export { assertWithinDir, isEnoent, isEnotdir, safeUnlink, tempDir } from "./util/fs.ts";
 export { fetchAndHashAddon } from "./util/addon-fetch.ts";
 export type { FetchAndHashAddonOptions } from "./util/addon-fetch.ts";

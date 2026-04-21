@@ -48,8 +48,12 @@ const AddonArtifactUrlSchema = HttpsUrlSchema.refine(
   { message: "addon url path must end with .node.gz" },
 );
 
+/** Sidecar bundle URL — the sigstore bundle companion to the addon. */
+const AddonBundleUrlSchema = HttpsUrlSchema;
+
 export const AddonEntrySchema = z.object({
   url: AddonArtifactUrlSchema,
+  bundleUrl: AddonBundleUrlSchema,
   sha256: z.string().regex(/^[0-9a-f]{64}$/),
 });
 export type AddonEntry = z.infer<typeof AddonEntrySchema>;
@@ -60,31 +64,39 @@ export const AddonInventorySchema = z.partialRecord(
 );
 export type AddonInventory = z.infer<typeof AddonInventorySchema>;
 
+/** Leaf shape accepted by `verify-addons` / `attest-addons`: binary URL + sidecar bundle URL. */
+const AddonUrlLeafSchema = z.object({
+  url: AddonArtifactUrlSchema,
+  bundleUrl: AddonBundleUrlSchema,
+});
+export type AddonUrlLeaf = z.infer<typeof AddonUrlLeafSchema>;
+
 /**
  * Declared-URLs shape accepted by `verify-addons` / `attest-addons`: nested
- * `{ [platform]: { [arch]: httpsUrl } }`. Identical key set to
- * {@link AddonInventorySchema}; leaves are bare URLs because sha256 is
- * computed by fetching each URL.
+ * `{ [platform]: { [arch]: { url, bundleUrl } } }`. Both URLs are mandatory:
+ * sigstore bundles are fetched as sidecar artifacts at `bundleUrl` (not from
+ * the Attestations API, which requires auth for private source repos).
  */
 export const AddonUrlMapSchema = z.partialRecord(
   PlatformSchema,
-  z.partialRecord(ArchSchema, AddonArtifactUrlSchema),
+  z.partialRecord(ArchSchema, AddonUrlLeafSchema),
 );
 export type AddonUrlMap = z.infer<typeof AddonUrlMapSchema>;
 
 /**
- * Flatten a nested {@link AddonUrlMap} into ordered `{ platform, arch, url }`
- * triples. Centralises the `Object.entries(...).flatMap(...)` idiom used by
+ * Flatten a nested {@link AddonUrlMap} into ordered `{ platform, arch, url, bundleUrl }`
+ * tuples. Centralises the `Object.entries(...).flatMap(...)` idiom used by
  * both publish-side actions so key typing is consistent.
  */
 export function flattenAddonUrlMap(
   map: AddonUrlMap,
-): Array<{ platform: Platform; arch: Arch; url: string }> {
+): Array<{ platform: Platform; arch: Arch; url: string; bundleUrl: string }> {
   return Object.entries(map).flatMap(([platform, byArch]) =>
-    Object.entries(byArch ?? {}).map(([arch, url]) => ({
+    Object.entries(byArch ?? {}).map(([arch, leaf]) => ({
       platform: platform as Platform,
       arch: arch as Arch,
-      url,
+      url: leaf.url,
+      bundleUrl: leaf.bundleUrl,
     })),
   );
 }
@@ -133,80 +145,9 @@ export const PublishedSchemas = {
   "slsa-manifest.v1.json": SlsaManifestSchemaV1,
 } as const;
 
-// --- Rekor API response schemas (used by rekor.ts) ---
-
-/** Rekor search-by-hash response: hex entry UUIDs. */
-export const RekorSearchResponseSchema = z.array(z.string().regex(/^[a-f0-9]+$/));
-
-const RekorLogEntryObject = z.object({
-  body: z.string(),
-  integratedTime: z.number(),
-  logID: z.string(),
-  logIndex: z.number(),
-  // Full DSSE envelope — base64 of JSON `{payloadType, payload, signatures}`.
-  // Required for subject-digest cross-check and Verifier signature check:
-  // Rekor's `body` only carries envelope/payload hashes, not the payload
-  // itself, so without this field no subject binding is possible.
-  attestation: z.object({ data: z.string() }),
-  verification: z.object({
-    signedEntryTimestamp: z.string(),
-    inclusionProof: z.object({
-      checkpoint: z.string(),
-      hashes: z.array(z.string()),
-      logIndex: z.number(),
-      rootHash: z.string(),
-      treeSize: z.number(),
-    }),
-  }),
-});
-
-export type RekorLogEntry = z.infer<typeof RekorLogEntryObject>;
-
-/** Rekor GET /log/entries/{uuid}: `{ [uuid]: entry }`. */
-export const RekorLogEntrySchema = z.record(z.string(), RekorLogEntryObject);
-
-export const RekorDsseBodySchema = z.object({
-  apiVersion: z.string(),
-  kind: z.literal("dsse"),
-  spec: z.object({
-    envelopeHash: z.object({
-      algorithm: z.literal("sha256"),
-      value: z.string(),
-    }),
-    payloadHash: z.object({
-      algorithm: z.literal("sha256"),
-      value: z.string(),
-    }),
-    signatures: z
-      .array(
-        z.object({
-          signature: z.string(),
-          verifier: z.string(),
-        }),
-      )
-      .min(1),
-  }),
-});
-
 /**
- * DSSE envelope as returned by Rekor's `attestation.data` (base64-decoded).
- * `payload` is base64-encoded in-toto Statement bytes.
- */
-export const DsseEnvelopeSchema = z.object({
-  payloadType: z.string(),
-  payload: z.string(),
-  signatures: z
-    .array(
-      z.object({
-        sig: z.string(),
-        keyid: z.string().optional(),
-      }),
-    )
-    .min(1),
-});
-
-/**
- * Minimal in-toto Statement shape. Only `subject` is used for the artifact
+ * Minimal in-toto Statement shape, as decoded from a sigstore bundle's
+ * `dsseEnvelope.payload`. Only `subject` is used for the addon-digest
  * binding; `predicateType` and `predicate` are carried through unread.
  */
 export const InTotoStatementSchema = z.object({
@@ -234,7 +175,11 @@ if (import.meta.vitest) {
     sourceRef: "refs/tags/v1.2.3",
     addons: {
       linux: {
-        x64: { url: "https://example.com/a.node.gz", sha256: "b".repeat(64) },
+        x64: {
+          url: "https://example.com/a.node.gz",
+          bundleUrl: "https://example.com/a.node.gz.sigstore",
+          sha256: "b".repeat(64),
+        },
       },
     },
   };
@@ -270,7 +215,15 @@ if (import.meta.vitest) {
     it("rejects unknown platform key", ({ expect }) => {
       const bad = {
         ...VALID,
-        addons: { freebsd: { x64: { url: "https://e.com/a.node.gz", sha256: "c".repeat(64) } } },
+        addons: {
+          freebsd: {
+            x64: {
+              url: "https://e.com/a.node.gz",
+              bundleUrl: "https://e.com/a.node.gz.sigstore",
+              sha256: "c".repeat(64),
+            },
+          },
+        },
       };
       expect(() => SlsaManifestSchemaV1.parse(bad)).toThrow();
     });
@@ -278,7 +231,15 @@ if (import.meta.vitest) {
     it("rejects unknown arch key", ({ expect }) => {
       const bad = {
         ...VALID,
-        addons: { linux: { riscv64: { url: "https://e.com/a.node.gz", sha256: "c".repeat(64) } } },
+        addons: {
+          linux: {
+            riscv64: {
+              url: "https://e.com/a.node.gz",
+              bundleUrl: "https://e.com/a.node.gz.sigstore",
+              sha256: "c".repeat(64),
+            },
+          },
+        },
       };
       expect(() => SlsaManifestSchemaV1.parse(bad)).toThrow();
     });
@@ -286,7 +247,15 @@ if (import.meta.vitest) {
     it("rejects non-https URL", ({ expect }) => {
       const bad = {
         ...VALID,
-        addons: { linux: { x64: { url: "http://e.com/a.node.gz", sha256: "c".repeat(64) } } },
+        addons: {
+          linux: {
+            x64: {
+              url: "http://e.com/a.node.gz",
+              bundleUrl: "https://e.com/a.node.gz.sigstore",
+              sha256: "c".repeat(64),
+            },
+          },
+        },
       };
       expect(() => SlsaManifestSchemaV1.parse(bad)).toThrow();
     });
@@ -294,7 +263,15 @@ if (import.meta.vitest) {
     it("rejects non-hex sha256", ({ expect }) => {
       const bad = {
         ...VALID,
-        addons: { linux: { x64: { url: "https://e.com/a.node.gz", sha256: "not-hex" } } },
+        addons: {
+          linux: {
+            x64: {
+              url: "https://e.com/a.node.gz",
+              bundleUrl: "https://e.com/a.node.gz.sigstore",
+              sha256: "not-hex",
+            },
+          },
+        },
       };
       expect(() => SlsaManifestSchemaV1.parse(bad)).toThrow();
     });

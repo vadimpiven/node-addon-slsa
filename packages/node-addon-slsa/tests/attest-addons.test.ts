@@ -9,7 +9,10 @@
  * there's nothing honest we can do with it in a unit test.
  */
 import { createHash } from "node:crypto";
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 
+import { tempDir } from "@node-addon-slsa/internal";
 import { MockAgent, setGlobalDispatcher, getGlobalDispatcher, type Dispatcher } from "undici";
 import { afterEach, beforeEach, describe, it, vi } from "vitest";
 
@@ -35,17 +38,24 @@ function setInput(name: string, value: string): void {
 
 let previousDispatcher: Dispatcher;
 let mockAgent: MockAgent;
+let bundles: { path: string } & AsyncDisposable;
 
-beforeEach(() => {
+beforeEach(async () => {
   mockAttestProvenance.mockReset();
   mockAttestProvenance.mockResolvedValue({
     attestationID: "stub-attestation-id",
+    certificate: "stub-cert",
+    // Minimal bundle shape — we only round-trip it through JSON.stringify.
+    bundle: { mediaType: "x", verificationMaterial: {}, dsseEnvelope: {} } as never,
   } as Awaited<ReturnType<AttestProvenance>>);
 
   previousDispatcher = getGlobalDispatcher();
   mockAgent = new MockAgent();
   mockAgent.disableNetConnect();
   setGlobalDispatcher(mockAgent);
+
+  bundles = await tempDir("slsa-bundles-");
+  setInput("bundle-dir", bundles.path);
 
   // Keep retry budgets snappy so a failing test doesn't hang CI.
   setInput("retry-count", "2");
@@ -55,6 +65,7 @@ beforeEach(() => {
 afterEach(async () => {
   vi.unstubAllEnvs();
   await mockAgent.close();
+  await bundles[Symbol.asyncDispose]();
   setGlobalDispatcher(previousDispatcher);
 });
 
@@ -75,8 +86,18 @@ describe("attest-addons main()", () => {
     setInput(
       "addons",
       JSON.stringify({
-        linux: { x64: "https://cdn.example.com/a.node.gz" },
-        darwin: { arm64: "https://cdn.example.com/b.node.gz" },
+        linux: {
+          x64: {
+            url: "https://cdn.example.com/a.node.gz",
+            bundleUrl: "https://cdn.example.com/a.node.gz.sigstore",
+          },
+        },
+        darwin: {
+          arm64: {
+            url: "https://cdn.example.com/b.node.gz",
+            bundleUrl: "https://cdn.example.com/b.node.gz.sigstore",
+          },
+        },
       }),
     );
     setInput("github-token", "ghs_fake_token");
@@ -98,6 +119,13 @@ describe("attest-addons main()", () => {
     expect(bySha.get(expectedA)).toBe("https://cdn.example.com/a.node.gz");
     expect(bySha.get(expectedB)).toBe("https://cdn.example.com/b.node.gz");
     expect(opts.subjects).toHaveLength(2);
+
+    // Bundle file written per addon, same contents (single multi-subject bundle).
+    const files = await readdir(bundles.path);
+    expect(files).toHaveLength(2);
+    const first = await readFile(join(bundles.path, files[0]!), "utf8");
+    const second = await readFile(join(bundles.path, files[1]!), "utf8");
+    expect(first).toBe(second);
   });
 
   it("retries on 404 (CDN propagation) then succeeds", async ({ expect }) => {
@@ -113,7 +141,17 @@ describe("attest-addons main()", () => {
       .intercept({ path: "/a.node.gz", method: "GET" })
       .reply(200, bytes, { headers: { "content-length": String(bytes.length) } });
 
-    setInput("addons", JSON.stringify({ linux: { x64: "https://cdn.example.com/a.node.gz" } }));
+    setInput(
+      "addons",
+      JSON.stringify({
+        linux: {
+          x64: {
+            url: "https://cdn.example.com/a.node.gz",
+            bundleUrl: "https://cdn.example.com/a.node.gz.sigstore",
+          },
+        },
+      }),
+    );
     setInput("github-token", "ghs_fake_token");
 
     await main();

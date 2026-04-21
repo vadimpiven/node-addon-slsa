@@ -105,14 +105,10 @@ export function sourceRef(value: string): SourceRef {
   return value as SourceRef;
 }
 
-/** Forward-declared to keep types.ts free of import cycles into verify/. */
-type RekorClient = import("./verify/rekor-client.ts").RekorClient;
-
 /**
  * Consumer-side verification options. All fields optional — defaults apply
  * to the common case. Escape hatches are for heavy callers (reusing a
- * verifier across calls), slow networks (timeouts), and fork / private
- * Sigstore deployments (custom Rekor URLs).
+ * verifier across calls) and slow networks (timeouts / retries).
  */
 export type VerifyOptions = {
   /**
@@ -124,17 +120,8 @@ export type VerifyOptions = {
   readonly verifier?: BundleVerifier | undefined;
   /** Pre-loaded trust material. Loaded via `loadTrustMaterial()` if omitted. */
   readonly trustMaterial?: TrustMaterial | undefined;
-  /**
-   * undici dispatcher — proxy / mTLS / custom connector. Plumbed into
-   * the default Rekor client when `rekorClient` isn't supplied.
-   */
+  /** undici dispatcher — proxy / mTLS / custom connector. */
   readonly dispatcher?: Dispatcher | undefined;
-  /**
-   * Inject a custom Rekor client. Tests fake this directly; forks
-   * pointing at a private Sigstore instance construct one and pass it.
-   * Takes full precedence over `dispatcher`.
-   */
-  readonly rekorClient?: RekorClient | undefined;
   /** AbortSignal for the entire verify + download pipeline. */
   readonly signal?: AbortSignal | undefined;
   /** Per-binary download size cap, bytes. Default: 268435456 (256 MiB). */
@@ -142,26 +129,13 @@ export type VerifyOptions = {
   /** Per-binary fetch timeout, seconds. Default: 300. */
   readonly maxBinarySeconds?: number | undefined;
   /**
-   * Max Rekor entries to check per artifact hash. Bounds a flood-attack's
-   * impact from "accepts malicious entry" (already impossible) to "load
-   * budget". Default: 100.
+   * Delays in milliseconds between retries when a sidecar bundle URL 404s
+   * (CDN propagation after a fresh release-asset upload). Publish-side
+   * self-verify only; installs see either the asset or a permanent 404.
+   * Default: `[2000, 5000, 10000, 15000]`. Pass `[]` to disable.
    */
-  readonly maxRekorEntries?: number | undefined;
-  /**
-   * Override Rekor endpoints — fork / private Sigstore instance. Both
-   * strings must be provided together when overriding. `entryUrl` is a
-   * URL template with a `{uuid}` placeholder (e.g.
-   * `https://rekor.example/api/v1/log/entries/{uuid}`).
-   */
-  readonly rekorSearchUrl?: string | undefined;
-  readonly rekorEntryUrl?: string | undefined;
-  /**
-   * Delays in milliseconds between retries when Rekor hasn't yet indexed
-   * a freshly published attestation (ingestion lag ~30s). Publish-side
-   * only. Default: `[2000, 5000, 10000, 15000]`. Pass `[]` to disable.
-   */
-  readonly rekorIngestionRetryDelays?: readonly number[] | undefined;
-  /** Per-request Rekor timeout, ms. Default: 30000. */
+  readonly bundleFetchRetryDelays?: readonly number[] | undefined;
+  /** Per-request HTTP timeout, ms. Default: 30000. */
   readonly timeoutMs?: number | undefined;
 };
 

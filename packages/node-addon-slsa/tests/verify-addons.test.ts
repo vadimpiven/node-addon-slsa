@@ -50,6 +50,7 @@ const GOOD_BINARY = Buffer.from("fake-addon-binary-bytes");
 const GOOD_GZ = gzipSync(GOOD_BINARY);
 const GOOD_SHA = createHash("sha256").update(GOOD_GZ).digest("hex");
 const ADDON_URL = "https://cdn.example.com/v1.0.0/my-addon-linux-x64.node.gz";
+const BUNDLE_URL = "https://cdn.example.com/v1.0.0/my-addon-linux-x64.node.gz.sigstore";
 
 function getManifest(): Record<string, unknown> {
   const call = mockSetOutput.mock.calls.find((c) => c[0] === "manifest");
@@ -141,7 +142,7 @@ describe("verify-addons main()", () => {
       data: GOOD_GZ,
       headers: { "content-length": String(GOOD_GZ.length) },
     }));
-    wireEnv({ addons: { linux: { x64: ADDON_URL } } });
+    wireEnv({ addons: { linux: { x64: { url: ADDON_URL, bundleUrl: BUNDLE_URL } } } });
     await main();
     expect(mockVerifyAttestation).toHaveBeenCalledOnce();
 
@@ -153,9 +154,13 @@ describe("verify-addons main()", () => {
     expect(manifest["runInvocationURI"]).toBe(
       "https://github.com/owner/repo/actions/runs/123/attempts/1",
     );
-    const linuxX64 = (manifest["addons"] as { linux: { x64: { url: string; sha256: string } } })
-      .linux.x64;
+    const linuxX64 = (
+      manifest["addons"] as {
+        linux: { x64: { url: string; bundleUrl: string; sha256: string } };
+      }
+    ).linux.x64;
     expect(linuxX64.url).toBe(ADDON_URL);
+    expect(linuxX64.bundleUrl).toBe(BUNDLE_URL);
     expect(linuxX64.sha256).toBe(GOOD_SHA);
   });
 
@@ -166,7 +171,7 @@ describe("verify-addons main()", () => {
       headers: { "content-length": String(GOOD_GZ.length) },
     }));
     mockVerifyAttestation.mockRejectedValueOnce(new Error("wrong bytes: Rekor miss"));
-    wireEnv({ addons: { linux: { x64: ADDON_URL } } });
+    wireEnv({ addons: { linux: { x64: { url: ADDON_URL, bundleUrl: BUNDLE_URL } } } });
     await expect(main()).rejects.toThrow(/wrong bytes/);
     expect(mockSetOutput).not.toHaveBeenCalled();
   });
@@ -177,7 +182,7 @@ describe("verify-addons main()", () => {
       data: GOOD_GZ,
       headers: { "content-length": "99999999999" },
     }));
-    wireEnv({ addons: { linux: { x64: ADDON_URL } } });
+    wireEnv({ addons: { linux: { x64: { url: ADDON_URL, bundleUrl: BUNDLE_URL } } } });
     await expect(main()).rejects.toThrow(/Content-Length .* exceeds cap/);
     expect(mockVerifyAttestation).not.toHaveBeenCalled();
   });
@@ -187,7 +192,10 @@ describe("verify-addons main()", () => {
   }) => {
     const bigBody = Buffer.alloc(4096, 0x41);
     interceptAddon(() => ({ statusCode: 200, data: bigBody }));
-    wireEnv({ addons: { linux: { x64: ADDON_URL } }, maxBinaryBytes: "128" });
+    wireEnv({
+      addons: { linux: { x64: { url: ADDON_URL, bundleUrl: BUNDLE_URL } } },
+      maxBinaryBytes: "128",
+    });
     await expect(main()).rejects.toThrow(/body exceeds cap/);
     expect(mockVerifyAttestation).not.toHaveBeenCalled();
   });
@@ -199,7 +207,7 @@ describe("verify-addons main()", () => {
       headers: { "content-length": String(GOOD_GZ.length) },
     }));
     wireEnv({
-      addons: { linux: { x64: ADDON_URL } },
+      addons: { linux: { x64: { url: ADDON_URL, bundleUrl: BUNDLE_URL } } },
       maxBinaryBytes: String(GOOD_GZ.length - 1),
     });
     await expect(main()).rejects.toThrow(/Content-Length .* exceeds cap/);
@@ -207,7 +215,7 @@ describe("verify-addons main()", () => {
 
   it("errors with URL + status on non-2xx HTTP", async ({ expect }) => {
     interceptAddon(() => ({ statusCode: 503, data: "boom" }), 3);
-    wireEnv({ addons: { linux: { x64: ADDON_URL } } });
+    wireEnv({ addons: { linux: { x64: { url: ADDON_URL, bundleUrl: BUNDLE_URL } } } });
     const err = await main().catch((e: Error) => e);
     expect(err).toBeInstanceOf(Error);
     expect((err as Error).message).toMatch(/503/);
@@ -225,18 +233,27 @@ describe("verify-addons main()", () => {
       data: GOOD_GZ,
       headers: { "content-length": String(GOOD_GZ.length) },
     }));
-    wireEnv({ addons: { linux: { x64: ADDON_URL } }, packageName: "@scope/my-pkg" });
+    wireEnv({
+      addons: { linux: { x64: { url: ADDON_URL, bundleUrl: BUNDLE_URL } } },
+      packageName: "@scope/my-pkg",
+    });
     await main();
     expect(getManifest()["packageName"]).toBe("@scope/my-pkg");
   });
 
   it("fails fast on missing GITHUB_REF", async ({ expect }) => {
-    wireEnv({ addons: { linux: { x64: ADDON_URL } }, unsetRef: true });
+    wireEnv({
+      addons: { linux: { x64: { url: ADDON_URL, bundleUrl: BUNDLE_URL } } },
+      unsetRef: true,
+    });
     await expect(main()).rejects.toThrow(/GITHUB_REF/);
   });
 
   it("fails fast on non-tag GITHUB_REF", async ({ expect }) => {
-    wireEnv({ addons: { linux: { x64: ADDON_URL } }, ref: "refs/heads/main" });
+    wireEnv({
+      addons: { linux: { x64: { url: ADDON_URL, bundleUrl: BUNDLE_URL } } },
+      ref: "refs/heads/main",
+    });
     await expect(main()).rejects.toThrow(/refs\/tags\//);
   });
 });

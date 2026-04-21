@@ -1,19 +1,23 @@
 name: "Verify addons and build SLSA manifest"
 description: >-
-  Trust-critical verification step. For each declared addon URL: re-fetch
-  under a size cap, SHA-256 the body, and `verifyAttestation` against
-  Rekor (signer pinned to this workflow via
-  `DEFAULT_ATTEST_SIGNER_PATTERN`). On success, emits the SLSA manifest
-  as a JSON string; the caller resolves the target path and writes the
-  file. Callers (publish.yaml) own tar extract/repack, manifest write,
-  path-traversal guard, and `npm publish` so the non-cryptographic
-  plumbing stays readable in the workflow.
+  Trust-critical verification step. For each declared addon:
+    (1) re-fetch the binary at `url` under a size cap and SHA-256 it,
+    (2) fetch the sidecar sigstore bundle at `bundleUrl`,
+    (3) run `@sigstore/verify`'s full trust chain (TUF → Fulcio → Rekor
+        inclusion proof) against the bundle,
+    (4) pin the Fulcio cert's OIDs to this workflow's
+        commit / ref / run-invocation-URI and the Build Signer pattern
+        (`DEFAULT_ATTEST_SIGNER_PATTERN`).
+  On success, emits the SLSA manifest as a JSON string; the caller resolves
+  the target path and writes the file into the tarball.
 inputs:
   package-name:
     description: "The `name` field from the pre-packed tarball's package.json (read by the caller via jq)."
     required: true
   addons:
-    description: "JSON map of verified addon URLs, shape `{ [platform]: { [arch]: url } }`."
+    description: >-
+      JSON map of verified addon URL + sidecar bundle URL,
+      shape `{ [platform]: { [arch]: { url, bundleUrl } } }`.
     required: true
   max-binary-bytes:
     description: "Hard size cap per addon URL in bytes. Requests exceeding this fail before verification. Default 256 MiB."

@@ -35,38 +35,16 @@ export const DEFAULT_MAX_BINARY_BYTES = 256 * 1024 * 1024;
 /** Default per-binary fetch timeout, seconds. Applied as undici headersTimeout + bodyTimeout. */
 export const DEFAULT_MAX_BINARY_SECONDS = 300;
 
-/** Upper bound for JSON API responses (Rekor). */
+/** Upper bound for JSON responses (sigstore bundles ~a few KB; cap generously). */
 export const MAX_JSON_RESPONSE_BYTES = 50 * 1024 * 1024;
 
-/** Rekor search-by-hash endpoint. */
-export const REKOR_SEARCH_URL = "https://rekor.sigstore.dev/api/v1/index/retrieve";
-/** Rekor get-entry endpoint template; `{uuid}` expands to the entry UUID. */
-export const REKOR_ENTRY_URL = "https://rekor.sigstore.dev/api/v1/log/entries/{uuid}";
-
 /**
- * Retry delays (ms) for Rekor ingestion lag. Newly-published attestations
- * take ~30s to appear in Rekor's index; the publish-side self-verify in
- * `verify-addons` retries through this schedule before giving up.
+ * Retry delays (ms) for sidecar bundle 404s — GitHub release assets (and
+ * most CDNs) take a few seconds to propagate after upload, so the
+ * publish-side self-verify in `verify-addons` retries through this schedule
+ * before giving up.
  */
-export const REKOR_INGESTION_RETRY_DELAYS: readonly number[] = [2_000, 5_000, 10_000, 15_000];
-
-/**
- * Max Rekor entries to check per artifact hash. Rekor's index is append-only;
- * any GitHub actor with `id-token: write` can submit an attestation for an
- * arbitrary sha256. An attacker flooding the log with entries for a legit
- * hash could push the legit entry out of a too-small newest-N window.
- *
- * 100 matches Rekor's default pagination page size and tolerates 99 attacker
- * entries per release before verification degrades from "rejected flooder,
- * found legit" to "all visible entries rejected" (still fail-closed — no
- * bypass — but the error becomes less diagnostic).
- */
-export const MAX_REKOR_ENTRIES = 100;
-
-/** Shared advice appended to Rekor network errors. */
-export const REKOR_NETWORK_ADVICE =
-  "Check your network connection and try again.\n" +
-  "If this persists, check https://status.sigstore.dev for outages.";
+export const BUNDLE_FETCH_RETRY_DELAYS: readonly number[] = [2_000, 5_000, 10_000, 15_000];
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
