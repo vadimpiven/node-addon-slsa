@@ -9,19 +9,12 @@
 
 import dedent from "dedent";
 
-import {
-  HttpError,
-  type HttpClient,
-} from "../http.ts";
+import { HttpError, type HttpClient } from "../http.ts";
 import type { Sha256Hex } from "../types.ts";
 import { readJsonBounded } from "../util/json.ts";
 import { evalTemplate } from "../util/template.ts";
 import { REKOR_NETWORK_ADVICE } from "./constants.ts";
-import {
-  RekorLogEntrySchema,
-  RekorSearchResponseSchema,
-  type RekorLogEntry,
-} from "./schemas.ts";
+import { RekorLogEntrySchema, RekorSearchResponseSchema, type RekorLogEntry } from "./schemas.ts";
 
 export type RekorErrorKind =
   /** Per-entry endpoint 404'd — ingestion index committed but replication still in flight. */

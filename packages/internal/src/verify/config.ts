@@ -4,11 +4,7 @@
 
 import type { Dispatcher } from "undici";
 
-import {
-  DEFAULT_STALL_TIMEOUT_MS,
-  DEFAULT_TIMEOUT_MS,
-  type HttpClient,
-} from "../http.ts";
+import { DEFAULT_STALL_TIMEOUT_MS, DEFAULT_TIMEOUT_MS, type HttpClient } from "../http.ts";
 import type { BundleVerifier, TrustMaterial, VerifyOptions } from "../types.ts";
 import {
   MAX_JSON_RESPONSE_BYTES,

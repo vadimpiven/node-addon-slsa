@@ -25,10 +25,7 @@ import type { BundleVerifier, GitHubRepo, Sha256Hex } from "../types.ts";
 import { errorMessage } from "../util/error.ts";
 import { log, warn } from "../util/log.ts";
 import { ProvenanceError, isProvenanceError } from "../util/provenance-error.ts";
-import {
-  verifyCertificateOIDs,
-  type CertificateOIDExpectations,
-} from "./certificates.ts";
+import { verifyCertificateOIDs, type CertificateOIDExpectations } from "./certificates.ts";
 import { RekorError, type RekorClient } from "./rekor-client.ts";
 import {
   DsseEnvelopeSchema,
@@ -169,10 +166,7 @@ async function* walkCandidates(
 }
 
 /** Pure reducer. Throws exactly one of three terminal shapes, never returns. */
-function reduceOutcomes(
-  outcomes: readonly Outcome[],
-  expect: CertificateOIDExpectations,
-): void {
+function reduceOutcomes(outcomes: readonly Outcome[], expect: CertificateOIDExpectations): void {
   const n = outcomes.length;
   let lag = 0;
   let unavailable = 0;
@@ -283,9 +277,7 @@ if (import.meta.vitest) {
   const ARTIFACT_SHA = sha256Hex("c".repeat(64));
 
   /** In-memory RekorClient for unit tests — no HTTP, no Zod schema checks. */
-  type FakeOutcome =
-    | { kind: "entry"; entry: RekorLogEntry }
-    | { kind: "error"; error: RekorError };
+  type FakeOutcome = { kind: "entry"; entry: RekorLogEntry } | { kind: "error"; error: RekorError };
   function fakeRekorClient(opts: {
     searchResult?: readonly string[];
     searchError?: RekorError;
@@ -371,7 +363,10 @@ if (import.meta.vitest) {
       // an older OID-mismatch entry fetches. Must retry, not give up.
       const entries = new Map<string, FakeOutcome>([
         ["old", { kind: "entry", entry: BOGUS_ENTRY }],
-        ["new", { kind: "error", error: new RekorError({ kind: "lag", uuid: "new", message: "lag" }) }],
+        [
+          "new",
+          { kind: "error", error: new RekorError({ kind: "lag", uuid: "new", message: "lag" }) },
+        ],
       ]);
       await expect(
         verifyRekorAttestations({
@@ -389,8 +384,20 @@ if (import.meta.vitest) {
       expect,
     }) => {
       const entries = new Map<string, FakeOutcome>([
-        ["u1", { kind: "error", error: new RekorError({ kind: "unavailable", uuid: "u1", message: "5xx" }) }],
-        ["u2", { kind: "error", error: new RekorError({ kind: "unavailable", uuid: "u2", message: "5xx" }) }],
+        [
+          "u1",
+          {
+            kind: "error",
+            error: new RekorError({ kind: "unavailable", uuid: "u1", message: "5xx" }),
+          },
+        ],
+        [
+          "u2",
+          {
+            kind: "error",
+            error: new RekorError({ kind: "unavailable", uuid: "u2", message: "5xx" }),
+          },
+        ],
       ]);
       await expect(
         verifyRekorAttestations({

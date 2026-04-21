@@ -129,9 +129,7 @@ describe("createHttpClient", () => {
     // Connect-refused: dial a port we didn't bind. Node's errno wraps
     // through undici into our mapper.
     const http = createHttpClient();
-    const err = await http
-      .request("http://127.0.0.1:1")
-      .catch((e) => e as unknown);
+    const err = await http.request("http://127.0.0.1:1").catch((e) => e as unknown);
     expect(err).toBeInstanceOf(HttpError);
     expect((err as HttpError).kind).toBe("network");
   });

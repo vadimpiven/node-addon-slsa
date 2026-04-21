@@ -112,9 +112,7 @@ export function createHttpClient(opts?: {
 
       const ac = new AbortController();
       const timer = globalThis.setTimeout(() => ac.abort(), timeoutMs);
-      const signal = options.signal
-        ? AbortSignal.any([ac.signal, options.signal])
-        : ac.signal;
+      const signal = options.signal ? AbortSignal.any([ac.signal, options.signal]) : ac.signal;
 
       try {
         const response = await request(url, {
@@ -165,7 +163,9 @@ export function createHttpClient(opts?: {
  * fragile specializations that re-derived the same decision from
  * different substrates.
  */
-export type RetryDecision = { readonly retry: true; readonly delayMs: number } | { readonly retry: false };
+export type RetryDecision =
+  | { readonly retry: true; readonly delayMs: number }
+  | { readonly retry: false };
 
 export async function withRetry<T>(
   fn: () => Promise<T>,
