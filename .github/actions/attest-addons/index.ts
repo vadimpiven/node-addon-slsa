@@ -21,6 +21,7 @@ import {
   AddonUrlMapSchema,
   DEFAULT_MAX_BINARY_BYTES,
   DEFAULT_MAX_BINARY_SECONDS,
+  createHttpClient,
   errorMessage,
   fetchAndHashAddon,
   flattenAddonUrlMap,
@@ -49,17 +50,16 @@ export async function main(): Promise<void> {
     throw new Error("addons input has no URLs; expected at least one platform/arch leaf");
   }
 
-  const dispatcher = getGlobalDispatcher();
+  const http = createHttpClient({ dispatcher: getGlobalDispatcher() });
 
   const subjects: Subject[] = await Promise.all(
     entries.map(async ({ platform, arch, url }) => {
-      const sha256 = await fetchAndHashAddon(url, {
+      const sha256 = await fetchAndHashAddon(http, url, {
         maxBinaryBytes,
         maxBinaryMs,
         label: `${platform}/${arch}`,
         retryCount,
         retryOn404: true,
-        dispatcher,
       });
       return { name: url, digest: { sha256 } } satisfies Subject;
     }),

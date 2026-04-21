@@ -5,10 +5,9 @@
 import type { Dispatcher } from "undici";
 
 import {
-  DEFAULT_RETRY_BASE_MS,
-  DEFAULT_RETRY_COUNT,
   DEFAULT_STALL_TIMEOUT_MS,
   DEFAULT_TIMEOUT_MS,
+  type HttpClient,
 } from "../http.ts";
 import type { BundleVerifier, TrustMaterial, VerifyOptions } from "../types.ts";
 import {
@@ -18,6 +17,7 @@ import {
   REKOR_INGESTION_RETRY_DELAYS,
   REKOR_SEARCH_URL,
 } from "./constants.ts";
+import type { RekorClient } from "./rekor-client.ts";
 
 /** Fully resolved internal config — not exported from the package. */
 export type ResolvedConfig = {
@@ -25,12 +25,12 @@ export type ResolvedConfig = {
   readonly maxRekorEntries: number;
   readonly timeoutMs: number;
   readonly stallTimeoutMs: number;
-  readonly retryCount: number;
-  readonly retryBaseMs: number;
   readonly signal: AbortSignal | undefined;
   readonly trustMaterial: TrustMaterial | undefined;
   readonly verifier: BundleVerifier | undefined;
   readonly dispatcher: Dispatcher | undefined;
+  readonly httpClient: HttpClient | undefined;
+  readonly rekorClient: RekorClient | undefined;
   readonly rekorSearchUrl: string;
   readonly rekorEntryUrl: string;
   readonly rekorIngestionRetryDelays: readonly number[];
@@ -51,12 +51,12 @@ export function resolveConfig(options?: VerifyOptions): ResolvedConfig {
     maxRekorEntries: options?.maxRekorEntries ?? MAX_REKOR_ENTRIES,
     timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     stallTimeoutMs: options?.stallTimeoutMs ?? DEFAULT_STALL_TIMEOUT_MS,
-    retryCount: options?.retryCount ?? DEFAULT_RETRY_COUNT,
-    retryBaseMs: options?.retryBaseMs ?? DEFAULT_RETRY_BASE_MS,
     signal: options?.signal,
     trustMaterial: options?.trustMaterial,
     verifier: options?.verifier,
     dispatcher: options?.dispatcher,
+    httpClient: options?.httpClient,
+    rekorClient: options?.rekorClient,
     rekorSearchUrl: rekorSearchUrl ?? REKOR_SEARCH_URL,
     rekorEntryUrl: rekorEntryUrl ?? REKOR_ENTRY_URL,
     rekorIngestionRetryDelays: options?.rekorIngestionRetryDelays ?? REKOR_INGESTION_RETRY_DELAYS,

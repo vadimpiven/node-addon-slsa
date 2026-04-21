@@ -29,12 +29,12 @@ import {
   ArchSchema,
   assertWithinDir,
   createHashPassthrough,
+  createHttpClient,
   DEFAULT_MANIFEST_PATH,
   DEFAULT_MAX_BINARY_BYTES,
   DEFAULT_MAX_BINARY_SECONDS,
   evalTemplate,
   extractExpectedRepo,
-  fetchWithRetry,
   log,
   PlatformSchema,
   readPackageJson,
@@ -61,6 +61,15 @@ export type PackOptions = {
 async function readManifestFile(packageDir: string, manifestRel: string): Promise<SlsaManifest> {
   const raw = await readFile(resolve(packageDir, manifestRel), "utf8");
   return SlsaManifestSchemaV1.parse(JSON.parse(raw));
+}
+
+/**
+ * Build the HttpClient used by `wget`. Full injection (`httpClient`)
+ * wins; otherwise construct a default client wrapping the dispatcher
+ * override (or undici's global). Single expression, one branch.
+ */
+function resolveHttpClient(options?: VerifyOptions): ReturnType<typeof createHttpClient> {
+  return options?.httpClient ?? createHttpClient({ dispatcher: options?.dispatcher });
 }
 
 function resolveAddonEntry(manifest: SlsaManifest): { url: string; sha256: string } {
@@ -134,18 +143,15 @@ export async function wget(packageDir: string, options?: VerifyOptions): Promise
   const { stream: hashStream, digest } = createHashPassthrough();
 
   try {
-    const response = await fetchWithRetry(entry.url, {
-      ...options,
+    const http = resolveHttpClient(options);
+    const response = await http.request(entry.url, {
       timeoutMs: maxMs,
       stallTimeoutMs: maxMs,
+      ...(options?.signal !== undefined && { signal: options.signal }),
     });
-    if (response.statusCode >= 400) {
-      await response.body.dump();
-      throw new Error(`download failed: ${entry.url}: ${response.statusCode}`);
-    }
     const declared = Number(response.headers["content-length"] ?? 0);
     if (declared > maxBytes) {
-      await response.body.dump();
+      response.body.destroy();
       throw new Error(`download exceeds size cap: Content-Length=${declared} cap=${maxBytes}`);
     }
 

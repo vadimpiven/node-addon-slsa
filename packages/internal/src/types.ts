@@ -105,24 +105,9 @@ export function sourceRef(value: string): SourceRef {
   return value as SourceRef;
 }
 
-/** Internal fetch knobs used by http.ts; not part of the public surface. */
-export type FetchOptions = {
-  readonly timeoutMs?: number | undefined;
-  readonly stallTimeoutMs?: number | undefined;
-  readonly retryCount?: number | undefined;
-  readonly retryBaseMs?: number | undefined;
-  /**
-   * Opt-in: also retry on HTTP 404. Enables "wait for CDN propagation" flows
-   * (freshly uploaded release assets often 404 briefly on edge nodes).
-   * Default: false — 4xx is treated as a terminal caller error.
-   */
-  readonly retryOn404?: boolean | undefined;
-  readonly signal?: AbortSignal | undefined;
-  readonly headers?: Record<string, string> | undefined;
-  readonly method?: string | undefined;
-  readonly body?: string | undefined;
-  readonly dispatcher?: Dispatcher | undefined;
-};
+/** Forward-declared to keep types.ts free of import cycles into verify/. */
+type RekorClient = import("./verify/rekor-client.ts").RekorClient;
+type HttpClient = import("./http.ts").HttpClient;
 
 /**
  * Consumer-side verification options. All fields optional — defaults apply
@@ -140,8 +125,24 @@ export type VerifyOptions = {
   readonly verifier?: BundleVerifier | undefined;
   /** Pre-loaded trust material. Loaded via `loadTrustMaterial()` if omitted. */
   readonly trustMaterial?: TrustMaterial | undefined;
-  /** undici dispatcher — proxy / mTLS / custom connector. */
+  /**
+   * undici dispatcher — proxy / mTLS / custom connector. Plumbed into the
+   * default HttpClient when neither `httpClient` nor `rekorClient` is
+   * supplied.
+   */
   readonly dispatcher?: Dispatcher | undefined;
+  /**
+   * Inject a custom HttpClient. Replaces the default undici-based client
+   * and bypasses the `dispatcher` option. Useful in tests and for callers
+   * that want full control over HTTP concerns.
+   */
+  readonly httpClient?: HttpClient | undefined;
+  /**
+   * Inject a custom RekorClient. Replaces both the default client and
+   * the underlying `httpClient` for Rekor-bound traffic. Unit tests
+   * typically fake this directly.
+   */
+  readonly rekorClient?: RekorClient | undefined;
   /** AbortSignal for the entire verify + download pipeline. */
   readonly signal?: AbortSignal | undefined;
   /** Per-binary download size cap, bytes. Default: 268435456 (256 MiB). */
@@ -180,10 +181,6 @@ export type VerifyOptions = {
    * Default: 30000.
    */
   readonly stallTimeoutMs?: number | undefined;
-  /** How many times to retry a transient (5xx / network) API call. Default: 3. */
-  readonly retryCount?: number | undefined;
-  /** Base delay for exponential retry backoff, in ms. Default: 500. */
-  readonly retryBaseMs?: number | undefined;
 };
 
 if (import.meta.vitest) {
