@@ -159,7 +159,8 @@ if (import.meta.vitest) {
     [OID_SOURCE_REPO_DIGEST]: "a".repeat(40),
     [OID_SOURCE_REPO_REF]: "refs/tags/v1.2.3",
     [OID_RUN_INVOCATION_URI]: "https://github.com/owner/repo/actions/runs/1/attempts/1",
-    [OID_BUILD_SIGNER_URI]: `${BRAND_REPO}/${BRAND_PUBLISH_WORKFLOW_PATH}@` + "a".repeat(40),
+    [OID_BUILD_SIGNER_URI]:
+      `https://github.com/${BRAND_REPO}/${BRAND_PUBLISH_WORKFLOW_PATH}@` + "a".repeat(40),
   };
 
   describe("verifyCertificateOIDs", () => {
@@ -194,7 +195,8 @@ if (import.meta.vitest) {
     it("rejects Build Signer URI from unrelated workflow", ({ expect }) => {
       const cert = mockCert({
         ...good,
-        [OID_BUILD_SIGNER_URI]: "other/repo/.github/workflows/publish.yaml@" + "a".repeat(40),
+        [OID_BUILD_SIGNER_URI]:
+          "https://github.com/other/repo/.github/workflows/publish.yaml@" + "a".repeat(40),
       });
       expect(() => verifyCertificateOIDs(cert, "owner/repo", expect_ok)).toThrow(
         /Build Signer URI/,
@@ -250,7 +252,7 @@ if (import.meta.vitest) {
     it("rejects tag-pinned Build Signer URI", ({ expect }) => {
       const cert = mockCert({
         ...good,
-        [OID_BUILD_SIGNER_URI]: `${BRAND_REPO}/${BRAND_PUBLISH_WORKFLOW_PATH}@refs/tags/v1.2.3`,
+        [OID_BUILD_SIGNER_URI]: `https://github.com/${BRAND_REPO}/${BRAND_PUBLISH_WORKFLOW_PATH}@refs/tags/v1.2.3`,
       });
       expect(() => verifyCertificateOIDs(cert, "owner/repo", expect_ok)).toThrow(
         /Build Signer URI/,
@@ -263,7 +265,7 @@ if (import.meta.vitest) {
   // `@<40-hex-sha>$` tail the default uses. The group below locks the
   // contract so a future refactor can't silently loosen the override path.
   describe("fork-support signer override", () => {
-    const FORK_PREFIX = "acme/node-addon-slsa/.github/workflows/publish.yaml";
+    const FORK_PREFIX = "https://github.com/acme/node-addon-slsa/.github/workflows/publish.yaml";
     const FORK_SIGNER = `${FORK_PREFIX}@${"b".repeat(40)}`;
 
     it("default pattern rejects a fork-minted attestation", async ({ expect }) => {
@@ -304,7 +306,7 @@ if (import.meta.vitest) {
       const { buildSignerPatternFromPrefix } = await import("./verify.ts");
       const cert = mockCert({
         ...good,
-        [OID_BUILD_SIGNER_URI]: `evil/node-addon-slsa/.github/workflows/publish.yaml@${"c".repeat(40)}`,
+        [OID_BUILD_SIGNER_URI]: `https://github.com/evil/node-addon-slsa/.github/workflows/publish.yaml@${"c".repeat(40)}`,
       });
       expect(() =>
         verifyCertificateOIDs(cert, "owner/repo", {

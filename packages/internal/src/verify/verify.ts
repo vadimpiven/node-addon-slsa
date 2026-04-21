@@ -77,11 +77,13 @@ function toRegExp(pattern: RegExp | string): RegExp {
 }
 
 /**
- * Build a Build Signer URI pin from a URL prefix. The prefix is escaped and
- * anchored with a required `@<40-hex-commit-sha>` suffix — matching the
- * shape {@link DEFAULT_ATTEST_SIGNER_PATTERN} enforces. Forks that use
- * reusable workflows get a commit SHA in `job_workflow_ref` automatically,
- * so this tail is the same for the default and any override.
+ * Build a Build Signer URI pin from a URL prefix. The prefix must be the
+ * full URL Fulcio embeds (e.g. `https://github.com/acme/fork/.github/\
+ * workflows/publish.yaml`) — not the raw `job_workflow_ref` claim. It is
+ * escaped and anchored with a required `@<40-hex-commit-sha>` suffix,
+ * matching the shape {@link DEFAULT_ATTEST_SIGNER_PATTERN} enforces.
+ * Forks that use reusable workflows get a commit SHA in `job_workflow_ref`
+ * automatically, so this tail is the same for the default and any override.
  *
  * Accepting a raw RegExp here would be a footgun (`.*` silently nullifies
  * the pin); accepting `@.+$` would accept mutable refs (`refs/tags/v1`).

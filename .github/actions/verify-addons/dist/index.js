@@ -103850,7 +103850,7 @@ var Lh = "vadimpiven/node-addon-slsa", Rh = "https://vadimpiven.github.io/node-a
 function Qh(e) {
 	return e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-var $h = RegExp(`^${Qh(`${Lh}/${zh}`)}@` + String.raw`[0-9a-f]{40}$`);
+var $h = RegExp(`^${Qh(`https://github.com/${Lh}/${zh}`)}@` + String.raw`[0-9a-f]{40}$`);
 //#endregion
 //#region src/verify/config.ts
 function eg(e) {
