@@ -23,6 +23,7 @@ import {
   DEFAULT_MAX_BINARY_SECONDS,
   SLSA_MANIFEST_V1_SCHEMA_URL,
   buildAddonInventory,
+  createHttpClient,
   errorMessage,
   fetchAndHashAddon,
   flattenAddonUrlMap,
@@ -76,21 +77,17 @@ export async function main(): Promise<void> {
     throw new Error("addons input has no URLs; expected at least one platform/arch leaf");
   }
 
-  // Load TUF trust material once; all parallel verifyAttestation calls share it.
   const trustMaterial = await loadTrustMaterial();
-
-  // Use the caller's global dispatcher (lets tests inject a MockAgent and
-  // lets operators inject a proxy agent); the helper's built-in no-keep-alive
-  // dispatcher is only a fallback for the CLI path.
-  const dispatcher = getGlobalDispatcher();
+  // One HttpClient for addon fetches; Rekor traffic inside
+  // `verifyAttestation` builds its own from the passed `dispatcher`.
+  const http = createHttpClient({ dispatcher: getGlobalDispatcher() });
 
   const verified = await Promise.all(
     entries.map(async ({ platform, arch, url }) => {
-      const sha256 = await fetchAndHashAddon(url, {
+      const sha256 = await fetchAndHashAddon(http, url, {
         maxBinaryBytes,
         maxBinaryMs,
         label: `${platform}/${arch}`,
-        dispatcher,
       });
       await verifyAttestation({
         sha256,
@@ -99,6 +96,7 @@ export async function main(): Promise<void> {
         sourceCommit: commit,
         sourceRef: ref,
         trustMaterial,
+        dispatcher: getGlobalDispatcher(),
       });
       return { platform, arch, entry: { url, sha256 } satisfies AddonEntry };
     }),

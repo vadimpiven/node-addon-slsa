@@ -105,24 +105,8 @@ export function sourceRef(value: string): SourceRef {
   return value as SourceRef;
 }
 
-/** Internal fetch knobs used by http.ts; not part of the public surface. */
-export type FetchOptions = {
-  readonly timeoutMs?: number | undefined;
-  readonly stallTimeoutMs?: number | undefined;
-  readonly retryCount?: number | undefined;
-  readonly retryBaseMs?: number | undefined;
-  /**
-   * Opt-in: also retry on HTTP 404. Enables "wait for CDN propagation" flows
-   * (freshly uploaded release assets often 404 briefly on edge nodes).
-   * Default: false — 4xx is treated as a terminal caller error.
-   */
-  readonly retryOn404?: boolean | undefined;
-  readonly signal?: AbortSignal | undefined;
-  readonly headers?: Record<string, string> | undefined;
-  readonly method?: string | undefined;
-  readonly body?: string | undefined;
-  readonly dispatcher?: Dispatcher | undefined;
-};
+/** Forward-declared to keep types.ts free of import cycles into verify/. */
+type RekorClient = import("./verify/rekor-client.ts").RekorClient;
 
 /**
  * Consumer-side verification options. All fields optional — defaults apply
@@ -140,8 +124,17 @@ export type VerifyOptions = {
   readonly verifier?: BundleVerifier | undefined;
   /** Pre-loaded trust material. Loaded via `loadTrustMaterial()` if omitted. */
   readonly trustMaterial?: TrustMaterial | undefined;
-  /** undici dispatcher — proxy / mTLS / custom connector. */
+  /**
+   * undici dispatcher — proxy / mTLS / custom connector. Plumbed into
+   * the default Rekor client when `rekorClient` isn't supplied.
+   */
   readonly dispatcher?: Dispatcher | undefined;
+  /**
+   * Inject a custom Rekor client. Tests fake this directly; forks
+   * pointing at a private Sigstore instance construct one and pass it.
+   * Takes full precedence over `dispatcher`.
+   */
+  readonly rekorClient?: RekorClient | undefined;
   /** AbortSignal for the entire verify + download pipeline. */
   readonly signal?: AbortSignal | undefined;
   /** Per-binary download size cap, bytes. Default: 268435456 (256 MiB). */
@@ -154,8 +147,6 @@ export type VerifyOptions = {
    * budget". Default: 100.
    */
   readonly maxRekorEntries?: number | undefined;
-  /** Upper bound on a single Rekor JSON response, in bytes. Default: 52428800 (50 MiB). */
-  readonly maxJsonResponseBytes?: number | undefined;
   /**
    * Override Rekor endpoints — fork / private Sigstore instance. Both
    * strings must be provided together when overriding. `entryUrl` is a
@@ -170,20 +161,8 @@ export type VerifyOptions = {
    * only. Default: `[2000, 5000, 10000, 15000]`. Pass `[]` to disable.
    */
   readonly rekorIngestionRetryDelays?: readonly number[] | undefined;
-  /**
-   * Per-request headers-timeout for Rekor / registry API calls, in ms.
-   * Default: 30000.
-   */
+  /** Per-request Rekor timeout, ms. Default: 30000. */
   readonly timeoutMs?: number | undefined;
-  /**
-   * Per-request body-stall timeout for Rekor / registry API calls, in ms.
-   * Default: 30000.
-   */
-  readonly stallTimeoutMs?: number | undefined;
-  /** How many times to retry a transient (5xx / network) API call. Default: 3. */
-  readonly retryCount?: number | undefined;
-  /** Base delay for exponential retry backoff, in ms. Default: 500. */
-  readonly retryBaseMs?: number | undefined;
 };
 
 if (import.meta.vitest) {

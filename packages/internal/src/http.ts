@@ -1,257 +1,195 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 /**
- * Shared HTTP client for Rekor, CDN, and GitHub API calls: timeout, retry with
- * backoff, and stall detection. Uses undici `request()` (not WHATWG fetch).
- * Every network-touching module in this package routes through {@link fetchWithRetry}.
+ * `HttpClient` is the only IO boundary in this package. Callers see one
+ * result type and one error type; classification (status vs network) is
+ * attached to the error so downstream retry policies and domain adapters
+ * can dispatch on `err.kind` / `err.status` without parsing messages or
+ * reading `cause`.
+ *
+ * The default implementation wraps undici `request()` with
+ * `maxRedirections: 5`. Redirects are NOT authorization-aware — callers
+ * must not pass credentialed headers to URLs whose redirect targets they
+ * don't control. All of this package's production callers hit public
+ * endpoints (GitHub release assets → public CDN, public Rekor, npmjs.org
+ * via `@actions/attest`), so the limitation is contractual only.
  */
 
+import type { IncomingHttpHeaders } from "node:http";
+import type { Readable } from "node:stream";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { Agent, request, type Dispatcher } from "undici";
+import { Agent, interceptors, request, type Dispatcher } from "undici";
 
-import type { FetchOptions } from "./types.ts";
 import { errorMessage } from "./util/error.ts";
-import { log } from "./util/log.ts";
 
-/** Per-request timeout used when {@link FetchOptions.timeoutMs} is not supplied. */
+/** @internal */
 export const DEFAULT_TIMEOUT_MS = 30_000;
-/** Stall timeout (no bytes received) used when {@link FetchOptions.stallTimeoutMs} is not supplied. */
+/** @internal */
 export const DEFAULT_STALL_TIMEOUT_MS = 30_000;
-/** Retry count used when {@link FetchOptions.retryCount} is not supplied. */
-export const DEFAULT_RETRY_COUNT = 2;
-/** Base delay for exponential backoff used when {@link FetchOptions.retryBaseMs} is not supplied. */
-export const DEFAULT_RETRY_BASE_MS = 500;
-/**
- * Maximum 3xx hops `request()` will follow. GitHub release-asset URLs do
- * one redirect to an S3-backed CDN; 5 leaves headroom without inviting
- * open-redirect loops.
- */
-const MAX_REDIRECTIONS = 5;
 
-/**
- * Request headers that must be dropped when a redirect crosses origins.
- * RFC 9110 §15.4 plus the same list every browser and well-behaved HTTP
- * library strips (Authorization, Cookie, Proxy-Authorization) extended
- * with common custom auth headers some callers pass through. Callers are
- * expected to use these standard names for credentials — non-standard
- * custom tokens won't be stripped and must not be sent cross-origin.
- */
-const CROSS_ORIGIN_STRIP = new Set([
-  "authorization",
-  "cookie",
-  "proxy-authorization",
-  "x-api-key",
-  "x-auth-token",
-]);
-
-/** Status codes that RFC 9110 §15.4 says rewrite the follow-up to GET. */
-const RESET_TO_GET = new Set([301, 302, 303]);
-
-/** Exponential backoff with ±20% jitter to avoid thundering-herd collisions. */
-function jitteredDelay(attempt: number, baseMs: number): number {
-  const base = baseMs * 2 ** (attempt - 1);
-  return Math.round(base * (0.8 + 0.4 * Math.random()));
-}
-
-/**
- * Apply RFC 9110 redirect semantics to the follow-up request's
- * method/body/headers. Returns `null` if the follow-up would be invalid
- * (cross-origin rewrite of a body-carrying method that must stay that
- * method per 307/308 — we don't forward bodies across origins).
- */
-function rewriteForRedirect(
-  statusCode: number,
-  method: string | undefined,
-  body: string | undefined,
-  headers: Record<string, string> | undefined,
-  sameOrigin: boolean,
-): {
-  method: string | undefined;
-  body: string | undefined;
-  headers: Record<string, string> | undefined;
-} {
-  // 301/302/303: rewrite non-GET/HEAD to GET and drop the body.
-  // 307/308: preserve method and body.
-  const resetToGet =
-    RESET_TO_GET.has(statusCode) && method !== undefined && method !== "GET" && method !== "HEAD";
-  const nextMethod = resetToGet ? "GET" : method;
-  const nextBody = resetToGet ? undefined : body;
-
-  if (!headers) return { method: nextMethod, body: nextBody, headers: undefined };
-  if (sameOrigin) return { method: nextMethod, body: nextBody, headers };
-
-  const stripped: Record<string, string> = {};
-  for (const [k, v] of Object.entries(headers)) {
-    if (!CROSS_ORIGIN_STRIP.has(k.toLowerCase())) stripped[k] = v;
-  }
-  return { method: nextMethod, body: nextBody, headers: stripped };
-}
-
-// HTTP/1.1-only agent with no keep-alive. This tool makes a handful
-// of sequential requests to different hosts — H2 multiplexing and
-// connection reuse provide no benefit. Disabling keep-alive ensures
-// connections close immediately after each response is consumed,
-// avoiding dangling H2 session promises.
-const defaultDispatcher: Dispatcher = new Agent({
-  allowH2: false,
-  keepAliveTimeout: 1,
-  keepAliveMaxTimeout: 1,
-});
-
-/** Response from {@link fetchWithRetry}. */
-export type FetchResponse = {
-  readonly statusCode: number;
-  readonly headers: Record<string, string | string[] | undefined>;
-  /** Node.js Readable body with .text(), .json(), .dump() mixins. */
-  readonly body: Dispatcher.ResponseData["body"];
+/** Shape of a successful HTTP response (status < 400). */
+export type HttpResult = {
+  readonly status: number;
+  readonly headers: IncomingHttpHeaders;
+  readonly body: Readable;
 };
 
+/** Options every {@link HttpClient.request} accepts. */
+export type HttpRequestOptions = {
+  readonly method?: "GET" | "POST";
+  /** Stringified body. Paired with {@link contentType}. */
+  readonly body?: string;
+  /** Sole request header we expose — enough for Rekor's JSON POST. */
+  readonly contentType?: string;
+  readonly signal?: AbortSignal;
+  /** Overall request budget including redirects. */
+  readonly timeoutMs?: number;
+  /** Per-hop headers + body stall ceiling. */
+  readonly stallTimeoutMs?: number;
+};
+
+export type HttpErrorKind = "status" | "network";
+
 /**
- * Fetch with timeout, retry with exponential backoff, and stall detection.
- * Retries on network errors and HTTP 5xx. Does NOT retry on 4xx.
- *
- * @throws on network failure after all retries are exhausted.
+ * Failure from {@link HttpClient.request}. `kind === "status"` means an
+ * HTTP response came back with `status >= 400`; `kind === "network"`
+ * covers timeouts, DNS, TLS, dispatcher errors, and aborts.
  */
-export async function fetchWithRetry(url: string, options?: FetchOptions): Promise<FetchResponse> {
-  const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const retryCount = options?.retryCount ?? DEFAULT_RETRY_COUNT;
-  const retryBaseMs = options?.retryBaseMs ?? DEFAULT_RETRY_BASE_MS;
-  const retryOn404 = options?.retryOn404 ?? false;
-  const stallTimeoutMs = options?.stallTimeoutMs ?? DEFAULT_STALL_TIMEOUT_MS;
-  const parentSignal = options?.signal;
+export class HttpError extends Error {
+  readonly kind: HttpErrorKind;
+  readonly status?: number;
+  readonly url: string;
 
-  const maxAttempts = 1 + retryCount;
-  let lastError: unknown;
+  constructor(opts: {
+    kind: HttpErrorKind;
+    message: string;
+    url: string;
+    status?: number;
+    cause?: unknown;
+  }) {
+    super(opts.message, opts.cause !== undefined ? { cause: opts.cause } : undefined);
+    this.kind = opts.kind;
+    this.url = opts.url;
+    if (opts.status !== undefined) this.status = opts.status;
+  }
+}
 
-  log(`fetching: ${url}`);
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    // Bail immediately if the parent signal is already aborted
-    parentSignal?.throwIfAborted();
+export interface HttpClient {
+  request(url: string, options?: HttpRequestOptions): Promise<HttpResult>;
+}
 
-    const ac = new AbortController();
-    const timer = globalThis.setTimeout(() => ac.abort(), timeoutMs);
+/**
+ * HTTP/1.1 agent, no keep-alive: sequential requests to different hosts
+ * get no pooling benefit and dangling sockets complicate test teardown.
+ */
+function createDefaultDispatcher(): Dispatcher {
+  return new Agent({
+    allowH2: false,
+    keepAliveTimeout: 1,
+    keepAliveMaxTimeout: 1,
+  }).compose(interceptors.redirect({ maxRedirections: 5 }));
+}
 
-    const signal = AbortSignal.any([ac.signal, parentSignal].filter((s) => !!s));
+/**
+ * Build an {@link HttpClient}. Pass `dispatcher` to substitute a proxy
+ * agent, mTLS agent, or test MockAgent; tests that assert redirect
+ * behavior instead use an in-process `http.createServer` fixture so the
+ * production `maxRedirections` path runs unmodified.
+ */
+export function createHttpClient(opts?: {
+  readonly dispatcher?: Dispatcher | undefined;
+}): HttpClient {
+  const dispatcher = opts?.dispatcher ?? createDefaultDispatcher();
+  return {
+    async request(url, options = {}): Promise<HttpResult> {
+      const method = options.method ?? "GET";
+      const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+      const stallTimeoutMs = options.stallTimeoutMs ?? DEFAULT_STALL_TIMEOUT_MS;
 
-    try {
-      // Manually follow 3xx redirects. GitHub release-asset URLs respond
-      // 302 → S3-backed CDN; undici's built-in `maxRedirections` would
-      // normally handle this, but it bypasses MockAgent (the redirect
-      // handler re-dispatches via the global dispatcher), leaving our
-      // tests unable to assert the behavior. Implementing redirects here
-      // keeps both runtime and test coverage on the same code path.
-      // RFC 9110 §15.4: strip `Authorization`/`Cookie` cross-origin and
-      // rewrite 301/302/303 non-GET to GET.
-      const dispatcher = options?.dispatcher ?? defaultDispatcher;
-      const originalUrl = new URL(url);
-      let currentUrl = url;
-      let currentOrigin = originalUrl.origin;
-      let currentMethod = options?.method;
-      let currentBody = options?.body;
-      let currentHeaders = options?.headers;
-      let response: Awaited<ReturnType<typeof request>> | undefined;
-      for (let redirects = 0; redirects <= MAX_REDIRECTIONS; redirects++) {
-        response = await request(currentUrl, {
-          ...(currentMethod !== undefined && { method: currentMethod }),
-          ...(currentHeaders !== undefined && { headers: currentHeaders }),
-          ...(currentBody !== undefined && { body: currentBody }),
+      const ac = new AbortController();
+      const timer = globalThis.setTimeout(() => ac.abort(), timeoutMs);
+      const signal = options.signal ? AbortSignal.any([ac.signal, options.signal]) : ac.signal;
+
+      // Refuse header-smuggling attempts: we only expose `contentType`,
+      // so any CR/LF in its value would splice extra header lines into
+      // the request (and could add Authorization cross-origin).
+      if (options.contentType !== undefined && /[\r\n]/.test(options.contentType)) {
+        throw new HttpError({
+          kind: "network",
+          url,
+          message: `${method} ${url} → contentType contains CR/LF`,
+        });
+      }
+      try {
+        const response = await request(url, {
+          method,
+          ...(options.body !== undefined && { body: options.body }),
+          ...(options.contentType !== undefined && {
+            headers: { "content-type": options.contentType },
+          }),
           signal,
           dispatcher,
-          // Per-hop header + body stall timers. A malicious server that
-          // drips 302s could otherwise hold the connection forever within
-          // the outer `timeoutMs` budget. `headersTimeout` caps each hop
-          // before bytes start; `bodyTimeout` caps stalls during the body.
           headersTimeout: stallTimeoutMs,
           bodyTimeout: stallTimeoutMs,
         });
-        // Anything outside 3xx is terminal. 304 Not Modified is also not
-        // a redirect — it carries no Location — so exit before the
-        // Location lookup below would wrongly throw.
-        if (
-          response.statusCode < 300 ||
-          response.statusCode === 304 ||
-          response.statusCode >= 400
-        ) {
-          break;
-        }
-        const location = response.headers["location"];
-        const next = Array.isArray(location) ? location[0] : location;
-        // A 3xx without Location is malformed (RFC 9110 §15.4) and would
-        // leave our fetch-and-hash pipeline silently returning the empty
-        // 3xx body — refuse it rather than paper over the server bug.
-        if (!next) {
+        if (response.statusCode >= 400) {
           await response.body.dump();
-          throw new Error(`HTTP ${response.statusCode} without Location header at ${currentUrl}`);
+          throw new HttpError({
+            kind: "status",
+            url,
+            status: response.statusCode,
+            message: `${method} ${url} → HTTP ${response.statusCode}`,
+          });
         }
-        if (redirects === MAX_REDIRECTIONS) {
-          await response.body.dump();
-          throw new Error(`too many redirects following ${url}`);
-        }
-        // Fully consume the 3xx body before re-requesting — leaving it
-        // hanging would leak sockets on the test MockAgent and real Agents.
-        await response.body.dump();
-        const nextUrl = new URL(next, currentUrl);
-        // Refuse protocol downgrades. A MITM on the 302 response would
-        // otherwise steer this trust-critical fetch onto plaintext HTTP
-        // where the response body is attacker-controlled end-to-end.
-        if (originalUrl.protocol === "https:" && nextUrl.protocol !== "https:") {
-          throw new Error(
-            `refusing ${originalUrl.protocol}→${nextUrl.protocol} downgrade redirect at ${currentUrl}`,
-          );
-        }
-        const sameOrigin = nextUrl.origin === currentOrigin;
-        const rewritten = rewriteForRedirect(
-          response.statusCode,
-          currentMethod,
-          currentBody,
-          currentHeaders,
-          sameOrigin,
-        );
-        currentUrl = nextUrl.toString();
-        currentOrigin = nextUrl.origin;
-        currentMethod = rewritten.method;
-        currentBody = rewritten.body;
-        currentHeaders = rewritten.headers;
-      }
-      // The loop body only breaks after assigning `response`; any other
-      // exit path (throw) never reaches this line.
-      if (!response) throw new Error("internal: redirect loop exited without a response");
-      const finalResponse = response;
-
-      const retryableStatus =
-        finalResponse.statusCode >= 500 || (retryOn404 && finalResponse.statusCode === 404);
-      if (retryableStatus && attempt < maxAttempts) {
-        await finalResponse.body.dump();
-        // Carry the status code + headers on the cause so retries+callers
-        // can inspect them. `Error.cause` convention prefers an Error, so
-        // we wrap them on a dedicated Error subtype rather than bare data.
-        const cause = new Error(`HTTP ${finalResponse.statusCode}`);
-        Object.assign(cause, {
-          statusCode: finalResponse.statusCode,
-          headers: finalResponse.headers,
+        return {
+          status: response.statusCode,
+          headers: response.headers,
+          body: response.body,
+        };
+      } catch (err) {
+        if (err instanceof HttpError) throw err;
+        throw new HttpError({
+          kind: "network",
+          url,
+          message: `${method} ${url} → ${errorMessage(err)}`,
+          cause: err,
         });
-        throw new Error(`HTTP ${finalResponse.statusCode}`, { cause });
+      } finally {
+        globalThis.clearTimeout(timer);
       }
+    },
+  };
+}
 
-      return finalResponse;
+/** Classifier decision: retry after `delayMs`, or give up and re-throw. */
+export type RetryDecision =
+  | { readonly retry: true; readonly delayMs: number }
+  | { readonly retry: false };
+
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  classify: (err: unknown, attempt: number) => RetryDecision,
+  options?: { readonly signal?: AbortSignal },
+): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    options?.signal?.throwIfAborted();
+    try {
+      return await fn();
     } catch (err) {
-      // If the parent signal aborted, propagate immediately — no retries
-      if (parentSignal?.aborted) throw err;
-      lastError = err;
-
-      if (attempt < maxAttempts) {
-        const delay = jitteredDelay(attempt, retryBaseMs);
-        log(
-          `retrying ${url} in ${delay}ms (attempt ${attempt}/${maxAttempts}): ${errorMessage(err)}`,
-        );
-        await sleep(delay, undefined, parentSignal ? { signal: parentSignal } : undefined);
-        continue;
-      }
-    } finally {
-      globalThis.clearTimeout(timer);
+      const decision = classify(err, attempt);
+      if (!decision.retry) throw err;
+      await sleep(
+        decision.delayMs,
+        undefined,
+        options?.signal ? { signal: options.signal } : undefined,
+      );
     }
   }
+}
 
-  throw lastError;
+/** Exponential backoff with ±20% jitter. */
+export function jitteredDelay(attempt: number, baseMs: number): number {
+  const base = baseMs * 2 ** (attempt - 1);
+  return Math.round(base * (0.8 + 0.4 * Math.random()));
 }

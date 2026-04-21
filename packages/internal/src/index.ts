@@ -59,8 +59,16 @@ export {
 } from "./verify/constants.ts";
 
 // Low-level helpers
-export { fetchWithRetry } from "./http.ts";
-export type { FetchResponse } from "./http.ts";
+export { createHttpClient, withRetry, HttpError } from "./http.ts";
+export type {
+  HttpClient,
+  HttpResult,
+  HttpRequestOptions,
+  HttpErrorKind,
+  RetryDecision,
+} from "./http.ts";
+export { createRekorClient, RekorError } from "./verify/rekor-client.ts";
+export type { RekorClient, RekorClientOptions, RekorErrorKind } from "./verify/rekor-client.ts";
 export { assertWithinDir, isEnoent, isEnotdir, safeUnlink, tempDir } from "./util/fs.ts";
 export { fetchAndHashAddon } from "./util/addon-fetch.ts";
 export type { FetchAndHashAddonOptions } from "./util/addon-fetch.ts";

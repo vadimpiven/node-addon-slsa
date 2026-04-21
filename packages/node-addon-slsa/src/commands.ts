@@ -29,12 +29,12 @@ import {
   ArchSchema,
   assertWithinDir,
   createHashPassthrough,
+  createHttpClient,
   DEFAULT_MANIFEST_PATH,
   DEFAULT_MAX_BINARY_BYTES,
   DEFAULT_MAX_BINARY_SECONDS,
   evalTemplate,
   extractExpectedRepo,
-  fetchWithRetry,
   log,
   PlatformSchema,
   readPackageJson,
@@ -134,18 +134,15 @@ export async function wget(packageDir: string, options?: VerifyOptions): Promise
   const { stream: hashStream, digest } = createHashPassthrough();
 
   try {
-    const response = await fetchWithRetry(entry.url, {
-      ...options,
+    const http = createHttpClient({ dispatcher: options?.dispatcher });
+    const response = await http.request(entry.url, {
       timeoutMs: maxMs,
       stallTimeoutMs: maxMs,
+      ...(options?.signal !== undefined && { signal: options.signal }),
     });
-    if (response.statusCode >= 400) {
-      await response.body.dump();
-      throw new Error(`download failed: ${entry.url}: ${response.statusCode}`);
-    }
     const declared = Number(response.headers["content-length"] ?? 0);
     if (declared > maxBytes) {
-      await response.body.dump();
+      response.body.destroy();
       throw new Error(`download exceeds size cap: Content-Length=${declared} cap=${maxBytes}`);
     }
 

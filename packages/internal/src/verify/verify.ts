@@ -22,6 +22,7 @@ import {
 import { bundleFromJSON } from "@sigstore/bundle";
 import dedent from "dedent";
 
+import { createHttpClient, withRetry } from "../http.ts";
 import {
   githubRepo,
   runInvocationURI,
@@ -36,12 +37,13 @@ import {
 import { readPackageJson } from "../package.ts";
 import { errorMessage } from "../util/error.ts";
 import { createHashPassthrough } from "../util/hash.ts";
-import { ProvenanceError } from "../util/provenance-error.ts";
+import { isProvenanceError, ProvenanceError } from "../util/provenance-error.ts";
 import type { CertificateOIDExpectations } from "./certificates.ts";
+import type { ResolvedConfig } from "./config.ts";
 import { resolveConfig } from "./config.ts";
 import { DEFAULT_ATTEST_SIGNER_PATTERN, DEFAULT_MANIFEST_PATH } from "./constants.ts";
+import { createRekorClient, type RekorClient } from "./rekor-client.ts";
 import { verifyRekorAttestations } from "./rekor.ts";
-import { withRekorIngestionRetry } from "./retry.ts";
 import { SLSA_MANIFEST_V1_SCHEMA_URL, SlsaManifestSchemaV1, type SlsaManifest } from "./schemas.ts";
 
 /** Load sigstore trust material (Fulcio CAs, Rekor public keys) from the TUF repository. */
@@ -111,6 +113,31 @@ export type VerifyAttestationOptions = VerifyOptions & {
   readonly attestSignerPattern?: string;
 };
 
+/** Default client: one undici-backed HttpClient shared across search + entry fetches. */
+function clientFromConfig(config: ResolvedConfig): RekorClient {
+  if (config.rekorClient) return config.rekorClient;
+  return createRekorClient({
+    http: createHttpClient({ dispatcher: config.dispatcher }),
+    searchUrl: config.rekorSearchUrl,
+    entryUrl: config.rekorEntryUrl,
+    timeoutMs: config.timeoutMs,
+  });
+}
+
+/** Retry on `rekor-not-found` per `delays`; fatal on anything else. */
+function classifyIngestionLag(
+  delays: readonly number[],
+): (err: unknown, attempt: number) => { retry: true; delayMs: number } | { retry: false } {
+  return (err, attempt) => {
+    const index = attempt - 1;
+    if (index >= delays.length) return { retry: false };
+    if (isProvenanceError(err) && err.kind === "rekor-not-found") {
+      return { retry: true, delayMs: delays[index] ?? 0 };
+    }
+    return { retry: false };
+  };
+}
+
 /**
  * Verify a Rekor entry exists for the given sha256 whose signing cert's
  * OIDs match the expected workflow run. Retries briefly for Rekor
@@ -123,10 +150,9 @@ export async function verifyAttestation(options: VerifyAttestationOptions): Prom
   const commit = sourceCommitSha(options.sourceCommit);
   const ref = sourceRef(options.sourceRef);
   const config = resolveConfig(options);
-  // Resolve verifier once per call. Callers can inject one to amortize
-  // trust-material loading across many verifications.
   const verifier =
     config.verifier ?? createBundleVerifier(config.trustMaterial ?? (await loadTrustMaterial()));
+  const client = clientFromConfig(config);
   const expect: CertificateOIDExpectations = {
     sourceCommit: commit,
     sourceRef: ref,
@@ -135,17 +161,18 @@ export async function verifyAttestation(options: VerifyAttestationOptions): Prom
       ? buildSignerPatternFromPrefix(options.attestSignerPattern)
       : DEFAULT_ATTEST_SIGNER_PATTERN,
   };
-  await withRekorIngestionRetry(
+  await withRetry(
     () =>
       verifyRekorAttestations({
         sha256: sha,
         repo,
         expect,
-        config,
+        client,
         verifier,
+        maxEntries: config.maxRekorEntries,
       }),
-    config.rekorIngestionRetryDelays,
-    options.signal,
+    classifyIngestionLag(config.rekorIngestionRetryDelays),
+    options.signal ? { signal: options.signal } : undefined,
   );
 }
 
@@ -275,26 +302,34 @@ export async function verifyPackageAt(
     ? buildSignerPatternFromPrefix(options.attestSignerPattern)
     : DEFAULT_ATTEST_SIGNER_PATTERN;
 
+  // One-time setup per handle: TUF trust fetch, verifier build, Rekor
+  // client. Hoisted out of `runRekor` so verifying N addon files against
+  // the same package makes one TUF round-trip, not N.
+  const config = resolveConfig(options);
+  const verifier =
+    config.verifier ?? createBundleVerifier(config.trustMaterial ?? (await loadTrustMaterial()));
+  const client = clientFromConfig(config);
+  const expect: CertificateOIDExpectations = {
+    sourceCommit: manifest.sourceCommit,
+    sourceRef: manifest.sourceRef,
+    runInvocationURI: runURI,
+    attestSignerPattern,
+  };
+
   const runRekor = async (sha: Sha256Hex): Promise<void> => {
-    const config = resolveConfig(options);
-    // Build the verifier lazily and only once per provenance handle. A
-    // caller verifying many addons for the same package thereby loads
-    // trust material one time — not once per call — without having to
-    // pre-build and pass a verifier themselves.
-    const verifier =
-      config.verifier ?? createBundleVerifier(config.trustMaterial ?? (await loadTrustMaterial()));
-    await verifyRekorAttestations({
-      sha256: sha,
-      repo: expectedRepo,
-      expect: {
-        sourceCommit: manifest.sourceCommit,
-        sourceRef: manifest.sourceRef,
-        runInvocationURI: runURI,
-        attestSignerPattern,
-      },
-      config,
-      verifier,
-    });
+    await withRetry(
+      () =>
+        verifyRekorAttestations({
+          sha256: sha,
+          repo: expectedRepo,
+          expect,
+          client,
+          verifier,
+          maxEntries: config.maxRekorEntries,
+        }),
+      classifyIngestionLag(config.rekorIngestionRetryDelays),
+      options.signal ? { signal: options.signal } : undefined,
+    );
   };
 
   return {
@@ -374,6 +409,7 @@ if (import.meta.vitest) {
   const { describe, it, vi } = import.meta.vitest;
   const { writeFile, mkdir } = await import("node:fs/promises");
   const { tempDir } = await import("../util/fs.ts");
+  const { RekorError } = await import("./rekor-client.ts");
 
   const BASE_MANIFEST: SlsaManifest = {
     $schema: SLSA_MANIFEST_V1_SCHEMA_URL,
@@ -572,6 +608,109 @@ if (import.meta.vitest) {
       } finally {
         cwdSpy.mockRestore();
       }
+    });
+  });
+
+  describe("verifyAttestation with injected RekorClient", () => {
+    const okVerifier: BundleVerifier = { verify: () => undefined };
+
+    const baseOpts = {
+      sha256: "a".repeat(64),
+      repo: "owner/repo",
+      runInvocationURI: "https://github.com/owner/repo/actions/runs/1/attempts/1",
+      sourceCommit: "a".repeat(40),
+      sourceRef: "refs/tags/v1.2.3",
+      verifier: okVerifier,
+      // Zero ingestion-retry delays so the test runs instantly.
+      rekorIngestionRetryDelays: [],
+    } as const;
+
+    it("surfaces search=[] as ProvenanceError { kind: rekor-not-found }", async ({ expect }) => {
+      const err = await verifyAttestation({
+        ...baseOpts,
+        rekorClient: {
+          search: async () => [],
+          fetchEntry: async () => {
+            throw new Error("unreachable");
+          },
+        },
+      }).catch((e) => e as unknown);
+      expect(err).toBeInstanceOf(ProvenanceError);
+      expect((err as ProvenanceError).kind).toBe("rekor-not-found");
+    });
+
+    it("retries on rekor-not-found per the configured schedule", async ({ expect }) => {
+      let searchCalls = 0;
+      const err = await verifyAttestation({
+        ...baseOpts,
+        rekorIngestionRetryDelays: [1, 1],
+        rekorClient: {
+          search: async () => {
+            searchCalls++;
+            return [];
+          },
+          fetchEntry: async () => {
+            throw new Error("unreachable");
+          },
+        },
+      }).catch((e) => e as unknown);
+      expect(err).toBeInstanceOf(ProvenanceError);
+      expect((err as ProvenanceError).kind).toBe("rekor-not-found");
+      // Initial attempt + two retries.
+      expect(searchCalls).toBe(3);
+    });
+
+    it("does NOT retry when search throws an unavailable RekorError", async ({ expect }) => {
+      let calls = 0;
+      await verifyAttestation({
+        ...baseOpts,
+        rekorClient: {
+          search: async () => {
+            calls++;
+            throw new RekorError({ kind: "unavailable", message: "5xx" });
+          },
+          fetchEntry: async () => {
+            throw new Error("unreachable");
+          },
+        },
+      }).catch(() => {});
+      expect(calls).toBe(1);
+    });
+  });
+
+  describe("verifyPackageAt provenance-handle Rekor wiring", () => {
+    it("routes verifyAddonBySha256 + verifyAddonFromFile through the injected RekorClient", async ({
+      expect,
+    }) => {
+      await using tmp = await makePackage();
+      // Seed a file to verify — contents irrelevant, we assert the fake
+      // client observed *a* sha.
+      const addonPath = join(tmp.path, "dist", "my.node");
+      await mkdir(dirname(addonPath), { recursive: true });
+      await writeFile(addonPath, "addon-bytes");
+
+      const searched: string[] = [];
+      const p = await verifyPackageAt(tmp.path, {
+        repo: "owner/repo",
+        verifier: { verify: () => undefined },
+        rekorIngestionRetryDelays: [],
+        rekorClient: {
+          search: async (sha) => {
+            searched.push(sha);
+            return [];
+          },
+          fetchEntry: async () => {
+            throw new Error("unreachable");
+          },
+        },
+      });
+      const provided = "b".repeat(64);
+      await p.verifyAddonBySha256(provided).catch(() => {});
+      await p.verifyAddonFromFile(addonPath).catch(() => {});
+      expect(searched).toHaveLength(2);
+      expect(searched[0]).toBe(provided);
+      expect(searched[1]).toMatch(/^[0-9a-f]{64}$/);
+      expect(searched[1]).not.toBe(provided);
     });
   });
 }

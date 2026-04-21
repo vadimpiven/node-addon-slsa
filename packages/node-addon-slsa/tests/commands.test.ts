@@ -122,10 +122,9 @@ describe("wget", () => {
     await writeTestPkg(tmp.path, "1.0.0");
     await writeTestManifest(tmp.path, "1.0.0");
 
-    // 400 is terminal in fetchWithRetry (only 5xx / opt-in 404 retry), so
-    // the response surfaces to wget's statusCode guard.
+    // HttpClient throws on any status >= 400 with a typed HttpError.
     await using dispatcher = mockDownload(400, "bad request");
-    await expect(wget(tmp.path, { dispatcher })).rejects.toThrow(/download failed.*400/);
+    await expect(wget(tmp.path, { dispatcher })).rejects.toThrow(/HTTP 400/);
   });
 
   it("rejects when Content-Length exceeds the size cap", async ({ expect }) => {
