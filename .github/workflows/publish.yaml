@@ -62,7 +62,7 @@ jobs:
         # contain its own sha. When the action code changes, bump in two
         # commits: first the action change (tag it), then update this sha
         # to that commit.
-        uses: "vadimpiven/node-addon-slsa/.github/actions/attest-addons@d42610e16e466fea49f0fd7f8aef0db54faf479a" # v0.8.9
+        uses: "vadimpiven/node-addon-slsa/.github/actions/attest-addons@417fbc5ba658118d0b90d33a25982c46ba458505" # v0.8.11
         with:
           addons: "${{ inputs.addons }}"
           max-binary-bytes: "${{ inputs.max-binary-bytes }}"
@@ -125,7 +125,7 @@ jobs:
           echo "manifest-rel=$manifest_rel" >>"$GITHUB_OUTPUT"
       - name: "Verify addons (Rekor) and build SLSA manifest"
         id: "verify"
-        uses: "vadimpiven/node-addon-slsa/.github/actions/verify-addons@d42610e16e466fea49f0fd7f8aef0db54faf479a" # v0.8.9
+        uses: "vadimpiven/node-addon-slsa/.github/actions/verify-addons@417fbc5ba658118d0b90d33a25982c46ba458505" # v0.8.11
         with:
           package-name: "${{ steps.pkg.outputs.name }}"
           addons: "${{ inputs.addons }}"
