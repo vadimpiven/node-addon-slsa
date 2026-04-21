@@ -67705,16 +67705,16 @@ var t = Object.defineProperty, n = Object.getOwnPropertyDescriptor, r = Object.g
 
 // EXPORTS
 __nccwpck_require__.d(__webpack_exports__, {
-  lr: () => (/* binding */ ug),
-  HJ: () => (/* binding */ Kh),
-  rM: () => (/* binding */ qh),
-  Wx: () => (/* binding */ ag),
-  f9: () => (/* binding */ fg),
+  lr: () => (/* binding */ mg),
+  HJ: () => (/* binding */ Xh),
+  rM: () => (/* binding */ Zh),
+  Wx: () => (/* binding */ lg),
+  f9: () => (/* binding */ gg),
   gJ: () => (/* binding */ Op),
-  Oz: () => (/* binding */ qg),
-  ac: () => (/* binding */ dg),
-  ak: () => (/* binding */ jg),
-  oe: () => (/* binding */ Lg)
+  Oz: () => (/* binding */ Zg),
+  ac: () => (/* binding */ hg),
+  ak: () => (/* binding */ Fg),
+  oe: () => (/* binding */ Vg)
 });
 
 // UNUSED EXPORTS: AddonInventorySchema, ArchSchema, BRAND_PAGES_BASE, BRAND_PUBLISH_WORKFLOW_PATH, BRAND_REPO, DEFAULT_ATTEST_SIGNER_PATTERN, DEFAULT_MANIFEST_PATH, PlatformSchema, ProvenanceError, PublishedSchemas, SlsaManifestSchemaV1, assertWithinDir, buildSignerPatternFromPrefix, createBundleVerifier, createHashPassthrough, evalTemplate, extractExpectedRepo, fetchWithRetry, isEnoent, isEnotdir, isProvenanceError, log, readPackageJson, safeUnlink, tempDir, verifyPackage, verifyPackageAt, warn
@@ -103775,43 +103775,87 @@ function jh(e) {
 function Mh(e) {
 	external_node_process_namespaceObject.stderr.write(`[slsa] ${e}\n`);
 }
-function Nh(e, t) {
+var Nh = 5, Ph = new Set([
+	"authorization",
+	"cookie",
+	"proxy-authorization",
+	"x-api-key",
+	"x-auth-token"
+]), Fh = new Set([
+	301,
+	302,
+	303
+]);
+function Ih(e, t) {
 	let n = t * 2 ** (e - 1);
 	return Math.round(n * (.8 + .4 * Math.random()));
 }
-var Ph = new Ah.Agent({
+function Lh(e, t, n, r, i) {
+	let a = Fh.has(e) && t !== void 0 && t !== "GET" && t !== "HEAD", o = a ? "GET" : t, s = a ? void 0 : n;
+	if (!r) return {
+		method: o,
+		body: s,
+		headers: void 0
+	};
+	if (i) return {
+		method: o,
+		body: s,
+		headers: r
+	};
+	let c = {};
+	for (let [e, t] of Object.entries(r)) Ph.has(e.toLowerCase()) || (c[e] = t);
+	return {
+		method: o,
+		body: s,
+		headers: c
+	};
+}
+var Rh = new Ah.Agent({
 	allowH2: !1,
 	keepAliveTimeout: 1,
 	keepAliveMaxTimeout: 1
 });
-async function Fh(e, t) {
+async function zh(e, t) {
 	let n = t?.timeoutMs ?? 3e4, r = t?.retryCount ?? 2, i = t?.retryBaseMs ?? 500, a = t?.retryOn404 ?? !1, o = t?.stallTimeoutMs ?? 3e4, s = t?.signal, c = 1 + r, l;
 	jh(`fetching: ${e}`);
 	for (let r = 1; r <= c; r++) {
 		s?.throwIfAborted();
 		let u = new AbortController(), d = globalThis.setTimeout(() => u.abort(), n), f = AbortSignal.any([u.signal, s].filter((e) => !!e));
 		try {
-			let n = await (0, Ah.request)(e, {
-				...t?.method && { method: t.method },
-				...t?.headers && { headers: t.headers },
-				...t?.body && { body: t.body },
+			let n = t?.dispatcher ?? Rh, i = new URL(e), s = e, l = i.origin, u = t?.method, d = t?.body, p = t?.headers, m;
+			for (let t = 0; t <= Nh && (m = await (0, Ah.request)(s, {
+				...u !== void 0 && { method: u },
+				...p !== void 0 && { headers: p },
+				...d !== void 0 && { body: d },
 				signal: f,
-				dispatcher: t?.dispatcher ?? Ph,
+				dispatcher: n,
+				headersTimeout: o,
 				bodyTimeout: o
-			});
-			if ((n.statusCode >= 500 || a && n.statusCode === 404) && r < c) {
-				await n.body.dump();
-				let e = /* @__PURE__ */ Error(`HTTP ${n.statusCode}`);
-				throw Object.assign(e, {
-					statusCode: n.statusCode,
-					headers: n.headers
-				}), Error(`HTTP ${n.statusCode}`, { cause: e });
+			}), !(m.statusCode < 300 || m.statusCode === 304 || m.statusCode >= 400)); t++) {
+				let n = m.headers.location, r = Array.isArray(n) ? n[0] : n;
+				if (!r) throw await m.body.dump(), Error(`HTTP ${m.statusCode} without Location header at ${s}`);
+				if (t === Nh) throw await m.body.dump(), Error(`too many redirects following ${e}`);
+				await m.body.dump();
+				let a = new URL(r, s);
+				if (i.protocol === "https:" && a.protocol !== "https:") throw Error(`refusing ${i.protocol}→${a.protocol} downgrade redirect at ${s}`);
+				let o = a.origin === l, c = Lh(m.statusCode, u, d, p, o);
+				s = a.toString(), l = a.origin, u = c.method, d = c.body, p = c.headers;
 			}
-			return n;
+			if (!m) throw Error("internal: redirect loop exited without a response");
+			let h = m;
+			if ((h.statusCode >= 500 || a && h.statusCode === 404) && r < c) {
+				await h.body.dump();
+				let e = /* @__PURE__ */ Error(`HTTP ${h.statusCode}`);
+				throw Object.assign(e, {
+					statusCode: h.statusCode,
+					headers: h.headers
+				}), Error(`HTTP ${h.statusCode}`, { cause: e });
+			}
+			return h;
 		} catch (t) {
 			if (s?.aborted) throw t;
 			if (l = t, r < c) {
-				let n = Nh(r, i);
+				let n = Ih(r, i);
 				jh(`retrying ${e} in ${n}ms (attempt ${r}/${c}): ${Op(t)}`), await (0,external_node_timers_promises_namespaceObject.setTimeout)(n, void 0, s ? { signal: s } : void 0);
 				continue;
 			}
@@ -103823,19 +103867,19 @@ async function Fh(e, t) {
 }
 //#endregion
 //#region src/verify/brand.ts
-var Ih = "vadimpiven/node-addon-slsa", Lh = "https://vadimpiven.github.io/node-addon-slsa", Rh = ".github/workflows/publish.yaml", zh = "1.3.6.1.4.1.57264.1.9", Bh = "1.3.6.1.4.1.57264.1.12", Vh = "1.3.6.1.4.1.57264.1.13", Hh = "1.3.6.1.4.1.57264.1.14", Uh = "1.3.6.1.4.1.57264.1.21", Wh = "https://token.actions.githubusercontent.com", Gh = "slsa-manifest.json", Kh = 256 * 1024 * 1024, qh = 300, Jh = [
+var Bh = "vadimpiven/node-addon-slsa", Vh = "https://vadimpiven.github.io/node-addon-slsa", Hh = ".github/workflows/publish.yaml", Uh = "1.3.6.1.4.1.57264.1.9", Wh = "1.3.6.1.4.1.57264.1.12", Gh = "1.3.6.1.4.1.57264.1.13", Kh = "1.3.6.1.4.1.57264.1.14", qh = "1.3.6.1.4.1.57264.1.21", Jh = "https://token.actions.githubusercontent.com", Yh = "slsa-manifest.json", Xh = 256 * 1024 * 1024, Zh = 300, Qh = [
 	2e3,
 	5e3,
 	1e4,
 	15e3
-], Yh = "Check your network connection and try again.\nIf this persists, check https://status.sigstore.dev for outages.";
-function Xh(e) {
+], $h = "Check your network connection and try again.\nIf this persists, check https://status.sigstore.dev for outages.";
+function eg(e) {
 	return e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-var Zh = RegExp(`^${Xh(`${Ih}/${Rh}`)}@` + String.raw`[0-9a-f]{40}$`);
+var tg = RegExp(`^${eg(`${Bh}/${Hh}`)}@` + String.raw`[0-9a-f]{40}$`);
 //#endregion
 //#region src/verify/config.ts
-function Qh(e) {
+function ng(e) {
 	let { rekorSearchUrl: t, rekorEntryUrl: n } = e ?? {};
 	if (t && !n || !t && n) throw TypeError("rekorSearchUrl and rekorEntryUrl must both be provided when overriding Rekor endpoints");
 	return {
@@ -103851,13 +103895,13 @@ function Qh(e) {
 		dispatcher: e?.dispatcher,
 		rekorSearchUrl: t ?? "https://rekor.sigstore.dev/api/v1/index/retrieve",
 		rekorEntryUrl: n ?? "https://rekor.sigstore.dev/api/v1/log/entries/{uuid}",
-		rekorIngestionRetryDelays: e?.rekorIngestionRetryDelays ?? Jh
+		rekorIngestionRetryDelays: e?.rekorIngestionRetryDelays ?? Qh
 	};
 }
 //#endregion
 //#region src/util/json.ts
-var $h = so();
-async function eg(e, t) {
+var rg = so();
+async function ig(e, t) {
 	let n = [], r = 0;
 	for await (let i of e) {
 		let a = Buffer.isBuffer(i) ? i : Buffer.from(i);
@@ -103868,7 +103912,7 @@ async function eg(e, t) {
 }
 //#endregion
 //#region src/util/template.ts
-function tg(e, t) {
+function ag(e, t) {
 	let n = e;
 	for (let [e, r] of Object.entries(t)) n = n.replaceAll(`{${e}}`, r);
 	let r = n.match(/\{[a-zA-Z_]\w*\}/g);
@@ -103880,35 +103924,35 @@ function tg(e, t) {
 }
 //#endregion
 //#region src/verify/certificates.ts
-function ng(e, t) {
+function og(e, t) {
 	let n = e.extension(t);
 	if (!n) return null;
 	let r = n.valueObj.subs?.[0];
 	return r ? r.value.toString("utf8") : n.value.toString("ascii");
 }
-function rg(e, t, n, r) {
-	let i = ng(e, t);
+function sg(e, t, n, r) {
+	let i = og(e, t);
 	if (i !== n) throw new M(D`
         ${r} mismatch.
         Expected: ${n}
         Got: ${i ?? "<missing>"}
       `);
 }
-function ig(e, t, n) {
-	let r = ng(e, "1.3.6.1.4.1.57264.1.8") ?? ng(e, "1.3.6.1.4.1.57264.1.1");
+function cg(e, t, n) {
+	let r = og(e, "1.3.6.1.4.1.57264.1.8") ?? og(e, "1.3.6.1.4.1.57264.1.1");
 	if (r !== "https://token.actions.githubusercontent.com") throw new M(D`
         Certificate issuer mismatch.
-        Expected: ${Wh}
+        Expected: ${Jh}
         Got: ${r ?? "<missing>"}
       `);
-	let i = ng(e, Bh), a = `https://github.com/${t}`;
+	let i = og(e, Wh), a = `https://github.com/${t}`;
 	if (i?.toLowerCase() !== a.toLowerCase()) throw new M(D`
         Source repository mismatch.
         Expected: ${a}
         Got: ${i ?? "<missing>"}
       `);
-	rg(e, Vh, n.sourceCommit, "Source commit"), rg(e, Hh, n.sourceRef, "Source ref"), rg(e, Uh, n.runInvocationURI, "Run invocation URI");
-	let o = ng(e, zh);
+	sg(e, Gh, n.sourceCommit, "Source commit"), sg(e, Kh, n.sourceRef, "Source ref"), sg(e, qh, n.runInvocationURI, "Run invocation URI");
+	let o = og(e, Uh);
 	if (!o || !n.attestSignerPattern.test(o)) throw new M(D`
         Build Signer URI does not match the attestation signer pattern.
         Pattern: ${n.attestSignerPattern.source}
@@ -103917,33 +103961,33 @@ function ig(e, t, n) {
 }
 //#endregion
 //#region src/verify/schemas.ts
-var ag = `${Lh}/schema/slsa-manifest.v1.json`, og = Xf([
+var lg = `${Vh}/schema/slsa-manifest.v1.json`, ug = Xf([
 	"darwin",
 	"linux",
 	"win32"
-]), sg = Xf([
+]), dg = Xf([
 	"x64",
 	"arm64",
 	"arm",
 	"ia32"
-]), cg = Z().url().refine((e) => e.startsWith("https://"), { message: "url must use https://" }).refine((e) => {
+]), fg = Z().url().refine((e) => e.startsWith("https://"), { message: "url must use https://" }).refine((e) => {
 	try {
 		return new URL(e).pathname.toLowerCase().endsWith(".node.gz");
 	} catch {
 		return !1;
 	}
-}, { message: "addon url path must end with .node.gz" }), lg = Jf(og, Jf(sg, Vf({
-	url: cg,
+}, { message: "addon url path must end with .node.gz" }), pg = Jf(ug, Jf(dg, Vf({
+	url: fg,
 	sha256: Z().regex(/^[0-9a-f]{64}$/)
-}))), ug = Jf(og, Jf(sg, cg));
-function dg(e) {
+}))), mg = Jf(ug, Jf(dg, fg));
+function hg(e) {
 	return Object.entries(e).flatMap(([e, t]) => Object.entries(t ?? {}).map(([t, n]) => ({
 		platform: e,
 		arch: t,
 		url: n
 	})));
 }
-function fg(e) {
+function gg(e) {
 	let t = {};
 	for (let { platform: n, arch: r, entry: i } of e) {
 		let e = t[n] ??= {};
@@ -103951,15 +103995,15 @@ function fg(e) {
 	}
 	return t;
 }
-var pg = Z().min(1), mg = Z().regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/), hg = Z().regex(/^https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+\/actions\/runs\/\d+\/attempts\/\d+$/), gg = Vf({
-	$schema: Qf(ag),
-	packageName: pg,
-	runInvocationURI: hg,
-	sourceRepo: mg,
+var _g = Z().min(1), vg = Z().regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/), yg = Z().regex(/^https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+\/actions\/runs\/\d+\/attempts\/\d+$/), bg = Vf({
+	$schema: Qf(lg),
+	packageName: _g,
+	runInvocationURI: yg,
+	sourceRepo: vg,
 	sourceCommit: Z().regex(/^[0-9a-f]{40}$/),
 	sourceRef: Z().regex(/^refs\/tags\//),
-	addons: lg
-}), _g = { "slsa-manifest.v1.json": gg }, vg = zf(Z().regex(/^[a-f0-9]+$/)), yg = Vf({
+	addons: pg
+}), xg = { "slsa-manifest.v1.json": bg }, Sg = zf(Z().regex(/^[a-f0-9]+$/)), Cg = Vf({
 	body: Z(),
 	integratedTime: jf(),
 	logID: Z(),
@@ -103975,7 +104019,7 @@ var pg = Z().min(1), mg = Z().regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/), hg = 
 			treeSize: jf()
 		})
 	})
-}), bg = qf(Z(), yg), xg = Vf({
+}), wg = qf(Z(), Cg), Tg = Vf({
 	apiVersion: Z(),
 	kind: Qf("dsse"),
 	spec: Vf({
@@ -103992,23 +104036,23 @@ var pg = Z().min(1), mg = Z().regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/), hg = 
 			verifier: Z()
 		})).min(1)
 	})
-}), Sg = Vf({
+}), Eg = Vf({
 	payloadType: Z(),
 	payload: Z(),
 	signatures: zf(Vf({
 		sig: Z(),
 		keyid: Z().optional()
 	})).min(1)
-}), Cg = Vf({
+}), Dg = Vf({
 	_type: Z(),
 	subject: zf(Vf({
 		name: Z().optional(),
 		digest: Vf({ sha256: Z().regex(/^[a-f0-9]{64}$/) })
 	})).min(1),
 	predicateType: Z()
-}), wg = "application/vnd.dev.sigstore.bundle.v0.3+json", Tg = "application/vnd.in-toto+json";
-async function Eg(e, t) {
-	let n = await Fh(t.rekorSearchUrl, {
+}), Og = "application/vnd.dev.sigstore.bundle.v0.3+json", kg = "application/vnd.in-toto+json";
+async function Ag(e, t) {
+	let n = await zh(t.rekorSearchUrl, {
 		...t,
 		method: "POST",
 		headers: { "content-type": "application/json" },
@@ -104016,34 +104060,34 @@ async function Eg(e, t) {
 	});
 	if (n.statusCode >= 400) throw await n.body.dump(), Error(D`
       Rekor search failed: ${n.statusCode}.
-      ${Yh}
+      ${$h}
     `);
-	return vg.parse(await eg(n.body, t.maxJsonResponseBytes));
+	return Sg.parse(await ig(n.body, t.maxJsonResponseBytes));
 }
-async function Dg(e, t) {
-	let n = await Fh(tg(t.rekorEntryUrl, { uuid: e }), t);
+async function jg(e, t) {
+	let n = await zh(ag(t.rekorEntryUrl, { uuid: e }), t);
 	if (n.statusCode >= 400) throw await n.body.dump(), Error(D`
       failed to fetch Rekor entry ${e}: ${n.statusCode}.
-      ${Yh}
+      ${$h}
     `);
-	let r = bg.parse(await eg(n.body, t.maxJsonResponseBytes)), i = r[e];
+	let r = wg.parse(await ig(n.body, t.maxJsonResponseBytes)), i = r[e];
 	if (!i) throw Error(D`
       Rekor response did not contain the requested entry ${e}.
       Keys returned: ${Object.keys(r).join(", ") || "(none)"}.
-      ${Yh}
+      ${$h}
     `);
 	return i;
 }
-function Og(e, t) {
-	let n = Buffer.from(e.body, "base64"), r = xg.parse(JSON.parse(n.toString("utf8"))), i = r.spec.signatures[0];
+function Mg(e, t) {
+	let n = Buffer.from(e.body, "base64"), r = Tg.parse(JSON.parse(n.toString("utf8"))), i = r.spec.signatures[0];
 	if (!i) throw Error("Rekor DSSE entry has no signatures");
-	let a = Buffer.from(i.verifier, "base64").toString("utf8"), o = new external_node_crypto_.X509Certificate(a).raw.toString("base64"), s = JSON.parse(Buffer.from(e.attestation.data, "base64").toString("utf8")), c = Sg.parse(s), l = JSON.parse(Buffer.from(c.payload, "base64").toString("utf8")), u = Cg.parse(l), d = t.toLowerCase();
+	let a = Buffer.from(i.verifier, "base64").toString("utf8"), o = new external_node_crypto_.X509Certificate(a).raw.toString("base64"), s = JSON.parse(Buffer.from(e.attestation.data, "base64").toString("utf8")), c = Eg.parse(s), l = JSON.parse(Buffer.from(c.payload, "base64").toString("utf8")), u = Dg.parse(l), d = t.toLowerCase();
 	if (!u.subject.some((e) => e.digest.sha256.toLowerCase() === d)) {
 		let e = u.subject.map((e) => e.digest.sha256).join(", ");
 		throw Error(`Rekor entry Statement does not attest the requested artifact: want=${d} subject.digest.sha256=[${e}]`);
 	}
 	let f = {
-		mediaType: wg,
+		mediaType: Og,
 		verificationMaterial: {
 			x509CertificateChain: void 0,
 			publicKey: void 0,
@@ -104078,16 +104122,16 @@ function Og(e, t) {
 			}))
 		}
 	};
-	if (c.payloadType !== Tg) throw Error(`Rekor entry DSSE payloadType is not in-toto: got ${c.payloadType}`);
+	if (c.payloadType !== kg) throw Error(`Rekor entry DSSE payloadType is not in-toto: got ${c.payloadType}`);
 	return {
 		bundle: f,
-		cert: $h.X509Certificate.parse(a)
+		cert: rg.X509Certificate.parse(a)
 	};
 }
-async function kg(e) {
+async function Ng(e) {
 	let { sha256: t, repo: n, expect: r, config: i, verifier: a } = e;
 	jh(`searching Rekor for ${t}`);
-	let o = await Eg(t, i);
+	let o = await Ag(t, i);
 	if (o.length === 0) throw new M(D`
         No Rekor entry found for artifact hash ${t}.
         The artifact may have been tampered with, or the publish workflow
@@ -104099,14 +104143,14 @@ async function kg(e) {
 	for (let e of s) {
 		let o;
 		try {
-			o = await Dg(e, i);
+			o = await jg(e, i);
 		} catch (t) {
 			c++, jh(`Rekor entry ${e} fetch failed: ${Op(t)}`);
 			continue;
 		}
 		try {
-			let { bundle: e, cert: i } = Og(o, t);
-			a.verify(e), ig(i, n, r);
+			let { bundle: e, cert: i } = Mg(o, t);
+			a.verify(e), cg(i, n, r);
 			return;
 		} catch (t) {
 			if (N(t)) {
@@ -104119,7 +104163,7 @@ async function kg(e) {
 	let u = s.length;
 	throw c === u ? Error(D`
       Failed to fetch ${u} Rekor transparency log entries for this artifact.
-      ${Yh}
+      ${$h}
     `) : new M(D`
     Addon provenance verification failed.
     ${l + c === u ? D`
@@ -104134,7 +104178,7 @@ async function kg(e) {
 }
 //#endregion
 //#region src/verify/retry.ts
-async function Ag(e, t, n) {
+async function Pg(e, t, n) {
 	for (let r of [...t, null]) try {
 		return await e();
 	} catch (e) {
@@ -104145,35 +104189,35 @@ async function Ag(e, t, n) {
 }
 //#endregion
 //#region src/verify/verify.ts
-async function jg() {
+async function Fg() {
 	return (0, Ho.toTrustMaterial)(await (0, Vo.getTrustedRoot)());
 }
-function Mg(e) {
+function Ig(e) {
 	let t = new Ho.Verifier(e);
 	return { verify(e) {
 		t.verify((0, Ho.toSignedEntity)((0, Uo.bundleFromJSON)(e)));
 	} };
 }
-function Ng(e) {
+function Lg(e) {
 	return e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-function Pg(e) {
-	return e instanceof RegExp ? e : RegExp(`^${Ng(e)}$`);
+function Rg(e) {
+	return e instanceof RegExp ? e : RegExp(`^${Lg(e)}$`);
 }
-function Fg(e) {
-	return RegExp(`^${Ng(e)}@[0-9a-f]{40}$`);
+function zg(e) {
+	return RegExp(`^${Lg(e)}@[0-9a-f]{40}$`);
 }
-function Ig(e) {
-	return RegExp(`^refs/tags/v?${Ng(e)}$`);
+function Bg(e) {
+	return RegExp(`^refs/tags/v?${Lg(e)}$`);
 }
-async function Lg(e) {
-	let t = Go(e.sha256), n = Ko(e.repo), r = qo(e.runInvocationURI), i = Jo(e.sourceCommit), a = Yo(e.sourceRef), o = Qh(e), s = o.verifier ?? Mg(o.trustMaterial ?? await jg()), c = {
+async function Vg(e) {
+	let t = Go(e.sha256), n = Ko(e.repo), r = qo(e.runInvocationURI), i = Jo(e.sourceCommit), a = Yo(e.sourceRef), o = ng(e), s = o.verifier ?? Ig(o.trustMaterial ?? await Fg()), c = {
 		sourceCommit: i,
 		sourceRef: a,
 		runInvocationURI: r,
-		attestSignerPattern: e.attestSignerPattern ? Fg(e.attestSignerPattern) : Zh
+		attestSignerPattern: e.attestSignerPattern ? zg(e.attestSignerPattern) : tg
 	};
-	await Ag(() => kg({
+	await Pg(() => Ng({
 		sha256: t,
 		repo: n,
 		expect: c,
@@ -104181,13 +104225,13 @@ async function Lg(e) {
 		verifier: s
 	}), o.rekorIngestionRetryDelays, e.signal);
 }
-async function Rg(e) {
+async function Hg(e) {
 	let { stream: t, digest: n } = kp();
 	return await h(o(e), t, async (e) => {
 		for await (let t of e);
 	}), n();
 }
-async function zg(e, t) {
+async function Ug(e, t) {
 	let n = p(e, t), r;
 	try {
 		r = await c(n, "utf8");
@@ -104199,7 +104243,7 @@ async function zg(e, t) {
     `);
 	}
 	try {
-		return gg.parse(JSON.parse(r));
+		return bg.parse(JSON.parse(r));
 	} catch (e) {
 		throw new M(D`
       manifest at ${t} failed schema validation.
@@ -104207,8 +104251,8 @@ async function zg(e, t) {
     `);
 	}
 }
-async function Bg(e, t) {
-	let n = await Ep(e), r = await zg(e, n.addon.manifest ?? "slsa-manifest.json");
+async function Wg(e, t) {
+	let n = await Ep(e), r = await Ug(e, n.addon.manifest ?? "slsa-manifest.json");
 	if (r.packageName !== n.name) throw new M(D`
       manifest.packageName does not match installed package.json name.
       manifest.packageName: ${r.packageName}
@@ -104225,15 +104269,15 @@ async function Bg(e, t) {
       manifest.sourceRepo: ${r.sourceRepo}
       expected:            ${i}
     `);
-	let a = Pg(t.refPattern ?? Ig(n.version));
+	let a = Rg(t.refPattern ?? Bg(n.version));
 	if (!a.test(r.sourceRef)) throw new M(D`
       manifest.sourceRef does not match expected refPattern.
       manifest.sourceRef: ${r.sourceRef}
       pattern:            ${a.source}
     `);
-	let o = qo(r.runInvocationURI), s = t.attestSignerPattern ? Fg(t.attestSignerPattern) : Zh, c = async (e) => {
-		let n = Qh(t), a = n.verifier ?? Mg(n.trustMaterial ?? await jg());
-		await kg({
+	let o = qo(r.runInvocationURI), s = t.attestSignerPattern ? zg(t.attestSignerPattern) : tg, c = async (e) => {
+		let n = ng(t), a = n.verifier ?? Ig(n.trustMaterial ?? await Fg());
+		await Ng({
 			sha256: e,
 			repo: i,
 			expect: {
@@ -104253,10 +104297,10 @@ async function Bg(e, t) {
 		sourceRef: r.sourceRef,
 		runInvocationURI: r.runInvocationURI,
 		verifyAddonBySha256: async (e) => c(Go(e)),
-		verifyAddonFromFile: async (e) => c(await Rg(e))
+		verifyAddonFromFile: async (e) => c(await Hg(e))
 	};
 }
-async function Vg(e) {
+async function Gg(e) {
 	let t = e.cwd ?? process.cwd(), n = a(t + "/"), r;
 	try {
 		r = n.resolve(`${e.packageName}/package.json`);
@@ -104266,17 +104310,17 @@ async function Vg(e) {
       Ensure the package is installed, or pass { cwd } explicitly.
     `, { cause: n });
 	}
-	return Bg(d(r), e);
+	return Wg(d(r), e);
 }
 //#endregion
 //#region src/util/fs.ts
-function Hg(e) {
+function Kg(e) {
 	return e instanceof Error && "code" in e && e.code === "ENOENT";
 }
-function Ug(e) {
+function qg(e) {
 	return e instanceof Error && "code" in e && e.code === "ENOTDIR";
 }
-async function Wg(e = "slsa-") {
+async function Jg(e = "slsa-") {
 	let t = await s(f(x(), e));
 	return {
 		path: t,
@@ -104286,7 +104330,7 @@ async function Wg(e = "slsa-") {
 		})
 	};
 }
-function Gg({ baseDir: e, target: t, label: n }) {
+function Yg({ baseDir: e, target: t, label: n }) {
 	let r = p(e), i = p(t);
 	if (!i.startsWith(r + m)) throw Error(D`
         ${n} escapes the package directory — possible path traversal.
@@ -104296,17 +104340,17 @@ function Gg({ baseDir: e, target: t, label: n }) {
         If you did not author this package, report this to the maintainer.
       `);
 }
-async function Kg(e, t) {
+async function Xg(e, t) {
 	try {
 		await u(e);
 	} catch (e) {
-		Hg(e) || Mh(`failed to clean up ${t}: ${e}`);
+		Kg(e) || Mh(`failed to clean up ${t}: ${e}`);
 	}
 }
 //#endregion
 //#region src/util/addon-fetch.ts
-async function qg(e, t) {
-	let { statusCode: n, headers: r, body: i } = await Fh(e, {
+async function Zg(e, t) {
+	let { statusCode: n, headers: r, body: i } = await zh(e, {
 		timeoutMs: t.maxBinaryMs,
 		stallTimeoutMs: t.maxBinaryMs,
 		retryCount: t.retryCount,
