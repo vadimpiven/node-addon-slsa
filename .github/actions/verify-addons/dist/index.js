@@ -67703,20 +67703,20 @@ var t = Object.defineProperty, n = Object.getOwnPropertyDescriptor, r = Object.g
 
 // EXPORTS
 __nccwpck_require__.d(__webpack_exports__, {
-  lr: () => (/* binding */ cg),
-  HJ: () => (/* binding */ qh),
-  rM: () => (/* binding */ Jh),
-  Wx: () => (/* binding */ rg),
-  f9: () => (/* binding */ ug),
+  lr: () => (/* binding */ ag),
+  HJ: () => (/* binding */ Wh),
+  rM: () => (/* binding */ Gh),
+  Wx: () => (/* binding */ eg),
+  f9: () => (/* binding */ sg),
   uT: () => (/* binding */ Yc),
   gJ: () => (/* binding */ Kc),
-  Oz: () => (/* binding */ n_),
-  ac: () => (/* binding */ lg),
-  ak: () => (/* binding */ Lg),
-  oe: () => (/* binding */ Gg)
+  Oz: () => (/* binding */ Qg),
+  ac: () => (/* binding */ og),
+  ak: () => (/* binding */ Pg),
+  oe: () => (/* binding */ Vg)
 });
 
-// UNUSED EXPORTS: AddonInventorySchema, ArchSchema, BRAND_PAGES_BASE, BRAND_PUBLISH_WORKFLOW_PATH, BRAND_REPO, DEFAULT_ATTEST_SIGNER_PATTERN, DEFAULT_MANIFEST_PATH, HttpError, PlatformSchema, ProvenanceError, PublishedSchemas, RekorError, SlsaManifestSchemaV1, assertWithinDir, buildSignerPatternFromPrefix, createBundleVerifier, createHashPassthrough, createRekorClient, evalTemplate, extractExpectedRepo, isEnoent, isEnotdir, isProvenanceError, log, readPackageJson, safeUnlink, tempDir, verifyPackage, verifyPackageAt, warn, withRetry
+// UNUSED EXPORTS: AddonInventorySchema, ArchSchema, DEFAULT_ATTEST_SIGNER_PATTERN, DEFAULT_MANIFEST_PATH, HttpError, PlatformSchema, ProvenanceError, PublishedSchemas, RekorError, SlsaManifestSchemaV1, assertWithinDir, createBundleVerifier, createHashPassthrough, createRekorClient, evalTemplate, extractExpectedRepo, isEnoent, isEnotdir, isProvenanceError, log, readPackageJson, safeUnlink, tempDir, verifyPackage, verifyPackageAt, warn, withRetry
 
 // EXTERNAL MODULE: ../../../packages/internal/dist/chunk-CzB3-c9G.js
 var chunk_CzB3_c9G = __nccwpck_require__(149);
@@ -103839,21 +103839,19 @@ function Ih() {
 		digest: () => $c(e.digest("hex"))
 	};
 }
-//#endregion
-//#region src/verify/brand.ts
-var Lh = "vadimpiven/node-addon-slsa", Rh = "https://vadimpiven.github.io/node-addon-slsa", zh = ".github/workflows/publish.yaml", Bh = "1.3.6.1.4.1.57264.1.9", Vh = "1.3.6.1.4.1.57264.1.12", Hh = "1.3.6.1.4.1.57264.1.13", Uh = "1.3.6.1.4.1.57264.1.14", Wh = "1.3.6.1.4.1.57264.1.21", Gh = "https://token.actions.githubusercontent.com", Kh = "slsa-manifest.json", qh = 256 * 1024 * 1024, Jh = 300, Yh = 50 * 1024 * 1024, Xh = [
+var Lh = "1.3.6.1.4.1.57264.1.9", Rh = "1.3.6.1.4.1.57264.1.12", zh = "1.3.6.1.4.1.57264.1.13", Bh = "1.3.6.1.4.1.57264.1.14", Vh = "1.3.6.1.4.1.57264.1.21", Hh = "https://token.actions.githubusercontent.com", Uh = "slsa-manifest.json", Wh = 256 * 1024 * 1024, Gh = 300, Kh = 50 * 1024 * 1024, qh = [
 	2e3,
 	5e3,
 	1e4,
 	15e3
-], Zh = "Check your network connection and try again.\nIf this persists, check https://status.sigstore.dev for outages.";
-function Qh(e) {
+], Jh = "Check your network connection and try again.\nIf this persists, check https://status.sigstore.dev for outages.";
+function Yh(e) {
 	return e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-var $h = RegExp(`^${Qh(`https://github.com/${Lh}/${zh}`)}@` + String.raw`[0-9a-f]{40}$`);
+var Xh = RegExp(`^${Yh("https://github.com/vadimpiven/node-addon-slsa/.github/workflows/publish.yaml")}@` + String.raw`[0-9a-f]{40}$`);
 //#endregion
 //#region src/verify/config.ts
-function eg(e) {
+function Zh(e) {
 	let { rekorSearchUrl: t, rekorEntryUrl: n } = e ?? {};
 	if (t && !n || !t && n) throw TypeError("rekorSearchUrl and rekorEntryUrl must both be provided when overriding Rekor endpoints");
 	return {
@@ -103866,12 +103864,12 @@ function eg(e) {
 		rekorClient: e?.rekorClient,
 		rekorSearchUrl: t ?? "https://rekor.sigstore.dev/api/v1/index/retrieve",
 		rekorEntryUrl: n ?? "https://rekor.sigstore.dev/api/v1/log/entries/{uuid}",
-		rekorIngestionRetryDelays: e?.rekorIngestionRetryDelays ?? Xh
+		rekorIngestionRetryDelays: e?.rekorIngestionRetryDelays ?? qh
 	};
 }
 //#endregion
 //#region src/util/json.ts
-async function tg(e, t) {
+async function Qh(e, t) {
 	let n = [], r = 0;
 	for await (let i of e) {
 		let a = Buffer.isBuffer(i) ? i : Buffer.from(i);
@@ -103882,7 +103880,7 @@ async function tg(e, t) {
 }
 //#endregion
 //#region src/util/template.ts
-function ng(e, t) {
+function $h(e, t) {
 	let n = e;
 	for (let [e, r] of Object.entries(t)) n = n.replaceAll(`{${e}}`, r);
 	let r = n.match(/\{[a-zA-Z_]\w*\}/g);
@@ -103894,33 +103892,33 @@ function ng(e, t) {
 }
 //#endregion
 //#region src/verify/schemas.ts
-var rg = `${Rh}/schema/slsa-manifest.v1.json`, ig = ih([
+var eg = "https://vadimpiven.github.io/node-addon-slsa/schema/slsa-manifest.v1.json", tg = ih([
 	"darwin",
 	"linux",
 	"win32"
-]), ag = ih([
+]), ng = ih([
 	"x64",
 	"arm64",
 	"arm",
 	"ia32"
-]), og = $().url().refine((e) => e.startsWith("https://"), { message: "url must use https://" }).refine((e) => {
+]), rg = $().url().refine((e) => e.startsWith("https://"), { message: "url must use https://" }).refine((e) => {
 	try {
 		return new URL(e).pathname.toLowerCase().endsWith(".node.gz");
 	} catch {
 		return !1;
 	}
-}, { message: "addon url path must end with .node.gz" }), sg = nh(ig, nh(ag, Ym({
-	url: og,
+}, { message: "addon url path must end with .node.gz" }), ig = nh(tg, nh(ng, Ym({
+	url: rg,
 	sha256: $().regex(/^[0-9a-f]{64}$/)
-}))), cg = nh(ig, nh(ag, og));
-function lg(e) {
+}))), ag = nh(tg, nh(ng, rg));
+function og(e) {
 	return Object.entries(e).flatMap(([e, t]) => Object.entries(t ?? {}).map(([t, n]) => ({
 		platform: e,
 		arch: t,
 		url: n
 	})));
 }
-function ug(e) {
+function sg(e) {
 	let t = {};
 	for (let { platform: n, arch: r, entry: i } of e) {
 		let e = t[n] ??= {};
@@ -103928,15 +103926,15 @@ function ug(e) {
 	}
 	return t;
 }
-var dg = $().min(1), fg = $().regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/), pg = $().regex(/^https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+\/actions\/runs\/\d+\/attempts\/\d+$/), mg = Ym({
-	$schema: oh(rg),
-	packageName: dg,
-	runInvocationURI: pg,
-	sourceRepo: fg,
+var cg = $().min(1), lg = $().regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/), ug = $().regex(/^https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+\/actions\/runs\/\d+\/attempts\/\d+$/), dg = Ym({
+	$schema: oh(eg),
+	packageName: cg,
+	runInvocationURI: ug,
+	sourceRepo: lg,
 	sourceCommit: $().regex(/^[0-9a-f]{40}$/),
 	sourceRef: $().regex(/^refs\/tags\//),
-	addons: sg
-}), hg = { "slsa-manifest.v1.json": mg }, gg = qm($().regex(/^[a-f0-9]+$/)), _g = Ym({
+	addons: ig
+}), fg = { "slsa-manifest.v1.json": dg }, pg = qm($().regex(/^[a-f0-9]+$/)), mg = Ym({
 	body: $(),
 	integratedTime: zm(),
 	logID: $(),
@@ -103952,7 +103950,7 @@ var dg = $().min(1), fg = $().regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/), pg = 
 			treeSize: zm()
 		})
 	})
-}), vg = th($(), _g), yg = Ym({
+}), hg = th($(), mg), gg = Ym({
 	apiVersion: $(),
 	kind: oh("dsse"),
 	spec: Ym({
@@ -103969,49 +103967,49 @@ var dg = $().min(1), fg = $().regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/), pg = 
 			verifier: $()
 		})).min(1)
 	})
-}), bg = Ym({
+}), _g = Ym({
 	payloadType: $(),
 	payload: $(),
 	signatures: qm(Ym({
 		sig: $(),
 		keyid: $().optional()
 	})).min(1)
-}), xg = Ym({
+}), vg = Ym({
 	_type: $(),
 	subject: qm(Ym({
 		name: $().optional(),
 		digest: Ym({ sha256: $().regex(/^[a-f0-9]{64}$/) })
 	})).min(1),
 	predicateType: $()
-}), Sg = class extends Error {
+}), yg = class extends Error {
 	kind;
 	uuid;
 	constructor(e) {
 		super(e.message, e.cause === void 0 ? void 0 : { cause: e.cause }), this.kind = e.kind, e.uuid !== void 0 && (this.uuid = e.uuid);
 	}
 };
-function Cg(e, t) {
-	return e instanceof qc ? e.kind === "status" && e.status === 404 && t !== void 0 ? new Sg({
+function bg(e, t) {
+	return e instanceof qc ? e.kind === "status" && e.status === 404 && t !== void 0 ? new yg({
 		kind: "lag",
 		uuid: t,
-		message: `Rekor entry ${t} not yet replicated (HTTP 404). ${Zh}`,
+		message: `Rekor entry ${t} not yet replicated (HTTP 404). ${Jh}`,
 		cause: e
-	}) : new Sg({
+	}) : new yg({
 		kind: "unavailable",
 		...t !== void 0 && { uuid: t },
-		message: `Rekor ${t ? `entry ${t}` : "search"} unavailable: ${e.message}. ${Zh}`,
+		message: `Rekor ${t ? `entry ${t}` : "search"} unavailable: ${e.message}. ${Jh}`,
 		cause: e
-	}) : new Sg({
+	}) : new yg({
 		kind: "malformed",
 		...t !== void 0 && { uuid: t },
 		message: D`
       Rekor response could not be parsed: ${e instanceof Error ? e.message : String(e)}.
-      ${Zh}
+      ${Jh}
     `,
 		cause: e
 	});
 }
-function wg(e) {
+function xg(e) {
 	let t = e.timeoutMs === void 0 ? {} : { timeoutMs: e.timeoutMs };
 	return {
 		async search(n) {
@@ -104022,67 +104020,67 @@ function wg(e) {
 					body: JSON.stringify({ hash: `sha256:${n}` }),
 					contentType: "application/json"
 				});
-				return gg.parse(await tg(r.body, Yh));
+				return pg.parse(await Qh(r.body, Kh));
 			} catch (e) {
-				throw e instanceof Sg ? e : Cg(e);
+				throw e instanceof yg ? e : bg(e);
 			}
 		},
 		async fetchEntry(n) {
-			let r = ng(e.entryUrl, { uuid: n });
+			let r = $h(e.entryUrl, { uuid: n });
 			try {
-				let i = await e.http.request(r, t), a = vg.parse(await tg(i.body, Yh)), o = a[n];
-				if (!o) throw new Sg({
+				let i = await e.http.request(r, t), a = hg.parse(await Qh(i.body, Kh)), o = a[n];
+				if (!o) throw new yg({
 					kind: "tamper",
 					uuid: n,
-					message: `Rekor response for ${n} did not contain the requested UUID; keys: ${Object.keys(a).join(", ") || "(none)"}. ${Zh}`
+					message: `Rekor response for ${n} did not contain the requested UUID; keys: ${Object.keys(a).join(", ") || "(none)"}. ${Jh}`
 				});
 				return o;
 			} catch (e) {
-				throw e instanceof Sg ? e : Cg(e, n);
+				throw e instanceof yg ? e : bg(e, n);
 			}
 		}
 	};
 }
 //#endregion
 //#region src/util/log.ts
-var Tg = so();
-function Eg(e) {
+var Sg = so();
+function Cg(e) {
 	external_node_process_namespaceObject.env.SLSA_DEBUG === "1" && external_node_process_namespaceObject.stderr.write(`[slsa] ${e}\n`);
 }
-function Dg(e) {
+function wg(e) {
 	external_node_process_namespaceObject.stderr.write(`[slsa] ${e}\n`);
 }
 //#endregion
 //#region src/verify/certificates.ts
-function Og(e, t) {
+function Tg(e, t) {
 	let n = e.extension(t);
 	if (!n) return null;
 	let r = n.valueObj.subs?.[0];
 	return r ? r.value.toString("utf8") : n.value.toString("ascii");
 }
-function kg(e, t, n, r) {
-	let i = Og(e, t);
+function Eg(e, t, n, r) {
+	let i = Tg(e, t);
 	if (i !== n) throw new M(D`
         ${r} mismatch.
         Expected: ${n}
         Got: ${i ?? "<missing>"}
       `);
 }
-function Ag(e, t, n) {
-	let r = Og(e, "1.3.6.1.4.1.57264.1.8") ?? Og(e, "1.3.6.1.4.1.57264.1.1");
+function Dg(e, t, n) {
+	let r = Tg(e, "1.3.6.1.4.1.57264.1.8") ?? Tg(e, "1.3.6.1.4.1.57264.1.1");
 	if (r !== "https://token.actions.githubusercontent.com") throw new M(D`
         Certificate issuer mismatch.
-        Expected: ${Gh}
+        Expected: ${Hh}
         Got: ${r ?? "<missing>"}
       `);
-	let i = Og(e, Vh), a = `https://github.com/${t}`;
+	let i = Tg(e, Rh), a = `https://github.com/${t}`;
 	if (i?.toLowerCase() !== a.toLowerCase()) throw new M(D`
         Source repository mismatch.
         Expected: ${a}
         Got: ${i ?? "<missing>"}
       `);
-	kg(e, Hh, n.sourceCommit, "Source commit"), kg(e, Uh, n.sourceRef, "Source ref"), kg(e, Wh, n.runInvocationURI, "Run invocation URI");
-	let o = Og(e, Bh);
+	Eg(e, zh, n.sourceCommit, "Source commit"), Eg(e, Bh, n.sourceRef, "Source ref"), Eg(e, Vh, n.runInvocationURI, "Run invocation URI");
+	let o = Tg(e, Lh);
 	if (!o || !n.attestSignerPattern.test(o)) throw new M(D`
         Build Signer URI does not match the attestation signer pattern.
         Pattern: ${n.attestSignerPattern.source}
@@ -104091,17 +104089,17 @@ function Ag(e, t, n) {
 }
 //#endregion
 //#region src/verify/rekor.ts
-var jg = "application/vnd.dev.sigstore.bundle.v0.3+json", Mg = "application/vnd.in-toto+json";
-function Ng(e, t) {
-	let n = Buffer.from(e.body, "base64"), r = yg.parse(JSON.parse(n.toString("utf8"))), i = r.spec.signatures[0];
+var Og = "application/vnd.dev.sigstore.bundle.v0.3+json", kg = "application/vnd.in-toto+json";
+function Ag(e, t) {
+	let n = Buffer.from(e.body, "base64"), r = gg.parse(JSON.parse(n.toString("utf8"))), i = r.spec.signatures[0];
 	if (!i) throw Error("Rekor DSSE entry has no signatures");
-	let a = Buffer.from(i.verifier, "base64").toString("utf8"), o = new external_node_crypto_.X509Certificate(a).raw.toString("base64"), s = JSON.parse(Buffer.from(e.attestation.data, "base64").toString("utf8")), c = bg.parse(s), l = JSON.parse(Buffer.from(c.payload, "base64").toString("utf8")), u = xg.parse(l), d = t.toLowerCase();
+	let a = Buffer.from(i.verifier, "base64").toString("utf8"), o = new external_node_crypto_.X509Certificate(a).raw.toString("base64"), s = JSON.parse(Buffer.from(e.attestation.data, "base64").toString("utf8")), c = _g.parse(s), l = JSON.parse(Buffer.from(c.payload, "base64").toString("utf8")), u = vg.parse(l), d = t.toLowerCase();
 	if (!u.subject.some((e) => e.digest.sha256.toLowerCase() === d)) {
 		let e = u.subject.map((e) => e.digest.sha256).join(", ");
 		throw Error(`Rekor entry Statement does not attest the requested artifact: want=${d} subject.digest.sha256=[${e}]`);
 	}
 	let f = {
-		mediaType: jg,
+		mediaType: Og,
 		verificationMaterial: {
 			x509CertificateChain: void 0,
 			publicKey: void 0,
@@ -104136,20 +104134,20 @@ function Ng(e, t) {
 			}))
 		}
 	};
-	if (c.payloadType !== Mg) throw Error(`Rekor entry DSSE payloadType is not in-toto: got ${c.payloadType}`);
+	if (c.payloadType !== kg) throw Error(`Rekor entry DSSE payloadType is not in-toto: got ${c.payloadType}`);
 	return {
 		bundle: f,
-		cert: Tg.X509Certificate.parse(a)
+		cert: Sg.X509Certificate.parse(a)
 	};
 }
-async function* Pg(e, t, n, r, i, a) {
+async function* jg(e, t, n, r, i, a) {
 	for (let o of e) {
 		let e;
 		try {
 			e = await t.fetchEntry(o);
 		} catch (e) {
-			if (e instanceof Sg) {
-				Eg(`Rekor entry ${o} fetch failed: ${e.message}`), yield {
+			if (e instanceof yg) {
+				Cg(`Rekor entry ${o} fetch failed: ${e.message}`), yield {
 					kind: "rekor-error",
 					error: e
 				};
@@ -104158,68 +104156,65 @@ async function* Pg(e, t, n, r, i, a) {
 			throw e;
 		}
 		try {
-			let { bundle: t, cert: o } = Ng(e, r);
-			n.verify(t), Ag(o, i, a), yield { kind: "verified" };
+			let { bundle: t, cert: o } = Ag(e, r);
+			n.verify(t), Dg(o, i, a), yield { kind: "verified" };
 			return;
 		} catch (e) {
-			N(e) ? Eg(`Rekor entry ${o} OID check failed: ${e.message}`) : Eg(`Rekor entry ${o} failed verification: ${Kc(e)}`), yield {
+			N(e) ? Cg(`Rekor entry ${o} OID check failed: ${e.message}`) : Cg(`Rekor entry ${o} failed verification: ${Kc(e)}`), yield {
 				kind: "verify-error",
 				error: e
 			};
 		}
 	}
 }
-function Fg(e, t) {
+function Mg(e, t) {
 	let n = e.length, r = 0, i = 0, a = 0, o = 0, s = 0;
 	for (let t of e) t.kind === "rekor-error" ? t.error.kind === "lag" ? r++ : t.error.kind === "unavailable" ? i++ : t.error.kind === "tamper" ? a++ : o++ : t.kind === "verify-error" && s++;
 	throw a > 0 ? new M(`Rekor returned ${a} of ${n} entries under a UUID we didn't request. Refusing to verify.`) : r > 0 ? new M(`${r} of ${n} Rekor entries still replicating (404). Retrying after ingestion-lag delay.`, { kind: "rekor-not-found" }) : i > 0 && s === 0 && o === 0 ? Error(`Rekor unavailable: ${i} of ${n} entry fetches failed (non-404).`) : new M(`Addon provenance verification failed. ${n} Rekor entries found, none matched the expected workflow run (${t.runInvocationURI}) or signer pattern.`);
 }
-async function Ig(e) {
+async function Ng(e) {
 	let { sha256: t, repo: n, expect: r, client: i, verifier: a, maxEntries: o } = e;
-	Eg(`searching Rekor for ${t}`);
+	Cg(`searching Rekor for ${t}`);
 	let s = await i.search(t);
 	if (s.length === 0) throw new M(`No Rekor entry found for artifact hash ${t}. The artifact may have been tampered with, or the publish workflow did not attest it.`, { kind: "rekor-not-found" });
 	let c = o > 0 ? s.slice(-o) : s;
-	s.length > c.length && Dg(`Rekor returned ${s.length} entries for ${t}; checking newest ${c.length}. If verification fails, this may indicate an attacker flooding the log.`);
+	s.length > c.length && wg(`Rekor returned ${s.length} entries for ${t}; checking newest ${c.length}. If verification fails, this may indicate an attacker flooding the log.`);
 	let l = [];
-	for await (let e of Pg(c, i, a, t, n, r)) {
+	for await (let e of jg(c, i, a, t, n, r)) {
 		if (e.kind === "verified") return;
 		l.push(e);
 	}
-	Fg(l, r);
+	Mg(l, r);
 }
 //#endregion
 //#region src/verify/verify.ts
-async function Lg() {
+async function Pg() {
 	return (0, Uc.toTrustMaterial)(await (0, Hc.getTrustedRoot)());
 }
-function Rg(e) {
+function Fg(e) {
 	let t = new Uc.Verifier(e);
 	return { verify(e) {
 		t.verify((0, Uc.toSignedEntity)((0, Wc.bundleFromJSON)(e)));
 	} };
 }
-function zg(e) {
+function Ig(e) {
 	return e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-function Bg(e) {
-	return e instanceof RegExp ? e : RegExp(`^${zg(e)}$`);
+function Lg(e) {
+	return e instanceof RegExp ? e : RegExp(`^${Ig(e)}$`);
 }
-function Vg(e) {
-	return RegExp(`^${zg(e)}@[0-9a-f]{40}$`);
+function Rg(e) {
+	return RegExp(`^refs/tags/v?${Ig(e)}$`);
 }
-function Hg(e) {
-	return RegExp(`^refs/tags/v?${zg(e)}$`);
-}
-function Ug(e) {
-	return e.rekorClient ? e.rekorClient : wg({
+function zg(e) {
+	return e.rekorClient ? e.rekorClient : xg({
 		http: Yc({ dispatcher: e.dispatcher }),
 		searchUrl: e.rekorSearchUrl,
 		entryUrl: e.rekorEntryUrl,
 		timeoutMs: e.timeoutMs
 	});
 }
-function Wg(e) {
+function Bg(e) {
 	return (t, n) => {
 		let r = n - 1;
 		return r >= e.length ? { retry: !1 } : N(t) && t.kind === "rekor-not-found" ? {
@@ -104228,29 +104223,29 @@ function Wg(e) {
 		} : { retry: !1 };
 	};
 }
-async function Gg(e) {
-	let t = $c(e.sha256), n = el(e.repo), r = tl(e.runInvocationURI), i = nl(e.sourceCommit), a = rl(e.sourceRef), o = eg(e), s = o.verifier ?? Rg(o.trustMaterial ?? await Lg()), c = Ug(o), l = {
+async function Vg(e) {
+	let t = $c(e.sha256), n = el(e.repo), r = tl(e.runInvocationURI), i = nl(e.sourceCommit), a = rl(e.sourceRef), o = Zh(e), s = o.verifier ?? Fg(o.trustMaterial ?? await Pg()), c = zg(o), l = {
 		sourceCommit: i,
 		sourceRef: a,
 		runInvocationURI: r,
-		attestSignerPattern: e.attestSignerPattern ? Vg(e.attestSignerPattern) : $h
+		attestSignerPattern: Xh
 	};
-	await Xc(() => Ig({
+	await Xc(() => Ng({
 		sha256: t,
 		repo: n,
 		expect: l,
 		client: c,
 		verifier: s,
 		maxEntries: o.maxRekorEntries
-	}), Wg(o.rekorIngestionRetryDelays), e.signal ? { signal: e.signal } : void 0);
+	}), Bg(o.rekorIngestionRetryDelays), e.signal ? { signal: e.signal } : void 0);
 }
-async function Kg(e) {
+async function Hg(e) {
 	let { stream: t, digest: n } = Ih();
 	return await h(o(e), t, async (e) => {
 		for await (let t of e);
 	}), n();
 }
-async function qg(e, t) {
+async function Ug(e, t) {
 	let n = p(e, t), r;
 	try {
 		r = await c(n, "utf8");
@@ -104262,7 +104257,7 @@ async function qg(e, t) {
     `);
 	}
 	try {
-		return mg.parse(JSON.parse(r));
+		return dg.parse(JSON.parse(r));
 	} catch (e) {
 		throw new M(D`
       manifest at ${t} failed schema validation.
@@ -104270,8 +104265,8 @@ async function qg(e, t) {
     `);
 	}
 }
-async function Jg(e, t) {
-	let n = await Ph(e), r = await qg(e, n.addon.manifest ?? "slsa-manifest.json");
+async function Wg(e, t) {
+	let n = await Ph(e), r = await Ug(e, n.addon.manifest ?? "slsa-manifest.json");
 	if (r.packageName !== n.name) throw new M(D`
       manifest.packageName does not match installed package.json name.
       manifest.packageName: ${r.packageName}
@@ -104288,26 +104283,26 @@ async function Jg(e, t) {
       manifest.sourceRepo: ${r.sourceRepo}
       expected:            ${i}
     `);
-	let a = Bg(t.refPattern ?? Hg(n.version));
+	let a = Lg(t.refPattern ?? Rg(n.version));
 	if (!a.test(r.sourceRef)) throw new M(D`
       manifest.sourceRef does not match expected refPattern.
       manifest.sourceRef: ${r.sourceRef}
       pattern:            ${a.source}
     `);
-	let o = tl(r.runInvocationURI), s = t.attestSignerPattern ? Vg(t.attestSignerPattern) : $h, c = eg(t), l = c.verifier ?? Rg(c.trustMaterial ?? await Lg()), u = Ug(c), d = {
+	let o = tl(r.runInvocationURI), s = Zh(t), c = s.verifier ?? Fg(s.trustMaterial ?? await Pg()), l = zg(s), u = {
 		sourceCommit: r.sourceCommit,
 		sourceRef: r.sourceRef,
 		runInvocationURI: o,
-		attestSignerPattern: s
-	}, f = async (e) => {
-		await Xc(() => Ig({
+		attestSignerPattern: Xh
+	}, d = async (e) => {
+		await Xc(() => Ng({
 			sha256: e,
 			repo: i,
-			expect: d,
-			client: u,
-			verifier: l,
-			maxEntries: c.maxRekorEntries
-		}), Wg(c.rekorIngestionRetryDelays), t.signal ? { signal: t.signal } : void 0);
+			expect: u,
+			client: l,
+			verifier: c,
+			maxEntries: s.maxRekorEntries
+		}), Bg(s.rekorIngestionRetryDelays), t.signal ? { signal: t.signal } : void 0);
 	};
 	return {
 		packageName: r.packageName,
@@ -104315,11 +104310,11 @@ async function Jg(e, t) {
 		sourceCommit: r.sourceCommit,
 		sourceRef: r.sourceRef,
 		runInvocationURI: r.runInvocationURI,
-		verifyAddonBySha256: async (e) => f($c(e)),
-		verifyAddonFromFile: async (e) => f(await Kg(e))
+		verifyAddonBySha256: async (e) => d($c(e)),
+		verifyAddonFromFile: async (e) => d(await Hg(e))
 	};
 }
-async function Yg(e) {
+async function Gg(e) {
 	let t = e.cwd ?? process.cwd(), n = a(t + "/"), r;
 	try {
 		r = n.resolve(`${e.packageName}/package.json`);
@@ -104329,17 +104324,17 @@ async function Yg(e) {
       Ensure the package is installed, or pass { cwd } explicitly.
     `, { cause: n });
 	}
-	return Jg(d(r), e);
+	return Wg(d(r), e);
 }
 //#endregion
 //#region src/util/fs.ts
-function Xg(e) {
+function Kg(e) {
 	return e instanceof Error && "code" in e && e.code === "ENOENT";
 }
-function Zg(e) {
+function qg(e) {
 	return e instanceof Error && "code" in e && e.code === "ENOTDIR";
 }
-async function Qg(e = "slsa-") {
+async function Jg(e = "slsa-") {
 	let t = await s(f(x(), e));
 	return {
 		path: t,
@@ -104349,7 +104344,7 @@ async function Qg(e = "slsa-") {
 		})
 	};
 }
-function $g({ baseDir: e, target: t, label: n }) {
+function Yg({ baseDir: e, target: t, label: n }) {
 	let r = p(e), i = p(t);
 	if (!i.startsWith(r + m)) throw Error(D`
         ${n} escapes the package directory — possible path traversal.
@@ -104359,17 +104354,17 @@ function $g({ baseDir: e, target: t, label: n }) {
         If you did not author this package, report this to the maintainer.
       `);
 }
-async function e_(e, t) {
+async function Xg(e, t) {
 	try {
 		await u(e);
 	} catch (e) {
-		Xg(e) || Dg(`failed to clean up ${t}: ${e}`);
+		Kg(e) || wg(`failed to clean up ${t}: ${e}`);
 	}
 }
 //#endregion
 //#region src/util/addon-fetch.ts
-var t_ = 500;
-async function n_(e, t, n) {
+var Zg = 500;
+async function Qg(e, t, n) {
 	return Xc(async () => {
 		let r = await e.request(t, {
 			timeoutMs: n.maxBinaryMs,
@@ -104386,12 +104381,12 @@ async function n_(e, t, n) {
 			r.body.destroy();
 		}
 		return a.digest("hex");
-	}, (e, t) => t >= 1 + (n.retryCount ?? 0) ? { retry: !1 } : e instanceof qc && (e.kind === "network" || e.kind === "status" && (e.status !== void 0 && e.status >= 500 || n.retryOn404 && e.status === 404)) ? r_(t) : { retry: !1 });
+	}, (e, t) => t >= 1 + (n.retryCount ?? 0) ? { retry: !1 } : e instanceof qc && (e.kind === "network" || e.kind === "status" && (e.status !== void 0 && e.status >= 500 || n.retryOn404 && e.status === 404)) ? $g(t) : { retry: !1 });
 }
-function r_(e) {
+function $g(e) {
 	return {
 		retry: !0,
-		delayMs: Zc(e, t_)
+		delayMs: Zc(e, Zg)
 	};
 }
 //#endregion

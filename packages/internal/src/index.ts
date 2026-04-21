@@ -45,11 +45,6 @@ export {
 } from "./verify/schemas.ts";
 export type { SlsaManifest, AddonInventory, AddonEntry, Platform, Arch } from "./verify/schemas.ts";
 
-// Branding / URLs. Exported so fork tooling can programmatically build
-// their own signer pattern via buildSignerPatternFromPrefix.
-export { BRAND_PAGES_BASE, BRAND_REPO, BRAND_PUBLISH_WORKFLOW_PATH } from "./verify/brand.ts";
-export { buildSignerPatternFromPrefix } from "./verify/verify.ts";
-
 // Defaults
 export {
   DEFAULT_ATTEST_SIGNER_PATTERN,

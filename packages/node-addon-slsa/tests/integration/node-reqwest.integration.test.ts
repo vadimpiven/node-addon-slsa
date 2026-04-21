@@ -49,7 +49,6 @@ const TARGET = {
   sourceCommit: "129dbc1c2abf7f293e85e2a53bb44624aa0784b5",
   runInvocationURI:
     "https://github.com/vadimpiven/node_reqwest/actions/runs/22809456834/attempts/1",
-  attestSignerPattern: "https://github.com/vadimpiven/node_reqwest/.github/workflows/release.yaml",
   // Smallest asset — keeps the test quick.
   addon: {
     url: "https://github.com/vadimpiven/node_reqwest/releases/download/v0.0.18/node_reqwest-v0.0.18-darwin-arm64.node.gz",
@@ -102,7 +101,6 @@ describe.skipIf(!LIVE)("node-reqwest@0.0.18 live integration", () => {
         runInvocationURI: TARGET.runInvocationURI,
         sourceCommit: TARGET.sourceCommit,
         sourceRef: TARGET.sourceRef,
-        attestSignerPattern: TARGET.attestSignerPattern,
         signal: ac.signal,
       }),
     ).rejects.toThrow(ProvenanceError);
@@ -143,7 +141,6 @@ describe.skipIf(!LIVE)("node-reqwest@0.0.18 live integration", () => {
 
     const provenance = await verifyPackageAt(tmp.path, {
       repo: TARGET.repo,
-      attestSignerPattern: TARGET.attestSignerPattern,
     });
     await expect(provenance.verifyAddonBySha256(sha256)).rejects.toThrow(ProvenanceError);
   }, 60_000);

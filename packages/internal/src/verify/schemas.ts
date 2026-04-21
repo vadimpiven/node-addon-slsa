@@ -7,10 +7,9 @@
 
 import { z } from "zod/v4";
 
-import { BRAND_PAGES_BASE } from "./brand.ts";
-
 /** URL embedded in every manifest's `$schema` field; compared by exact string equality. */
-export const SLSA_MANIFEST_V1_SCHEMA_URL = `${BRAND_PAGES_BASE}/schema/slsa-manifest.v1.json`;
+export const SLSA_MANIFEST_V1_SCHEMA_URL =
+  "https://vadimpiven.github.io/node-addon-slsa/schema/slsa-manifest.v1.json";
 
 /** Closed set of Node.js `process.platform` values supported by prebuilt addons. */
 export const PlatformSchema = z.enum(["darwin", "linux", "win32"]);
@@ -241,12 +240,6 @@ if (import.meta.vitest) {
   };
 
   describe("SlsaManifestSchemaV1", () => {
-    it("derives $schema URL from BRAND_PAGES_BASE", ({ expect }) => {
-      // Pins the "forks only edit brand.ts" invariant: inlining a hard-coded
-      // origin here would sever the rebrand-by-constant-edit design promise.
-      expect(SLSA_MANIFEST_V1_SCHEMA_URL.startsWith(BRAND_PAGES_BASE)).toBe(true);
-    });
-
     it("parses valid manifest", ({ expect }) => {
       expect(SlsaManifestSchemaV1.parse(VALID)).toEqual(VALID);
     });

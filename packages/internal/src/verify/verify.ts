@@ -76,22 +76,6 @@ function toRegExp(pattern: RegExp | string): RegExp {
   return new RegExp(`^${escapeRegExp(pattern)}$`);
 }
 
-/**
- * Build a Build Signer URI pin from a URL prefix. The prefix must be the
- * full URL Fulcio embeds (e.g. `https://github.com/acme/fork/.github/\
- * workflows/publish.yaml`) — not the raw `job_workflow_ref` claim. It is
- * escaped and anchored with a required `@<40-hex-commit-sha>` suffix,
- * matching the shape {@link DEFAULT_ATTEST_SIGNER_PATTERN} enforces.
- * Forks that use reusable workflows get a commit SHA in `job_workflow_ref`
- * automatically, so this tail is the same for the default and any override.
- *
- * Accepting a raw RegExp here would be a footgun (`.*` silently nullifies
- * the pin); accepting `@.+$` would accept mutable refs (`refs/tags/v1`).
- */
-export function buildSignerPatternFromPrefix(prefix: string): RegExp {
-  return new RegExp(`^${escapeRegExp(prefix)}@[0-9a-f]{40}$`);
-}
-
 /** Default `refPattern` for a given installed package version. */
 function defaultRefPattern(version: string): RegExp {
   return new RegExp(`^refs/tags/v?${escapeRegExp(version)}$`);
@@ -107,12 +91,6 @@ export type VerifyAttestationOptions = VerifyOptions & {
   readonly runInvocationURI: string;
   readonly sourceCommit: string;
   readonly sourceRef: string;
-  /**
-   * Override the default Build Signer URI pin. Accepts a URL *prefix*
-   * (everything up to — but not including — the `@<ref-or-sha>` segment);
-   * the `@.+$` tail is enforced internally.
-   */
-  readonly attestSignerPattern?: string;
 };
 
 /** Default client: one undici-backed HttpClient shared across search + entry fetches. */
@@ -159,9 +137,7 @@ export async function verifyAttestation(options: VerifyAttestationOptions): Prom
     sourceCommit: commit,
     sourceRef: ref,
     runInvocationURI: runURI,
-    attestSignerPattern: options.attestSignerPattern
-      ? buildSignerPatternFromPrefix(options.attestSignerPattern)
-      : DEFAULT_ATTEST_SIGNER_PATTERN,
+    attestSignerPattern: DEFAULT_ATTEST_SIGNER_PATTERN,
   };
   await withRetry(
     () =>
@@ -189,16 +165,6 @@ export type VerifyPackageOptions = VerifyOptions & {
    * String → exact-match (literal); RegExp → pattern match.
    */
   readonly refPattern?: RegExp | string;
-  /**
-   * Fulcio cert's Build Signer URI pin. Defaults to the built-in pattern
-   * matching this toolkit's reusable publish workflow. Override only to
-   * verify a package produced by a different fork's publish workflow.
-   *
-   * Accepts a URL *prefix* (e.g. `https://github.com/owner/fork/.github/workflows/publish.yaml`);
-   * the required `@<ref-or-sha>` tail is enforced internally. Accepting a
-   * raw RegExp would let a careless `.*` nullify the entire pin.
-   */
-  readonly attestSignerPattern?: string;
   /**
    * Directory to resolve `packageName` from. Defaults to `process.cwd()`.
    * Programmatic callers that don't want to depend on ambient cwd (test
@@ -300,9 +266,6 @@ export async function verifyPackageAt(
   }
 
   const runURI = runInvocationURI(manifest.runInvocationURI);
-  const attestSignerPattern = options.attestSignerPattern
-    ? buildSignerPatternFromPrefix(options.attestSignerPattern)
-    : DEFAULT_ATTEST_SIGNER_PATTERN;
 
   // One-time setup per handle: TUF trust fetch, verifier build, Rekor
   // client. Hoisted out of `runRekor` so verifying N addon files against
@@ -315,7 +278,7 @@ export async function verifyPackageAt(
     sourceCommit: manifest.sourceCommit,
     sourceRef: manifest.sourceRef,
     runInvocationURI: runURI,
-    attestSignerPattern,
+    attestSignerPattern: DEFAULT_ATTEST_SIGNER_PATTERN,
   };
 
   const runRekor = async (sha: Sha256Hex): Promise<void> => {

@@ -166,22 +166,6 @@ describe("verifyPackageAt → PackageProvenance addon handle", () => {
     await expect(p.verifyAddonFromFile(binaryPath)).rejects.toThrow(/Addon provenance/);
     expect(rekorSearchBodies.some((body) => body.includes(expected))).toBe(true);
   });
-
-  it("accepts a URL-prefix `attestSignerPattern` override without throwing on construction", async ({
-    expect,
-  }) => {
-    // Exercises the prefix-to-regex builder for a custom signer pattern.
-    // The Rekor round-trip still fails (sigstore is mocked), but reaching
-    // it proves the override composed without throwing.
-    await using tmp = await makePackage();
-    const p = await verifyPackageAt(tmp.path, {
-      repo: "owner/repo",
-      dispatcher: agent,
-      verifier: failingVerifier,
-      attestSignerPattern: "https://github.com/fork/repo/.github/workflows/publish.yaml",
-    });
-    await expect(p.verifyAddonBySha256("d".repeat(64))).rejects.toThrow(/Addon provenance/);
-  });
 });
 
 describe("verifyPackage (top-level)", () => {

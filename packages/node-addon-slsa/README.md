@@ -243,7 +243,6 @@ await verifyPackage({
   // All below are optional:
   cwd: process.cwd(), // resolution base; defaults to process.cwd()
   refPattern: /^refs\/tags\/v?1\./, // restrict accepted tag refs
-  attestSignerPattern, // fork's publish-workflow URL prefix
   timeoutMs: 60_000, // per-request timeout (default: 30s)
   retryCount: 5, // retries after first attempt (default: 2)
   trustMaterial, // pre-loaded via loadTrustMaterial()
