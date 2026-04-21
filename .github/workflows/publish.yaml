@@ -56,11 +56,13 @@ jobs:
         # Cross-repo `uses:` avoids the reusable-workflow self-location
         # problem: `github.workflow_ref`/`workflow_sha` resolve to the caller
         # inside `workflow_call`, so there's no context variable for the
-        # callee's own ref. Pinned to the previous release's sha, which
-        # contains the action code we want to invoke. When the action code
-        # changes, bump in two commits: first the action change, then update
-        # this sha to that commit.
-        uses: "vadimpiven/node-addon-slsa/.github/actions/attest-addons@e9dda1e232a026d46ffd53ceff631f521709345c" # v0.8.2
+        # callee's own ref. Pinned to this workflow's own release tag — the
+        # sha chicken-and-egg (a commit can't contain its own sha) forces a
+        # tag ref here. Bump the tag on every release so callers pinning
+        # publish.yaml by sha resolve to matching action bytes. `zizmor`
+        # ignore is scoped to this intra-repo self-reference; external
+        # action refs still require sha pins.
+        uses: "vadimpiven/node-addon-slsa/.github/actions/attest-addons@v0.8.4" # zizmor: ignore[unpinned-uses]
         with:
           addons: "${{ inputs.addons }}"
           max-binary-bytes: "${{ inputs.max-binary-bytes }}"
@@ -72,21 +74,18 @@ jobs:
           name: "${{ inputs.tarball-artifact }}"
           path: "./tarball"
       - name: "Set up Node.js + npm registry for trusted publishing"
-        # Pinned to a Node LTS major (not `latest`) for reproducibility: the
-        # bundled npm version is only a starting point — we upgrade it below.
-        # `registry-url` writes the .npmrc that directs `npm publish` at
-        # npmjs.org with OIDC auth.
+        # Pinned to Node 24 LTS, whose bundled npm (≥ 11.x) already meets the
+        # ≥ 11.5.1 requirement for OIDC trusted publishing. Upgrading npm in
+        # place from Node 22's bundled 10.x was flaky (mid-install corruption
+        # of npm's own node_modules; e.g. missing `promise-retry`), so we
+        # avoid the self-upgrade entirely by choosing a Node major that
+        # already ships a suitable npm. `registry-url` writes the .npmrc that
+        # directs `npm publish` at npmjs.org with OIDC auth.
         uses: "actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f" # v6.3.0
         with:
-          node-version: "22"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
-      - name: "Upgrade npm to a trusted-publishing-capable release"
-        # OIDC trusted publishing requires npm ≥ 11.5.1; GHA Node LTS images
-        # ship an older bundled npm. We track `@latest` so fixes land
-        # automatically — an exact pin would need dependabot churn.
-        shell: "bash"
-        run: "npm install -g npm@latest"
       - name: "Extract pre-packed tarball"
         id: "extract"
         shell: "bash"
@@ -126,7 +125,7 @@ jobs:
           echo "manifest-rel=$manifest_rel" >>"$GITHUB_OUTPUT"
       - name: "Verify addons (Rekor) and build SLSA manifest"
         id: "verify"
-        uses: "vadimpiven/node-addon-slsa/.github/actions/verify-addons@e9dda1e232a026d46ffd53ceff631f521709345c" # v0.8.2
+        uses: "vadimpiven/node-addon-slsa/.github/actions/verify-addons@v0.8.4" # zizmor: ignore[unpinned-uses]
         with:
           package-name: "${{ steps.pkg.outputs.name }}"
           addons: "${{ inputs.addons }}"
