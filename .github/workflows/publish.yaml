@@ -47,28 +47,20 @@ jobs:
       id-token: "write" # Sigstore OIDC + npm trusted publishing
       attestations: "write" # @actions/attest writes to the GitHub Attestations API
     steps:
-      - name: "Resolve this workflow's repo from its ref"
-        id: "self-repo"
-        env:
-          WORKFLOW_REF: "${{ github.workflow_ref }}"
-        # `github.workflow_ref` is `owner/repo/.github/workflows/file.yaml@ref`;
-        # strip `/.github/...` onward for `owner/repo`. Ref uses
-        # `github.workflow_sha` directly (immutable).
-        shell: "bash"
-        run: 'echo "repo=${WORKFLOW_REF%%/.github/*}" >>"$GITHUB_OUTPUT"'
-      - name: "Checkout reusable workflow repo at its commit"
-        uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
-        with:
-          repository: "${{ steps.self-repo.outputs.repo }}"
-          ref: "${{ github.workflow_sha }}"
-          fetch-depth: 1
-          persist-credentials: false
       - name: "Attest addons (public-good sigstore)"
-        # Runs early — only needs `addons` and the checked-out repo. Failing
-        # here skips the tarball download and Node setup. The Fulcio cert's
-        # Build Signer URI records this reusable workflow's ref, which is
-        # what `verifyPackage` enforces via `DEFAULT_ATTEST_SIGNER_PATTERN`.
-        uses: "./.github/actions/attest-addons"
+        # Runs early — only needs `addons`. Failing here skips the tarball
+        # download and Node setup. The Fulcio cert's Build Signer URI records
+        # this reusable workflow's ref, which is what `verifyPackage` enforces
+        # via `DEFAULT_ATTEST_SIGNER_PATTERN`.
+        #
+        # Cross-repo `uses:` avoids the reusable-workflow self-location
+        # problem: `github.workflow_ref`/`workflow_sha` resolve to the caller
+        # inside `workflow_call`, so there's no context variable for the
+        # callee's own ref. Pinned to the previous release's sha, which
+        # contains the action code we want to invoke. When the action code
+        # changes, bump in two commits: first the action change, then update
+        # this sha to that commit.
+        uses: "vadimpiven/node-addon-slsa/.github/actions/attest-addons@e9dda1e232a026d46ffd53ceff631f521709345c" # v0.8.2
         with:
           addons: "${{ inputs.addons }}"
           max-binary-bytes: "${{ inputs.max-binary-bytes }}"
@@ -134,7 +126,7 @@ jobs:
           echo "manifest-rel=$manifest_rel" >>"$GITHUB_OUTPUT"
       - name: "Verify addons (Rekor) and build SLSA manifest"
         id: "verify"
-        uses: "./.github/actions/verify-addons"
+        uses: "vadimpiven/node-addon-slsa/.github/actions/verify-addons@e9dda1e232a026d46ffd53ceff631f521709345c" # v0.8.2
         with:
           package-name: "${{ steps.pkg.outputs.name }}"
           addons: "${{ inputs.addons }}"
