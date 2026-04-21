@@ -78,9 +78,8 @@ export async function main(): Promise<void> {
   }
 
   const trustMaterial = await loadTrustMaterial();
-  // One HttpClient for addon fetches and Rekor calls. Operators who set
-  // a proxy/mTLS agent via `setGlobalDispatcher` pick it up here; tests
-  // pass an `httpClient` option directly instead.
+  // One HttpClient for addon fetches; Rekor traffic inside
+  // `verifyAttestation` builds its own from the passed `dispatcher`.
   const http = createHttpClient({ dispatcher: getGlobalDispatcher() });
 
   const verified = await Promise.all(
@@ -97,7 +96,7 @@ export async function main(): Promise<void> {
         sourceCommit: commit,
         sourceRef: ref,
         trustMaterial,
-        httpClient: http,
+        dispatcher: getGlobalDispatcher(),
       });
       return { platform, arch, entry: { url, sha256 } satisfies AddonEntry };
     }),

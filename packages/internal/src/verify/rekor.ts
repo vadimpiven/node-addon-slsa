@@ -165,39 +165,46 @@ async function* walkCandidates(
   }
 }
 
-/** Pure reducer. Throws exactly one of three terminal shapes, never returns. */
+/** Pure reducer. Throws one terminal shape, never returns. */
 function reduceOutcomes(outcomes: readonly Outcome[], expect: CertificateOIDExpectations): void {
   const n = outcomes.length;
   let lag = 0;
   let unavailable = 0;
-  let otherFetch = 0;
+  let tamper = 0;
+  let malformed = 0;
   let verifyFail = 0;
 
   for (const o of outcomes) {
     if (o.kind === "rekor-error") {
       if (o.error.kind === "lag") lag++;
       else if (o.error.kind === "unavailable") unavailable++;
-      else otherFetch++;
+      else if (o.error.kind === "tamper") tamper++;
+      else malformed++;
     } else if (o.kind === "verify-error") {
       verifyFail++;
     }
   }
 
-  // Lag wins: any 404 shape → `rekor-not-found` so outer retry waits for
-  // replication. Covers pure-lag and mixed-with-verify-fail cases alike:
-  // workflow re-runs produce multiple attestations for the same hash,
-  // and the correct one may still be replicating while older ones OID-
-  // mismatch.
+  // Tamper short-circuits: a UUID-reorder response is an active-attacker
+  // signal, not a race. Fail closed before any retry can mask it.
+  if (tamper > 0) {
+    throw new ProvenanceError(
+      `Rekor returned ${tamper} of ${n} entries under a UUID we didn't request. Refusing to verify.`,
+    );
+  }
+  // Any 404 → retry: rebuilds produce several attestations for one hash
+  // and the correct one may still be replicating while older ones
+  // OID-mismatch, so mixed (lag + verify-fail) must also retry.
   if (lag > 0) {
     throw new ProvenanceError(
       `${lag} of ${n} Rekor entries still replicating (404). Retrying after ingestion-lag delay.`,
       { kind: "rekor-not-found" },
     );
   }
-  // Pure server/network unreachability: distinct from verification
-  // failure so operators aren't misled into waiting 30s for "ingestion"
-  // when Rekor itself is down.
-  if (unavailable > 0 && verifyFail === 0 && otherFetch === 0) {
+  // Pure server/network unreachability → distinct error. A malformed or
+  // verify-failed entry makes the run provenance-failing (below), since
+  // the unavailability was partial and not the root cause.
+  if (unavailable > 0 && verifyFail === 0 && malformed === 0) {
     throw new Error(`Rekor unavailable: ${unavailable} of ${n} entry fetches failed (non-404).`);
   }
   throw new ProvenanceError(

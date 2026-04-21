@@ -59,13 +59,7 @@ export {
 } from "./verify/constants.ts";
 
 // Low-level helpers
-export {
-  createHttpClient,
-  withRetry,
-  HttpError,
-  DEFAULT_TIMEOUT_MS,
-  DEFAULT_STALL_TIMEOUT_MS,
-} from "./http.ts";
+export { createHttpClient, withRetry, HttpError } from "./http.ts";
 export type {
   HttpClient,
   HttpResult,

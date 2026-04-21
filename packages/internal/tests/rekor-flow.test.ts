@@ -79,7 +79,6 @@ describe("verifyRekorAttestations aggregate-failure branch", () => {
       http,
       searchUrl: "https://rekor.example/api/v1/index/retrieve",
       entryUrl: "https://rekor.example/api/v1/log/entries/{uuid}",
-      maxJsonResponseBytes: 50 * 1024 * 1024,
     });
 
     await expect(

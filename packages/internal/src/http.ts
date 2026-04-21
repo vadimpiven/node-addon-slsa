@@ -23,9 +23,9 @@ import { Agent, interceptors, request, type Dispatcher } from "undici";
 
 import { errorMessage } from "./util/error.ts";
 
-/** Per-request timeout used when {@link HttpRequestOptions.timeoutMs} is not supplied. */
+/** @internal */
 export const DEFAULT_TIMEOUT_MS = 30_000;
-/** Stall / body / headers timeout used when {@link HttpRequestOptions.stallTimeoutMs} is not supplied. */
+/** @internal */
 export const DEFAULT_STALL_TIMEOUT_MS = 30_000;
 
 /** Shape of a successful HTTP response (status < 400). */
@@ -80,11 +80,8 @@ export interface HttpClient {
 }
 
 /**
- * HTTP/1.1 agent composed with the redirect interceptor (undici 8+
- * removed `maxRedirections` from `request()` in favour of this seam).
- * No keep-alive because the package issues a handful of sequential
- * requests to different hosts — pooling provides no benefit and
- * dangling sockets complicate test teardown.
+ * HTTP/1.1 agent, no keep-alive: sequential requests to different hosts
+ * get no pooling benefit and dangling sockets complicate test teardown.
  */
 function createDefaultDispatcher(): Dispatcher {
   return new Agent({
@@ -114,6 +111,16 @@ export function createHttpClient(opts?: {
       const timer = globalThis.setTimeout(() => ac.abort(), timeoutMs);
       const signal = options.signal ? AbortSignal.any([ac.signal, options.signal]) : ac.signal;
 
+      // Refuse header-smuggling attempts: we only expose `contentType`,
+      // so any CR/LF in its value would splice extra header lines into
+      // the request (and could add Authorization cross-origin).
+      if (options.contentType !== undefined && /[\r\n]/.test(options.contentType)) {
+        throw new HttpError({
+          kind: "network",
+          url,
+          message: `${method} ${url} → contentType contains CR/LF`,
+        });
+      }
       try {
         const response = await request(url, {
           method,
@@ -155,14 +162,7 @@ export function createHttpClient(opts?: {
   };
 }
 
-/**
- * Higher-order retry. The classifier inspects the thrown error once and
- * returns either `{ retry: true, delayMs }` or `{ retry: false }`. This
- * single primitive replaces the package's previous in-band retry (inside
- * the old `fetchWithRetry`) and outer Rekor ingestion retry — both were
- * fragile specializations that re-derived the same decision from
- * different substrates.
- */
+/** Classifier decision: retry after `delayMs`, or give up and re-throw. */
 export type RetryDecision =
   | { readonly retry: true; readonly delayMs: number }
   | { readonly retry: false };

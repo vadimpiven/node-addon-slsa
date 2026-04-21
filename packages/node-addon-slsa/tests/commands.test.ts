@@ -127,6 +127,7 @@ describe("wget", () => {
     await expect(wget(tmp.path, { dispatcher })).rejects.toThrow(/HTTP 400/);
   });
 
+
   it("rejects when Content-Length exceeds the size cap", async ({ expect }) => {
     await using tmp = await tempDir();
     await writeTestPkg(tmp.path, "1.0.0");

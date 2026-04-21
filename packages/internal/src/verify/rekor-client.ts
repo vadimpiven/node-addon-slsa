@@ -13,7 +13,7 @@ import { HttpError, type HttpClient } from "../http.ts";
 import type { Sha256Hex } from "../types.ts";
 import { readJsonBounded } from "../util/json.ts";
 import { evalTemplate } from "../util/template.ts";
-import { REKOR_NETWORK_ADVICE } from "./constants.ts";
+import { MAX_JSON_RESPONSE_BYTES, REKOR_NETWORK_ADVICE } from "./constants.ts";
 import { RekorLogEntrySchema, RekorSearchResponseSchema, type RekorLogEntry } from "./schemas.ts";
 
 export type RekorErrorKind =
@@ -21,8 +21,15 @@ export type RekorErrorKind =
   | "lag"
   /** 5xx / network / timeout. Server or path is unhealthy right now. */
   | "unavailable"
-  /** Schema / subject-digest mismatch or missing key. Permanent. */
-  | "malformed";
+  /** Zod schema failure from Rekor's response — server bug or API drift. */
+  | "malformed"
+  /**
+   * Response keyed by a UUID the caller didn't ask for. Treat as an active
+   * tamper signal: a cooperative proxy, MITM, or future Rekor schema change
+   * that returned multiple keys would otherwise let an attacker pin a
+   * different entry under our UUID.
+   */
+  | "tamper";
 
 /** Closed-union failure from a {@link RekorClient} call. */
 export class RekorError extends Error {
@@ -47,9 +54,7 @@ export type RekorClientOptions = {
   readonly http: HttpClient;
   readonly searchUrl: string;
   readonly entryUrl: string;
-  readonly maxJsonResponseBytes: number;
   readonly timeoutMs?: number;
-  readonly stallTimeoutMs?: number;
 };
 
 function mapHttpError(err: unknown, uuid?: string): RekorError {
@@ -81,10 +86,7 @@ function mapHttpError(err: unknown, uuid?: string): RekorError {
 }
 
 export function createRekorClient(opts: RekorClientOptions): RekorClient {
-  const requestOpts = {
-    ...(opts.timeoutMs !== undefined && { timeoutMs: opts.timeoutMs }),
-    ...(opts.stallTimeoutMs !== undefined && { stallTimeoutMs: opts.stallTimeoutMs }),
-  };
+  const requestOpts = opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {};
   return {
     async search(sha256) {
       try {
@@ -95,7 +97,7 @@ export function createRekorClient(opts: RekorClientOptions): RekorClient {
           contentType: "application/json",
         });
         return RekorSearchResponseSchema.parse(
-          await readJsonBounded(result.body, opts.maxJsonResponseBytes),
+          await readJsonBounded(result.body, MAX_JSON_RESPONSE_BYTES),
         );
       } catch (err) {
         throw err instanceof RekorError ? err : mapHttpError(err);
@@ -107,15 +109,14 @@ export function createRekorClient(opts: RekorClientOptions): RekorClient {
       try {
         const result = await opts.http.request(url, requestOpts);
         const data = RekorLogEntrySchema.parse(
-          await readJsonBounded(result.body, opts.maxJsonResponseBytes),
+          await readJsonBounded(result.body, MAX_JSON_RESPONSE_BYTES),
         );
-        // Look up by the UUID we requested, not data[Object.keys(data)[0]]:
-        // an MITM or future Rekor schema change must not be allowed to
-        // reorder the response and land a different entry.
         const entry = data[uuid];
         if (!entry) {
+          // MITM / schema-change / cooperative-proxy signal — not a bug.
+          // Alert distinctly from schema failures.
           throw new RekorError({
-            kind: "malformed",
+            kind: "tamper",
             uuid,
             message: `Rekor response for ${uuid} did not contain the requested UUID; keys: ${
               Object.keys(data).join(", ") || "(none)"
@@ -135,7 +136,6 @@ if (import.meta.vitest) {
   const { Readable } = await import("node:stream");
   const { sha256Hex } = await import("../types.ts");
 
-  const maxJsonResponseBytes = 10_000;
   const searchUrl = "https://rekor.example/search";
   const entryUrl = "https://rekor.example/entries/{uuid}";
 
@@ -165,7 +165,6 @@ if (import.meta.vitest) {
         http: fakeHttp(() => ({ body: JSON.stringify(["a".repeat(80), "b".repeat(80)]) })),
         searchUrl,
         entryUrl,
-        maxJsonResponseBytes,
       });
       const uuids = await client.search(sha256Hex("a".repeat(64)));
       expect(uuids).toEqual(["a".repeat(80), "b".repeat(80)]);
@@ -178,7 +177,6 @@ if (import.meta.vitest) {
         })),
         searchUrl,
         entryUrl,
-        maxJsonResponseBytes,
       });
       const err = await client.search(sha256Hex("a".repeat(64))).catch((e) => e as unknown);
       expect(err).toBeInstanceOf(RekorError);
@@ -190,7 +188,6 @@ if (import.meta.vitest) {
         http: fakeHttp(() => ({ body: "not json" })),
         searchUrl,
         entryUrl,
-        maxJsonResponseBytes,
       });
       const err = await client.search(sha256Hex("a".repeat(64))).catch((e) => e as unknown);
       expect(err).toBeInstanceOf(RekorError);
@@ -224,7 +221,6 @@ if (import.meta.vitest) {
         http: fakeHttp(() => ({ body: JSON.stringify({ [UUID]: minimalEntry }) })),
         searchUrl,
         entryUrl,
-        maxJsonResponseBytes,
       });
       const entry = await client.fetchEntry(UUID);
       expect(entry).toMatchObject({ logIndex: 0 });
@@ -242,7 +238,6 @@ if (import.meta.vitest) {
         })),
         searchUrl,
         entryUrl,
-        maxJsonResponseBytes,
       });
       const err = await client.fetchEntry(UUID).catch((e) => e as unknown);
       expect(err).toBeInstanceOf(RekorError);
@@ -257,23 +252,21 @@ if (import.meta.vitest) {
         })),
         searchUrl,
         entryUrl,
-        maxJsonResponseBytes,
       });
       const err = await client.fetchEntry(UUID).catch((e) => e as unknown);
       expect(err).toBeInstanceOf(RekorError);
       expect((err as RekorError).kind).toBe("unavailable");
     });
 
-    it("rejects a response keyed by the wrong UUID (proxy-reorder guard)", async ({ expect }) => {
+    it("signals `tamper` on a response keyed by the wrong UUID", async ({ expect }) => {
       const client = createRekorClient({
         http: fakeHttp(() => ({ body: JSON.stringify({ "different-uuid": minimalEntry }) })),
         searchUrl,
         entryUrl,
-        maxJsonResponseBytes,
       });
       const err = await client.fetchEntry(UUID).catch((e) => e as unknown);
       expect(err).toBeInstanceOf(RekorError);
-      expect((err as RekorError).kind).toBe("malformed");
+      expect((err as RekorError).kind).toBe("tamper");
     });
   });
 }

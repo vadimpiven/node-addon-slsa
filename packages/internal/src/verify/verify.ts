@@ -113,32 +113,18 @@ export type VerifyAttestationOptions = VerifyOptions & {
   readonly attestSignerPattern?: string;
 };
 
-/**
- * Build a {@link RekorClient} from a resolved config if the caller hasn't
- * injected one. Production code paths resolve here once per verify so a
- * single HttpClient (with its dispatcher) is shared across search and
- * entry fetches — tests inject a fake client directly.
- */
+/** Default client: one undici-backed HttpClient shared across search + entry fetches. */
 function clientFromConfig(config: ResolvedConfig): RekorClient {
   if (config.rekorClient) return config.rekorClient;
-  const http =
-    config.httpClient ??
-    createHttpClient(config.dispatcher !== undefined ? { dispatcher: config.dispatcher } : {});
   return createRekorClient({
-    http,
+    http: createHttpClient({ dispatcher: config.dispatcher }),
     searchUrl: config.rekorSearchUrl,
     entryUrl: config.rekorEntryUrl,
-    maxJsonResponseBytes: config.maxJsonResponseBytes,
     timeoutMs: config.timeoutMs,
-    stallTimeoutMs: config.stallTimeoutMs,
   });
 }
 
-/**
- * Retry classifier: wait-and-retry on `ProvenanceError { kind:
- * "rekor-not-found" }` per the configured delay schedule; fatal on
- * anything else. One function captures the full retry policy.
- */
+/** Retry on `rekor-not-found` per `delays`; fatal on anything else. */
 function classifyIngestionLag(
   delays: readonly number[],
 ): (err: unknown, attempt: number) => { retry: true; delayMs: number } | { retry: false } {

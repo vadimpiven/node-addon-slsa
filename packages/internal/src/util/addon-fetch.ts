@@ -8,7 +8,7 @@
 
 import { createHash } from "node:crypto";
 
-import { HttpError, withRetry, type HttpClient } from "../http.ts";
+import { HttpError, jitteredDelay, withRetry, type HttpClient } from "../http.ts";
 
 export type FetchAndHashAddonOptions = {
   readonly maxBinaryBytes: number;
@@ -21,7 +21,7 @@ export type FetchAndHashAddonOptions = {
   readonly retryOn404?: boolean | undefined;
 };
 
-const DEFAULT_RETRY_BASE_MS = 500;
+const RETRY_BASE_MS = 500;
 
 /**
  * Fetch `url` via the given client, enforce `maxBinaryBytes` at both the
@@ -68,10 +68,10 @@ export async function fetchAndHashAddon(
       const maxAttempts = 1 + (opts.retryCount ?? 0);
       if (attempt >= maxAttempts) return { retry: false };
       if (err instanceof HttpError) {
-        if (err.kind === "network") return retryDecision(attempt);
+        if (err.kind === "network") return backoff(attempt);
         if (err.kind === "status") {
-          if (err.status !== undefined && err.status >= 500) return retryDecision(attempt);
-          if (opts.retryOn404 && err.status === 404) return retryDecision(attempt);
+          if (err.status !== undefined && err.status >= 500) return backoff(attempt);
+          if (opts.retryOn404 && err.status === 404) return backoff(attempt);
         }
       }
       return { retry: false };
@@ -79,7 +79,6 @@ export async function fetchAndHashAddon(
   );
 }
 
-function retryDecision(attempt: number): { retry: true; delayMs: number } {
-  const base = DEFAULT_RETRY_BASE_MS * 2 ** (attempt - 1);
-  return { retry: true, delayMs: Math.round(base * (0.8 + 0.4 * Math.random())) };
+function backoff(attempt: number): { retry: true; delayMs: number } {
+  return { retry: true, delayMs: jitteredDelay(attempt, RETRY_BASE_MS) };
 }

@@ -63,15 +63,6 @@ async function readManifestFile(packageDir: string, manifestRel: string): Promis
   return SlsaManifestSchemaV1.parse(JSON.parse(raw));
 }
 
-/**
- * Build the HttpClient used by `wget`. Full injection (`httpClient`)
- * wins; otherwise construct a default client wrapping the dispatcher
- * override (or undici's global). Single expression, one branch.
- */
-function resolveHttpClient(options?: VerifyOptions): ReturnType<typeof createHttpClient> {
-  return options?.httpClient ?? createHttpClient({ dispatcher: options?.dispatcher });
-}
-
 function resolveAddonEntry(manifest: SlsaManifest): { url: string; sha256: string } {
   const platform = PlatformSchema.safeParse(process.platform);
   const arch = ArchSchema.safeParse(process.arch);
@@ -143,7 +134,7 @@ export async function wget(packageDir: string, options?: VerifyOptions): Promise
   const { stream: hashStream, digest } = createHashPassthrough();
 
   try {
-    const http = resolveHttpClient(options);
+    const http = createHttpClient({ dispatcher: options?.dispatcher });
     const response = await http.request(entry.url, {
       timeoutMs: maxMs,
       stallTimeoutMs: maxMs,
