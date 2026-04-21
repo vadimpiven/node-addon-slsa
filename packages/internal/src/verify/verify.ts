@@ -302,25 +302,28 @@ export async function verifyPackageAt(
     ? buildSignerPatternFromPrefix(options.attestSignerPattern)
     : DEFAULT_ATTEST_SIGNER_PATTERN;
 
+  // One-time setup per handle: TUF trust fetch, verifier build, Rekor
+  // client. Hoisted out of `runRekor` so verifying N addon files against
+  // the same package makes one TUF round-trip, not N.
+  const config = resolveConfig(options);
+  const verifier =
+    config.verifier ?? createBundleVerifier(config.trustMaterial ?? (await loadTrustMaterial()));
+  const client = clientFromConfig(config);
+  const expect: CertificateOIDExpectations = {
+    sourceCommit: manifest.sourceCommit,
+    sourceRef: manifest.sourceRef,
+    runInvocationURI: runURI,
+    attestSignerPattern,
+  };
+
   const runRekor = async (sha: Sha256Hex): Promise<void> => {
-    const config = resolveConfig(options);
-    // Build the verifier lazily and only once per provenance handle so a
-    // caller verifying many addons for the same package loads trust
-    // material one time, without pre-building the verifier themselves.
-    const verifier =
-      config.verifier ?? createBundleVerifier(config.trustMaterial ?? (await loadTrustMaterial()));
     await withRetry(
       () =>
         verifyRekorAttestations({
           sha256: sha,
           repo: expectedRepo,
-          expect: {
-            sourceCommit: manifest.sourceCommit,
-            sourceRef: manifest.sourceRef,
-            runInvocationURI: runURI,
-            attestSignerPattern,
-          },
-          client: clientFromConfig(config),
+          expect,
+          client,
           verifier,
           maxEntries: config.maxRekorEntries,
         }),

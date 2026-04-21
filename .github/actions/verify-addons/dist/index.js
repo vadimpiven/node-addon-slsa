@@ -104294,21 +104294,20 @@ async function Jg(e, t) {
       manifest.sourceRef: ${r.sourceRef}
       pattern:            ${a.source}
     `);
-	let o = tl(r.runInvocationURI), s = t.attestSignerPattern ? Vg(t.attestSignerPattern) : $h, c = async (e) => {
-		let n = eg(t), a = n.verifier ?? Rg(n.trustMaterial ?? await Lg());
+	let o = tl(r.runInvocationURI), s = t.attestSignerPattern ? Vg(t.attestSignerPattern) : $h, c = eg(t), l = c.verifier ?? Rg(c.trustMaterial ?? await Lg()), u = Ug(c), d = {
+		sourceCommit: r.sourceCommit,
+		sourceRef: r.sourceRef,
+		runInvocationURI: o,
+		attestSignerPattern: s
+	}, f = async (e) => {
 		await Xc(() => Ig({
 			sha256: e,
 			repo: i,
-			expect: {
-				sourceCommit: r.sourceCommit,
-				sourceRef: r.sourceRef,
-				runInvocationURI: o,
-				attestSignerPattern: s
-			},
-			client: Ug(n),
-			verifier: a,
-			maxEntries: n.maxRekorEntries
-		}), Wg(n.rekorIngestionRetryDelays), t.signal ? { signal: t.signal } : void 0);
+			expect: d,
+			client: u,
+			verifier: l,
+			maxEntries: c.maxRekorEntries
+		}), Wg(c.rekorIngestionRetryDelays), t.signal ? { signal: t.signal } : void 0);
 	};
 	return {
 		packageName: r.packageName,
@@ -104316,8 +104315,8 @@ async function Jg(e, t) {
 		sourceCommit: r.sourceCommit,
 		sourceRef: r.sourceRef,
 		runInvocationURI: r.runInvocationURI,
-		verifyAddonBySha256: async (e) => c($c(e)),
-		verifyAddonFromFile: async (e) => c(await Kg(e))
+		verifyAddonBySha256: async (e) => f($c(e)),
+		verifyAddonFromFile: async (e) => f(await Kg(e))
 	};
 }
 async function Yg(e) {

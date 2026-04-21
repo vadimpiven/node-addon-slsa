@@ -11,7 +11,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 
-import { afterEach, beforeEach, describe, it } from "vitest";
+import { describe, it } from "vitest";
 
 import { createHttpClient, HttpError } from "../src/http.ts";
 
@@ -33,16 +33,6 @@ async function withServer<T>(handler: Handler, fn: (base: string) => Promise<T>)
     );
   }
 }
-
-let currentHandler: Handler | null = null;
-
-beforeEach(() => {
-  currentHandler = null;
-});
-
-afterEach(() => {
-  currentHandler = null;
-});
 
 async function drain(body: NodeJS.ReadableStream): Promise<string> {
   const chunks: Buffer[] = [];
@@ -167,6 +157,3 @@ describe("createHttpClient", () => {
     );
   });
 });
-
-// Unused: keeps TS from warning on the beforeEach/afterEach hoist.
-void currentHandler;
