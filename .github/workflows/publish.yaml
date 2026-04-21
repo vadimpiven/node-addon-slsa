@@ -72,21 +72,18 @@ jobs:
           name: "${{ inputs.tarball-artifact }}"
           path: "./tarball"
       - name: "Set up Node.js + npm registry for trusted publishing"
-        # Pinned to a Node LTS major (not `latest`) for reproducibility: the
-        # bundled npm version is only a starting point — we upgrade it below.
-        # `registry-url` writes the .npmrc that directs `npm publish` at
-        # npmjs.org with OIDC auth.
+        # Pinned to Node 24 LTS, whose bundled npm (≥ 11.x) already meets the
+        # ≥ 11.5.1 requirement for OIDC trusted publishing. Upgrading npm in
+        # place from Node 22's bundled 10.x was flaky (mid-install corruption
+        # of npm's own node_modules; e.g. missing `promise-retry`), so we
+        # avoid the self-upgrade entirely by choosing a Node major that
+        # already ships a suitable npm. `registry-url` writes the .npmrc that
+        # directs `npm publish` at npmjs.org with OIDC auth.
         uses: "actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f" # v6.3.0
         with:
-          node-version: "22"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
-      - name: "Upgrade npm to a trusted-publishing-capable release"
-        # OIDC trusted publishing requires npm ≥ 11.5.1; GHA Node LTS images
-        # ship an older bundled npm. We track `@latest` so fixes land
-        # automatically — an exact pin would need dependabot churn.
-        shell: "bash"
-        run: "npm install -g npm@latest"
       - name: "Extract pre-packed tarball"
         id: "extract"
         shell: "bash"
