@@ -100917,10 +100917,10 @@ function Jc() {
 		allowH2: !1,
 		keepAliveTimeout: 1,
 		keepAliveMaxTimeout: 1
-	}).compose(Gc.interceptors.redirect({ maxRedirections: 5 }));
+	});
 }
 function Yc(e) {
-	let t = e?.dispatcher ?? Jc();
+	let t = (e?.dispatcher ?? Jc()).compose(Gc.interceptors.redirect({ maxRedirections: 5 }));
 	return { async request(e, n = {}) {
 		let r = n.method ?? "GET", i = n.timeoutMs ?? 3e4, a = n.stallTimeoutMs ?? 3e4, o = new AbortController(), s = globalThis.setTimeout(() => o.abort(), i), c = n.signal ? AbortSignal.any([o.signal, n.signal]) : o.signal;
 		if (n.contentType !== void 0 && /[\r\n]/.test(n.contentType)) throw new qc({

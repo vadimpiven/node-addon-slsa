@@ -83,12 +83,12 @@ export interface HttpClient {
  * HTTP/1.1 agent, no keep-alive: sequential requests to different hosts
  * get no pooling benefit and dangling sockets complicate test teardown.
  */
-function createDefaultDispatcher(): Dispatcher {
+function createBaseDispatcher(): Dispatcher {
   return new Agent({
     allowH2: false,
     keepAliveTimeout: 1,
     keepAliveMaxTimeout: 1,
-  }).compose(interceptors.redirect({ maxRedirections: 5 }));
+  });
 }
 
 /**
@@ -96,11 +96,17 @@ function createDefaultDispatcher(): Dispatcher {
  * agent, mTLS agent, or test MockAgent; tests that assert redirect
  * behavior instead use an in-process `http.createServer` fixture so the
  * production `maxRedirections` path runs unmodified.
+ *
+ * Redirect-following is part of the client contract (GitHub release
+ * assets 302 → CDN), so the interceptor is composed on top of whatever
+ * dispatcher the caller supplied — the caller's dispatcher is transport,
+ * redirect semantics are policy.
  */
 export function createHttpClient(opts?: {
   readonly dispatcher?: Dispatcher | undefined;
 }): HttpClient {
-  const dispatcher = opts?.dispatcher ?? createDefaultDispatcher();
+  const base = opts?.dispatcher ?? createBaseDispatcher();
+  const dispatcher = base.compose(interceptors.redirect({ maxRedirections: 5 }));
   return {
     async request(url, options = {}): Promise<HttpResult> {
       const method = options.method ?? "GET";

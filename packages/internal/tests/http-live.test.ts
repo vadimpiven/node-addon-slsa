@@ -11,6 +11,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 
+import { Agent } from "undici";
 import { describe, it } from "vitest";
 
 import { createHttpClient, HttpError } from "../src/http.ts";
@@ -77,6 +78,44 @@ describe("createHttpClient", () => {
             const result = await http.request(`${ghBase}/asset`);
             expect(result.status).toBe(200);
             expect(await drain(result.body)).toBe("final-bytes");
+          },
+        );
+      },
+    );
+  });
+
+  it("follows 302 even when the caller supplies a bare dispatcher", async ({ expect }) => {
+    // Regression: the action entrypoints pass `getGlobalDispatcher()` into
+    // `createHttpClient`. The global dispatcher has no redirect interceptor
+    // composed, so redirects silently dropped out, the empty 302 body
+    // hashed to `e3b0c44...` (SHA-256 of the empty string), and Rekor lookup
+    // matched on an unrelated artifact's log entry. Redirect-following must
+    // be applied regardless of which dispatcher the caller hands in.
+    await withServer(
+      (_req, res) => {
+        res.writeHead(200, { "content-type": "application/octet-stream" });
+        res.end("final-bytes");
+      },
+      async (cdnBase) => {
+        await withServer(
+          (_req, res) => {
+            res.writeHead(302, { location: `${cdnBase}/real` });
+            res.end();
+          },
+          async (ghBase) => {
+            const bare = new Agent({
+              allowH2: false,
+              keepAliveTimeout: 1,
+              keepAliveMaxTimeout: 1,
+            });
+            try {
+              const http = createHttpClient({ dispatcher: bare });
+              const result = await http.request(`${ghBase}/asset`);
+              expect(result.status).toBe(200);
+              expect(await drain(result.body)).toBe("final-bytes");
+            } finally {
+              await bare.close();
+            }
           },
         );
       },
