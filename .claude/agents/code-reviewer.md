@@ -62,7 +62,11 @@ optional reading for context — the operative rules are inlined below.
 7. **Verify.** Run `mise run check` and `mise run test`. If either fails,
    fix the regression (not by reverting, unless the fix itself was wrong)
    and re-run until both pass.
-8. **Report.** Produce the report described below, with each finding marked
+8. **Final gate — must pass before the report.** Run `mise run -f test`.
+   Fix every error it surfaces, then re-run. Do not present the report
+   while this command is red. The report is the *last* thing you produce;
+   a green `mise run -f test` is the precondition.
+9. **Report.** Produce the report described below, with each finding marked
    `[fixed]`, `[partial]`, or `[deferred]`.
 
 ---
