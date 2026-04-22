@@ -58,7 +58,8 @@ function escapeRegExp(s: string): string {
  * produces `@<40-hex>`. Fulcio wraps that claim into the `https://github.com/…`
  * URI form in the extension; the pin anchors on that exact shape.
  */
-const SIGNER_BASE = "https://github.com/vadimpiven/node-addon-slsa/.github/workflows/publish.yaml";
+export const SIGNER_BASE =
+  "https://github.com/vadimpiven/node-addon-slsa/.github/workflows/publish.yaml";
 export const DEFAULT_ATTEST_SIGNER_PATTERN = new RegExp(
   `^${escapeRegExp(SIGNER_BASE)}@` + String.raw`[0-9a-f]{40}$`,
 );

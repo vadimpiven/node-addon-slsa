@@ -26,7 +26,7 @@ for (const [name, schema] of Object.entries(PublishedSchemas)) {
   // Zod's toJSONSchema() omits $id and top-level $schema; inject them so the
   // file self-describes with the URL the verifier pins (exact-string match).
   const withIds = {
-    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $schema: "http://json-schema.org/draft-07/schema#",
     $id: `${PAGES_BASE}/schema/${name}`,
     ...json,
   };

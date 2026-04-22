@@ -130,10 +130,7 @@ export function verifyCertificateOIDs(
 if (import.meta.vitest) {
   const { describe, it } = import.meta.vitest;
   const { runInvocationURI } = await import("../types.ts");
-  const { DEFAULT_ATTEST_SIGNER_PATTERN } = await import("./constants.ts");
-
-  const SIGNER_BASE =
-    "https://github.com/vadimpiven/node-addon-slsa/.github/workflows/publish.yaml";
+  const { DEFAULT_ATTEST_SIGNER_PATTERN, SIGNER_BASE } = await import("./constants.ts");
 
   const expect_ok = {
     sourceCommit: "a".repeat(40),
