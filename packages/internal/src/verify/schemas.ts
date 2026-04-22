@@ -135,7 +135,7 @@ export const SlsaManifestSchemaV1 = z.object({
   runInvocationURI: RunInvocationURISchema,
   sourceRepo: GitHubRepoSchema,
   sourceCommit: z.string().regex(/^[0-9a-f]{40}$/),
-  sourceRef: z.string().regex(/^refs\/tags\//),
+  sourceRef: z.string().regex(/^refs\/tags\/[A-Za-z0-9._/-]+$/),
   addons: AddonInventorySchema,
 });
 export type SlsaManifest = z.infer<typeof SlsaManifestSchemaV1>;

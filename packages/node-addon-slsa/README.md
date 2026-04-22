@@ -242,11 +242,14 @@ await verifyPackage({
   repo: "owner/repo",
   // All below are optional:
   cwd: process.cwd(), // resolution base; defaults to process.cwd()
-  refPattern: /^refs\/tags\/v?1\./, // restrict accepted tag refs
-  timeoutMs: 60_000, // per-request timeout (default: 30s)
-  retryCount: 5, // retries after first attempt (default: 2)
+  refPattern: /^refs\/tags\/v?1\./, // RegExp or exact-match string
+  timeoutMs: 60_000, // per-request HTTP timeout (default: 30s)
+  maxBinaryBytes: 256 * 1024 * 1024, // per-binary size cap (default: 256 MiB)
+  maxBinarySeconds: 300, // per-binary download timeout (default: 300s)
+  bundleFetchRetryDelays: [2000, 5000, 10000, 15000], // retry ms for sidecar 404s
   trustMaterial, // pre-loaded via loadTrustMaterial()
   dispatcher, // custom undici Dispatcher
+  signal, // AbortSignal
 });
 ```
 

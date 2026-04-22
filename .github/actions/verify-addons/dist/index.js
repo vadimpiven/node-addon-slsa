@@ -103720,7 +103720,7 @@ var Uh = Kp().min(1), Wh = Kp().regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/), Gh 
 	runInvocationURI: Gh,
 	sourceRepo: Wh,
 	sourceCommit: Kp().regex(/^[0-9a-f]{40}$/),
-	sourceRef: Kp().regex(/^refs\/tags\//),
+	sourceRef: Kp().regex(/^refs\/tags\/[A-Za-z0-9._/-]+$/),
 	addons: zh
 }), qh = { "slsa-manifest.v1.json": Kh }, Jh = bm({
 	_type: Kp(),
