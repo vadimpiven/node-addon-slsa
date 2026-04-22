@@ -158,8 +158,26 @@ Use discriminated error types or cause chains.
 
 **Conventions.** ESM only. `node:` prefix on built-ins. License header
 present. No `any`; use `unknown` + narrowing or zod at the boundary. Exact
-versions in `package.json`. `const` by default. Prefer `type` over
-`interface` unless a class `implements` it.
+versions in `package.json`. `const` by default.
+
+**Type declarations.** Use `interface` **only** when a class will
+`implements` it. For every other shape — options bags, return types,
+zod-inferred shapes, DTOs, discriminated unions — use `type`. Flag every
+`interface` that is not paired with an `implements` clause.
+
+**Function signatures.** Functions take **at most two positional
+arguments**. Anything beyond the primary subject (and at most one other
+essential value) goes into a single options parameter:
+
+- The options parameter is a **named `type`** exported alongside the
+  function — not an inline `{ a: string; b?: number }` literal. The name
+  reads as the concept (`VerifyOptions`, `LoadAddonOptions`), not the
+  function name with `Args` glued on.
+- Defaults are applied inside the function, not required at the call site.
+- No "flag" boolean positionals (`verify(pkg, true, false)`) — those become
+  named fields on the options type.
+- Arity over three at the call site is a blocker: the signature is
+  documenting a missing type.
 
 **Established patterns.** Before suggesting a new utility or abstraction,
 check whether the project already has one. Flag duplication; do not invent
@@ -191,6 +209,30 @@ generic "something went wrong."
 **No defensive re-parsing.** Once data is past the boundary and has the
 parsed type, downstream code trusts it. Flag redundant validation that
 suggests the type system is being mistrusted.
+
+**Test shape.** The test suite is reviewed as a design artefact, not just
+a safety net:
+
+- **Mock budget: at most two mocks per test.** A test that mocks three or
+  more collaborators is testing wiring, not behaviour — the abstraction
+  underneath is probably wrong, or the test is at the wrong level. Flag
+  every test over the budget and recommend either raising it to
+  end-to-end or lowering it to a pure unit on a smaller seam.
+- **Prefer end-to-end and longer unit tests.** The default shape is an
+  end-to-end or integration test that exercises the real code path
+  (network stubbed at the HTTP boundary, filesystem real-or-tmp, zod
+  schemas real). Longer unit tests that cover a cohesive behaviour
+  end-to-end within a module beat a pile of micro-tests that each pin one
+  line.
+- **Fine-grained unit tests fill the coverage gaps left by the above.**
+  They exist to pin specific branches (error mapping, edge schemas,
+  parser corner cases) that would be awkward to reach through the
+  integration layer — not to re-test the happy path at a finer grain.
+- **Test names describe behaviour**, not function names. Flag
+  `test('loader.load')` in favour of `test('loads a prebuilt addon from
+  a sidecar tarball')`.
+- **Error paths are exercised.** A suite that only covers the happy path
+  is incomplete. Flag modules whose tests never invoke a failure mode.
 
 ## Lens 4 — Security Champion
 
