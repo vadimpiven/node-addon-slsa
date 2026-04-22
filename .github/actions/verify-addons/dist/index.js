@@ -100923,42 +100923,35 @@ function Kc() {
 function qc(e) {
 	let t = (e?.dispatcher ?? Kc()).compose(Uc.interceptors.redirect({ maxRedirections: 5 }));
 	return { async request(e, n = {}) {
-		let r = n.method ?? "GET", i = n.timeoutMs ?? 3e4, a = n.stallTimeoutMs ?? 3e4, o = new AbortController(), s = globalThis.setTimeout(() => o.abort(), i), c = n.signal ? AbortSignal.any([o.signal, n.signal]) : o.signal;
-		if (n.contentType !== void 0 && /[\r\n]/.test(n.contentType)) throw new Gc({
-			kind: "network",
-			url: e,
-			message: `${r} ${e} → contentType contains CR/LF`
-		});
+		let r = n.timeoutMs ?? 3e4, i = n.stallTimeoutMs ?? 3e4, a = new AbortController(), o = globalThis.setTimeout(() => a.abort(), r), s = n.signal ? AbortSignal.any([a.signal, n.signal]) : a.signal;
 		try {
-			let i = await (0, Uc.request)(e, {
-				method: r,
-				...n.body !== void 0 && { body: n.body },
-				...n.contentType !== void 0 && { headers: { "content-type": n.contentType } },
-				signal: c,
+			let n = await (0, Uc.request)(e, {
+				method: "GET",
+				signal: s,
 				dispatcher: t,
-				headersTimeout: a,
-				bodyTimeout: a
+				headersTimeout: i,
+				bodyTimeout: i
 			});
-			if (i.statusCode >= 400) throw await i.body.dump(), new Gc({
+			if (n.statusCode >= 400) throw await n.body.dump(), new Gc({
 				kind: "status",
 				url: e,
-				status: i.statusCode,
-				message: `${r} ${e} → HTTP ${i.statusCode}`
+				status: n.statusCode,
+				message: `GET ${e} → HTTP ${n.statusCode}`
 			});
 			return {
-				status: i.statusCode,
-				headers: i.headers,
-				body: i.body
+				status: n.statusCode,
+				headers: n.headers,
+				body: n.body
 			};
 		} catch (t) {
 			throw t instanceof Gc ? t : new Gc({
 				kind: "network",
 				url: e,
-				message: `${r} ${e} → ${Wc(t)}`,
+				message: `GET ${e} → ${Wc(t)}`,
 				cause: t
 			});
 		} finally {
-			globalThis.clearTimeout(s);
+			globalThis.clearTimeout(o);
 		}
 	} };
 }

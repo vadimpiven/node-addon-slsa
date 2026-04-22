@@ -81,6 +81,32 @@ shapes used only internally are not re-exported. Types from dependencies do
 not leak into the public API unless the dependency *is* the contract (e.g.
 sigstore bundle format at the verify boundary).
 
+**File layout enforces abstraction.** File separation and directory
+hierarchy are part of the abstraction surface, not an incidental artifact:
+
+- One concept per file. A file's name must predict its contents; a reader
+  looking for concept *X* should know which file to open without grep.
+- Internal helpers live beside the concept they serve, not in a grab-bag
+  `utils.ts`. If `utils.ts` exists, audit it — most entries want to move
+  next to their actual caller or become their own named module.
+- Directory boundaries mirror abstraction boundaries. A folder should
+  correspond to a coherent layer (CLI, verification, schemas, loader), not
+  to file-type categorisation.
+- Cross-layer imports reveal leaks. If `cli.ts` reaches into a verification
+  internal, either the verification layer needs a higher-level entry or the
+  CLI is doing work that belongs elsewhere.
+
+**File size is a design signal.** No source file exceeds **500 lines**.
+Average across `packages/*/src/**/*.ts` should stay under **250 lines**.
+Treat the limits as smoke tests for missing abstractions, not stylistic
+rules — a 700-line file almost always hides two or three concepts that
+should be separate. When splitting, split along concept boundaries, not
+arbitrary line counts.
+
+Check with: `find packages/*/src -name '*.ts' -exec wc -l {} + | sort -n`
+for a quick view; flag any file over 500 and compute the average to verify
+the 250 target.
+
 **Progressive disclosure on the user-facing surface.** The CLI and the
 programmatic API exported from `index.ts` are block-facing; apply these rules:
 
