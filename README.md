@@ -50,8 +50,7 @@ npm install node-addon-slsa
 ```json
 {
   "addon": {
-    "path": "./dist/my_addon.node",
-    "url": "https://github.com/owner/repo/releases/download/v{version}/my_addon-v{version}-{platform}-{arch}.node.gz"
+    "path": "./dist/my_addon.node"
   },
   "scripts": {
     "postinstall": "slsa wget",
@@ -59,6 +58,10 @@ npm install node-addon-slsa
   }
 }
 ```
+
+Download URLs live in the generated `slsa-manifest.json` alongside the
+binary's SHA-256 and sigstore sidecar URL; the publish workflow writes
+it into the published tarball.
 
 Programmatic API:
 

@@ -79,8 +79,8 @@ function assertOidEquals(
  * for defense-in-depth against sigstore library bugs.
  *
  * `attestSignerPattern` is the pin binding attestations to the reusable
- * publish workflow: no workflow outside {@link BRAND_REPO} mints matching
- * certs.
+ * publish workflow: no workflow outside this toolkit's own `publish.yaml`
+ * mints matching certs.
  */
 export function verifyCertificateOIDs(
   cert: X509ExtensionReader,
@@ -130,8 +130,7 @@ export function verifyCertificateOIDs(
 if (import.meta.vitest) {
   const { describe, it } = import.meta.vitest;
   const { runInvocationURI } = await import("../types.ts");
-  const { DEFAULT_ATTEST_SIGNER_PATTERN } = await import("./constants.ts");
-  const { BRAND_REPO, BRAND_PUBLISH_WORKFLOW_PATH } = await import("./brand.ts");
+  const { DEFAULT_ATTEST_SIGNER_PATTERN, SIGNER_BASE } = await import("./constants.ts");
 
   const expect_ok = {
     sourceCommit: "a".repeat(40),
@@ -159,7 +158,7 @@ if (import.meta.vitest) {
     [OID_SOURCE_REPO_DIGEST]: "a".repeat(40),
     [OID_SOURCE_REPO_REF]: "refs/tags/v1.2.3",
     [OID_RUN_INVOCATION_URI]: "https://github.com/owner/repo/actions/runs/1/attempts/1",
-    [OID_BUILD_SIGNER_URI]: `${BRAND_REPO}/${BRAND_PUBLISH_WORKFLOW_PATH}@` + "a".repeat(40),
+    [OID_BUILD_SIGNER_URI]: `${SIGNER_BASE}@` + "a".repeat(40),
   };
 
   describe("verifyCertificateOIDs", () => {
@@ -194,7 +193,8 @@ if (import.meta.vitest) {
     it("rejects Build Signer URI from unrelated workflow", ({ expect }) => {
       const cert = mockCert({
         ...good,
-        [OID_BUILD_SIGNER_URI]: "other/repo/.github/workflows/publish.yaml@" + "a".repeat(40),
+        [OID_BUILD_SIGNER_URI]:
+          "https://github.com/other/repo/.github/workflows/publish.yaml@" + "a".repeat(40),
       });
       expect(() => verifyCertificateOIDs(cert, "owner/repo", expect_ok)).toThrow(
         /Build Signer URI/,
@@ -250,68 +250,11 @@ if (import.meta.vitest) {
     it("rejects tag-pinned Build Signer URI", ({ expect }) => {
       const cert = mockCert({
         ...good,
-        [OID_BUILD_SIGNER_URI]: `${BRAND_REPO}/${BRAND_PUBLISH_WORKFLOW_PATH}@refs/tags/v1.2.3`,
+        [OID_BUILD_SIGNER_URI]: `${SIGNER_BASE}@refs/tags/v1.2.3`,
       });
       expect(() => verifyCertificateOIDs(cert, "owner/repo", expect_ok)).toThrow(
         /Build Signer URI/,
       );
-    });
-  });
-
-  // Fork scenario: consumers of a forked toolkit pass `attestSignerPattern`
-  // as a URL prefix; `buildSignerPatternFromPrefix` wraps it with the same
-  // `@<40-hex-sha>$` tail the default uses. The group below locks the
-  // contract so a future refactor can't silently loosen the override path.
-  describe("fork-support signer override", () => {
-    const FORK_PREFIX = "acme/node-addon-slsa/.github/workflows/publish.yaml";
-    const FORK_SIGNER = `${FORK_PREFIX}@${"b".repeat(40)}`;
-
-    it("default pattern rejects a fork-minted attestation", async ({ expect }) => {
-      const cert = mockCert({ ...good, [OID_BUILD_SIGNER_URI]: FORK_SIGNER });
-      expect(() => verifyCertificateOIDs(cert, "owner/repo", expect_ok)).toThrow(
-        /Build Signer URI/,
-      );
-    });
-
-    it("override prefix accepts the fork's own SHA-pinned attestation", async ({ expect }) => {
-      const { buildSignerPatternFromPrefix } = await import("./verify.ts");
-      const cert = mockCert({ ...good, [OID_BUILD_SIGNER_URI]: FORK_SIGNER });
-      expect(() =>
-        verifyCertificateOIDs(cert, "owner/repo", {
-          ...expect_ok,
-          attestSignerPattern: buildSignerPatternFromPrefix(FORK_PREFIX),
-        }),
-      ).not.toThrow();
-    });
-
-    it("override still rejects tag/branch refs (no SHA tail)", async ({ expect }) => {
-      const { buildSignerPatternFromPrefix } = await import("./verify.ts");
-      const cert = mockCert({
-        ...good,
-        [OID_BUILD_SIGNER_URI]: `${FORK_PREFIX}@refs/tags/v1.2.3`,
-      });
-      expect(() =>
-        verifyCertificateOIDs(cert, "owner/repo", {
-          ...expect_ok,
-          attestSignerPattern: buildSignerPatternFromPrefix(FORK_PREFIX),
-        }),
-      ).toThrow(/Build Signer URI/);
-    });
-
-    it("override rejects a different owner/repo whose signer URI shares no prefix", async ({
-      expect,
-    }) => {
-      const { buildSignerPatternFromPrefix } = await import("./verify.ts");
-      const cert = mockCert({
-        ...good,
-        [OID_BUILD_SIGNER_URI]: `evil/node-addon-slsa/.github/workflows/publish.yaml@${"c".repeat(40)}`,
-      });
-      expect(() =>
-        verifyCertificateOIDs(cert, "owner/repo", {
-          ...expect_ok,
-          attestSignerPattern: buildSignerPatternFromPrefix(FORK_PREFIX),
-        }),
-      ).toThrow(/Build Signer URI/);
     });
   });
 }

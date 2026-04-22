@@ -83,10 +83,11 @@ function resolveAddonEntry(manifest: SlsaManifest): { url: string; sha256: strin
  * 3. Run {@link verifyPackageAt} to load and validate the SLSA manifest.
  * 4. Pick the `platform/arch` entry from `manifest.addons`.
  * 5. Stream the gzipped binary under wire- and decompressed-size caps.
- * 6. Compare the wire sha256 against the manifest, then verify Rekor.
+ * 6. Compare the wire sha256 against the manifest, then run sigstore
+ *    bundle verification against the expected workflow identity.
  * 7. Atomically rename the temp file over `addon.path`.
  *
- * @throws {ProvenanceError} when manifest or Rekor verification fails.
+ * @throws {ProvenanceError} when manifest or sigstore verification fails.
  * @throws {Error} on malformed `package.json`, unsupported platform/arch,
  *   download / HTTP / decompression failure, or sha256 mismatch.
  */

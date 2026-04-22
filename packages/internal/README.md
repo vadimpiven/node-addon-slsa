@@ -23,15 +23,15 @@ The grouping below mirrors the barrel:
 
 - **Verification** — [`src/verify/verify.ts`](./src/verify/verify.ts) for
   `verifyAttestation`, `loadTrustMaterial`, `verifyPackage`, `verifyPackageAt`.
-  [`rekor.ts`](./src/verify/rekor.ts) handles the Rekor transparency-log
-  round trip; [`certificates.ts`](./src/verify/certificates.ts) pulls
-  OIDs out of Fulcio certs; [`config.ts`](./src/verify/config.ts) resolves
-  caller options against defaults from
+  [`bundle.ts`](./src/verify/bundle.ts) fetches and cryptographically
+  verifies the sidecar sigstore bundle; [`certificates.ts`](./src/verify/certificates.ts)
+  pulls OIDs out of Fulcio certs; [`config.ts`](./src/verify/config.ts)
+  resolves caller options against defaults from
   [`constants.ts`](./src/verify/constants.ts).
-- **Schemas and branding** — [`src/verify/schemas.ts`](./src/verify/schemas.ts)
-  is the Zod source of truth for the published SLSA manifest (`$schema`
-  URLs defined in [`brand.ts`](./src/verify/brand.ts)). JSON Schemas are
-  regenerated from here by
+- **Schemas** — [`src/verify/schemas.ts`](./src/verify/schemas.ts)
+  is the Zod source of truth for the published SLSA manifest (the pinned
+  `$schema` URL lives in the same file). JSON Schemas are regenerated
+  from here by
   [`packages/node-addon-slsa/scripts/generate-schemas.ts`](../node-addon-slsa/scripts/generate-schemas.ts).
 - **Branded types** — [`src/types.ts`](./src/types.ts) has the runtime
   validators (`githubRepo`, `sha256Hex`, `semVerString`, etc.) that mint
@@ -45,25 +45,26 @@ The grouping below mirrors the barrel:
   [`src/util/`](./src/util) has `tempDir`, `assertWithinDir`,
   `createHashPassthrough`, `ProvenanceError`, the `errorMessage` formatter.
 
-## If you're here to build your own publisher
+## Reference composition
 
-Read these three files in order:
+Read these three files in order to understand how the published actions
+and CLI compose the internal primitives:
 
 1. [`src/verify/verify.ts`](./src/verify/verify.ts) — the shape of
-   `verifyAttestation` (hash + expected repo/commit/ref → Rekor check) and
-   `verifyPackageAt` (manifest file → provenance handle).
+   `verifyAttestation` (hash + expected repo/commit/ref → sidecar bundle
+   verification, which internally runs the TUF / Fulcio / Rekor-inclusion
+   chain) and `verifyPackageAt` (manifest file → provenance handle).
 2. [`.github/actions/verify-addons/index.ts`](../../.github/actions/verify-addons/index.ts)
-   — the reference composition: fetch + hash + `verifyAttestation` + manifest
-   emission. This is the template for a custom verifier.
+   — composition for the verify side: fetch + hash + `verifyAttestation` +
+   manifest emission.
 3. [`.github/actions/attest-addons/index.ts`](../../.github/actions/attest-addons/index.ts)
    — minting side: fetch + hash + `@actions/attest.attestProvenance`.
-   A custom publisher will mirror this.
 
 The [`publish.yaml`](../../.github/workflows/publish.yaml) reusable
-workflow shows how the two halves compose at the workflow level, including
-`DEFAULT_ATTEST_SIGNER_PATTERN` — the Build Signer URI regex
-`verifyAttestation` pins against. If you fork, this is the string that
-must match your own workflow's ref.
+workflow shows how the two halves compose at the workflow level.
+`DEFAULT_ATTEST_SIGNER_PATTERN` is the Build Signer URI pin that binds
+every attestation to this repo's `publish.yaml`; it is not configurable
+by consumers.
 
 ## Development
 

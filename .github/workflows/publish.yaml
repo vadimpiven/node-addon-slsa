@@ -4,9 +4,11 @@ on:
     inputs:
       addons:
         description: >-
-          Nested JSON: `{ [platform]: { [arch]: url } }` using Node's
-          process.platform / process.arch. Each leaf is a public URL the
-          caller has already uploaded the `.node.gz` addon to.
+          Nested JSON: `{ [platform]: { [arch]: { url, bundleUrl } } }`
+          using Node's process.platform / process.arch. `url` is the public
+          URL the caller has already uploaded the `.node.gz` binary to;
+          `bundleUrl` is the public URL its sidecar sigstore bundle will
+          be served at (typically the binary URL with `.sigstore` appended).
         required: true
         type: string
       tarball-artifact:

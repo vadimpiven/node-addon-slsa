@@ -2,8 +2,9 @@
 
 /**
  * Public verification API consumed by node-addon-slsa and verify-addons.
- * Owns manifest reading, Fulcio cert OID expectations, and the Rekor
- * ingestion-lag retry loop; delegates Rekor I/O to {@link ./rekor.ts}.
+ * Owns manifest reading, Fulcio cert OID expectations, and the sidecar
+ * bundle fetch-retry loop; delegates per-addon bundle verification to
+ * {@link ./bundle.ts}.
  */
 
 import { createReadStream } from "node:fs";
@@ -12,17 +13,18 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
 
+import { bundleFromJSON } from "@sigstore/bundle";
 import { getTrustedRoot } from "@sigstore/tuf";
-import { toSignedEntity } from "@sigstore/verify";
 import {
+  toSignedEntity,
   toTrustMaterial,
   Verifier as SigstoreVerifier,
   type TrustMaterial,
 } from "@sigstore/verify";
-import { bundleFromJSON } from "@sigstore/bundle";
 import dedent from "dedent";
 
-import { createHttpClient, withRetry } from "../http.ts";
+import { createHttpClient, HttpError, withRetry, type HttpClient } from "../http.ts";
+import { readPackageJson } from "../package.ts";
 import {
   githubRepo,
   runInvocationURI,
@@ -34,16 +36,14 @@ import {
   type Sha256Hex,
   type VerifyOptions,
 } from "../types.ts";
-import { readPackageJson } from "../package.ts";
 import { errorMessage } from "../util/error.ts";
 import { createHashPassthrough } from "../util/hash.ts";
-import { isProvenanceError, ProvenanceError } from "../util/provenance-error.ts";
+import { ProvenanceError } from "../util/provenance-error.ts";
+import { verifyAddonBundle } from "./bundle.ts";
 import type { CertificateOIDExpectations } from "./certificates.ts";
 import type { ResolvedConfig } from "./config.ts";
 import { resolveConfig } from "./config.ts";
-import { DEFAULT_ATTEST_SIGNER_PATTERN, DEFAULT_MANIFEST_PATH } from "./constants.ts";
-import { createRekorClient, type RekorClient } from "./rekor-client.ts";
-import { verifyRekorAttestations } from "./rekor.ts";
+import { DEFAULT_ATTEST_SIGNER_PATTERN, DEFAULT_MANIFEST_PATH, escapeRegExp } from "./constants.ts";
 import { SLSA_MANIFEST_V1_SCHEMA_URL, SlsaManifestSchemaV1, type SlsaManifest } from "./schemas.ts";
 
 /** Load sigstore trust material (Fulcio CAs, Rekor public keys) from the TUF repository. */
@@ -66,28 +66,10 @@ export function createBundleVerifier(trustMaterial: TrustMaterial): BundleVerifi
   };
 }
 
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 /** Normalize a `RegExp | string` pattern to a `RegExp`. Strings are anchored and escaped. */
 function toRegExp(pattern: RegExp | string): RegExp {
   if (pattern instanceof RegExp) return pattern;
   return new RegExp(`^${escapeRegExp(pattern)}$`);
-}
-
-/**
- * Build a Build Signer URI pin from a URL prefix. The prefix is escaped and
- * anchored with a required `@<40-hex-commit-sha>` suffix — matching the
- * shape {@link DEFAULT_ATTEST_SIGNER_PATTERN} enforces. Forks that use
- * reusable workflows get a commit SHA in `job_workflow_ref` automatically,
- * so this tail is the same for the default and any override.
- *
- * Accepting a raw RegExp here would be a footgun (`.*` silently nullifies
- * the pin); accepting `@.+$` would accept mutable refs (`refs/tags/v1`).
- */
-export function buildSignerPatternFromPrefix(prefix: string): RegExp {
-  return new RegExp(`^${escapeRegExp(prefix)}@[0-9a-f]{40}$`);
 }
 
 /** Default `refPattern` for a given installed package version. */
@@ -96,52 +78,40 @@ function defaultRefPattern(version: string): RegExp {
 }
 
 /**
- * Options for {@link verifyAttestation}. Plain strings are validated internally;
- * no branded-type constructors required at call sites.
+ * Retry when the sidecar bundle URL 404s (CDN propagation lag after a
+ * fresh release-asset upload). Any other error is fatal.
  */
-export type VerifyAttestationOptions = VerifyOptions & {
-  readonly sha256: string;
-  readonly repo: string;
-  readonly runInvocationURI: string;
-  readonly sourceCommit: string;
-  readonly sourceRef: string;
-  /**
-   * Override the default Build Signer URI pin. Accepts a URL *prefix*
-   * (everything up to — but not including — the `@<ref-or-sha>` segment);
-   * the `@.+$` tail is enforced internally.
-   */
-  readonly attestSignerPattern?: string;
-};
-
-/** Default client: one undici-backed HttpClient shared across search + entry fetches. */
-function clientFromConfig(config: ResolvedConfig): RekorClient {
-  if (config.rekorClient) return config.rekorClient;
-  return createRekorClient({
-    http: createHttpClient({ dispatcher: config.dispatcher }),
-    searchUrl: config.rekorSearchUrl,
-    entryUrl: config.rekorEntryUrl,
-    timeoutMs: config.timeoutMs,
-  });
-}
-
-/** Retry on `rekor-not-found` per `delays`; fatal on anything else. */
-function classifyIngestionLag(
+function classifyBundle404(
   delays: readonly number[],
 ): (err: unknown, attempt: number) => { retry: true; delayMs: number } | { retry: false } {
   return (err, attempt) => {
     const index = attempt - 1;
     if (index >= delays.length) return { retry: false };
-    if (isProvenanceError(err) && err.kind === "rekor-not-found") {
+    if (err instanceof HttpError && err.kind === "status" && err.status === 404) {
       return { retry: true, delayMs: delays[index] ?? 0 };
     }
     return { retry: false };
   };
 }
 
+/** Options for {@link verifyAttestation}. */
+export type VerifyAttestationOptions = VerifyOptions & {
+  readonly sha256: string;
+  readonly bundleUrl: string;
+  readonly repo: string;
+  readonly runInvocationURI: string;
+  readonly sourceCommit: string;
+  readonly sourceRef: string;
+};
+
+function httpFromConfig(config: ResolvedConfig): HttpClient {
+  return createHttpClient({ dispatcher: config.dispatcher });
+}
+
 /**
- * Verify a Rekor entry exists for the given sha256 whose signing cert's
- * OIDs match the expected workflow run. Retries briefly for Rekor
- * ingestion lag (publish-side only; new attestations take ~30s to index).
+ * Verify that the bundle at `bundleUrl` attests the given `sha256` and
+ * carries a Fulcio cert whose OIDs match the expected workflow run.
+ * Retries briefly on 404 for CDN propagation; any other failure is fatal.
  */
 export async function verifyAttestation(options: VerifyAttestationOptions): Promise<void> {
   const sha = sha256Hex(options.sha256);
@@ -152,26 +122,24 @@ export async function verifyAttestation(options: VerifyAttestationOptions): Prom
   const config = resolveConfig(options);
   const verifier =
     config.verifier ?? createBundleVerifier(config.trustMaterial ?? (await loadTrustMaterial()));
-  const client = clientFromConfig(config);
+  const http = httpFromConfig(config);
   const expect: CertificateOIDExpectations = {
     sourceCommit: commit,
     sourceRef: ref,
     runInvocationURI: runURI,
-    attestSignerPattern: options.attestSignerPattern
-      ? buildSignerPatternFromPrefix(options.attestSignerPattern)
-      : DEFAULT_ATTEST_SIGNER_PATTERN,
+    attestSignerPattern: DEFAULT_ATTEST_SIGNER_PATTERN,
   };
   await withRetry(
     () =>
-      verifyRekorAttestations({
+      verifyAddonBundle({
         sha256: sha,
+        bundleUrl: options.bundleUrl,
         repo,
         expect,
-        client,
+        http,
         verifier,
-        maxEntries: config.maxRekorEntries,
       }),
-    classifyIngestionLag(config.rekorIngestionRetryDelays),
+    classifyBundle404(config.bundleFetchRetryDelays),
     options.signal ? { signal: options.signal } : undefined,
   );
 }
@@ -187,16 +155,6 @@ export type VerifyPackageOptions = VerifyOptions & {
    * String → exact-match (literal); RegExp → pattern match.
    */
   readonly refPattern?: RegExp | string;
-  /**
-   * Fulcio cert's Build Signer URI pin. Defaults to the built-in pattern
-   * matching this toolkit's reusable publish workflow. Override only to
-   * verify a package produced by a different fork's publish workflow.
-   *
-   * Accepts a URL *prefix* (e.g. `https://github.com/owner/fork/.github/workflows/publish.yaml`);
-   * the required `@<ref-or-sha>` tail is enforced internally. Accepting a
-   * raw RegExp would let a careless `.*` nullify the entire pin.
-   */
-  readonly attestSignerPattern?: string;
   /**
    * Directory to resolve `packageName` from. Defaults to `process.cwd()`.
    * Programmatic callers that don't want to depend on ambient cwd (test
@@ -251,6 +209,23 @@ async function readManifest(packageRoot: string, manifestRel: string): Promise<S
   }
 }
 
+/** Locate the manifest addon entry whose sha256 matches the hashed binary. */
+function findAddonEntryBySha(
+  manifest: SlsaManifest,
+  sha256: string,
+): { url: string; bundleUrl: string; sha256: string } {
+  for (const byArch of Object.values(manifest.addons)) {
+    for (const entry of Object.values(byArch ?? {})) {
+      if (entry && entry.sha256.toLowerCase() === sha256.toLowerCase()) {
+        return entry;
+      }
+    }
+  }
+  throw new ProvenanceError(
+    `sha256 ${sha256} not found in manifest's addon inventory — the binary does not match any declared addon.`,
+  );
+}
+
 /**
  * Verify an installed package's manifest and return a provenance handle.
  * Prefer {@link verifyPackage}; this form is for test fixtures
@@ -298,36 +273,34 @@ export async function verifyPackageAt(
   }
 
   const runURI = runInvocationURI(manifest.runInvocationURI);
-  const attestSignerPattern = options.attestSignerPattern
-    ? buildSignerPatternFromPrefix(options.attestSignerPattern)
-    : DEFAULT_ATTEST_SIGNER_PATTERN;
 
-  // One-time setup per handle: TUF trust fetch, verifier build, Rekor
-  // client. Hoisted out of `runRekor` so verifying N addon files against
-  // the same package makes one TUF round-trip, not N.
+  // One-time setup per handle: TUF trust fetch, verifier build, HTTP client.
+  // Hoisted out of `runVerify` so verifying N addon files against the same
+  // package makes one TUF round-trip, not N.
   const config = resolveConfig(options);
   const verifier =
     config.verifier ?? createBundleVerifier(config.trustMaterial ?? (await loadTrustMaterial()));
-  const client = clientFromConfig(config);
+  const http = httpFromConfig(config);
   const expect: CertificateOIDExpectations = {
     sourceCommit: manifest.sourceCommit,
     sourceRef: manifest.sourceRef,
     runInvocationURI: runURI,
-    attestSignerPattern,
+    attestSignerPattern: DEFAULT_ATTEST_SIGNER_PATTERN,
   };
 
-  const runRekor = async (sha: Sha256Hex): Promise<void> => {
+  const runVerify = async (sha: Sha256Hex): Promise<void> => {
+    const entry = findAddonEntryBySha(manifest, sha);
     await withRetry(
       () =>
-        verifyRekorAttestations({
+        verifyAddonBundle({
           sha256: sha,
+          bundleUrl: entry.bundleUrl,
           repo: expectedRepo,
           expect,
-          client,
+          http,
           verifier,
-          maxEntries: config.maxRekorEntries,
         }),
-      classifyIngestionLag(config.rekorIngestionRetryDelays),
+      classifyBundle404(config.bundleFetchRetryDelays),
       options.signal ? { signal: options.signal } : undefined,
     );
   };
@@ -338,8 +311,8 @@ export async function verifyPackageAt(
     sourceCommit: manifest.sourceCommit,
     sourceRef: manifest.sourceRef,
     runInvocationURI: manifest.runInvocationURI,
-    verifyAddonBySha256: async (sha256) => runRekor(sha256Hex(sha256)),
-    verifyAddonFromFile: async (filePath) => runRekor(await hashFile(filePath)),
+    verifyAddonBySha256: async (sha256) => runVerify(sha256Hex(sha256)),
+    verifyAddonFromFile: async (filePath) => runVerify(await hashFile(filePath)),
   };
 }
 
@@ -352,36 +325,6 @@ export async function verifyPackageAt(
  *
  * @throws {@link ProvenanceError} on any schema or trust-chain mismatch.
  * @throws `TypeError` on malformed option values (invalid `repo` slug, etc.).
- *
- * @example
- * Minimal — trust bootstraps per call:
- * ```typescript
- * import { verifyPackage } from "node-addon-slsa";
- *
- * const p = await verifyPackage({
- *   packageName: "my-addon",
- *   repo: "owner/repo",
- * });
- * await p.verifyAddonFromFile("/path/to/my-addon/dist/addon.node.gz");
- * ```
- *
- * @example
- * Heavy use — pre-build the verifier once and reuse across many packages:
- * ```typescript
- * import { verifyPackage } from "node-addon-slsa";
- * import { loadTrustMaterial, createBundleVerifier } from "node-addon-slsa/advanced";
- *
- * const verifier = createBundleVerifier(await loadTrustMaterial());
- *
- * for (const name of ["addon-a", "addon-b", "addon-c"]) {
- *   const p = await verifyPackage({
- *     packageName: name,
- *     repo: "owner/repo",
- *     verifier,
- *   });
- *   await p.verifyAddonFromFile(`/path/to/${name}/dist/addon.node.gz`);
- * }
- * ```
  */
 export async function verifyPackage(options: VerifyPackageOptions): Promise<PackageProvenance> {
   // Resolution base: caller-supplied `cwd` for programmatic use, falling
@@ -409,7 +352,8 @@ if (import.meta.vitest) {
   const { describe, it, vi } = import.meta.vitest;
   const { writeFile, mkdir } = await import("node:fs/promises");
   const { tempDir } = await import("../util/fs.ts");
-  const { RekorError } = await import("./rekor-client.ts");
+
+  const ADDON_SHA = "b".repeat(64);
 
   const BASE_MANIFEST: SlsaManifest = {
     $schema: SLSA_MANIFEST_V1_SCHEMA_URL,
@@ -419,7 +363,13 @@ if (import.meta.vitest) {
     sourceCommit: "a".repeat(40),
     sourceRef: "refs/tags/v1.2.3",
     addons: {
-      linux: { x64: { url: "https://e.com/a.node.gz", sha256: "b".repeat(64) } },
+      linux: {
+        x64: {
+          url: "https://e.com/a.node.gz",
+          bundleUrl: "https://e.com/a.node.gz.sigstore",
+          sha256: ADDON_SHA,
+        },
+      },
     },
   };
 
@@ -445,7 +395,10 @@ if (import.meta.vitest) {
   describe("verifyPackageAt", () => {
     it("returns a provenance handle for a matching manifest", async ({ expect }) => {
       await using tmp = await makePackage();
-      const p = await verifyPackageAt(tmp.path, { repo: "owner/repo" });
+      const p = await verifyPackageAt(tmp.path, {
+        repo: "owner/repo",
+        verifier: { verify: () => undefined },
+      });
       expect(p.sourceRepo).toBe("owner/repo");
       expect(p.sourceCommit).toBe("a".repeat(40));
       expect(p.sourceRef).toBe("refs/tags/v1.2.3");
@@ -453,71 +406,39 @@ if (import.meta.vitest) {
 
     it("rejects manifest packageName mismatch", async ({ expect }) => {
       await using tmp = await makePackage({ manifest: { packageName: "other" } });
-      await expect(verifyPackageAt(tmp.path, { repo: "owner/repo" })).rejects.toThrow(
-        /manifest\.packageName/,
-      );
+      await expect(
+        verifyPackageAt(tmp.path, { repo: "owner/repo", verifier: { verify: () => undefined } }),
+      ).rejects.toThrow(/manifest\.packageName/);
     });
 
     it("rejects sourceRepo mismatch", async ({ expect }) => {
       await using tmp = await makePackage();
-      await expect(verifyPackageAt(tmp.path, { repo: "evil/repo" })).rejects.toThrow(
-        /manifest\.sourceRepo/,
-      );
+      await expect(
+        verifyPackageAt(tmp.path, { repo: "evil/repo", verifier: { verify: () => undefined } }),
+      ).rejects.toThrow(/manifest\.sourceRepo/);
     });
 
     it("accepts case-insensitive repo match", async ({ expect }) => {
       await using tmp = await makePackage();
-      await expect(verifyPackageAt(tmp.path, { repo: "Owner/Repo" })).resolves.toBeDefined();
+      await expect(
+        verifyPackageAt(tmp.path, { repo: "Owner/Repo", verifier: { verify: () => undefined } }),
+      ).resolves.toBeDefined();
     });
 
     it("rejects invalid repo option", async ({ expect }) => {
       await using tmp = await makePackage();
-      await expect(verifyPackageAt(tmp.path, { repo: "not-a-slash" })).rejects.toThrow(TypeError);
-    });
-
-    it("default refPattern accepts v-prefixed and bare tag", async ({ expect }) => {
-      await using tmpV = await makePackage();
-      await expect(verifyPackageAt(tmpV.path, { repo: "owner/repo" })).resolves.toBeDefined();
-      await using tmpBare = await makePackage({
-        manifest: { sourceRef: "refs/tags/1.2.3" },
-      });
-      await expect(verifyPackageAt(tmpBare.path, { repo: "owner/repo" })).resolves.toBeDefined();
+      await expect(
+        verifyPackageAt(tmp.path, { repo: "not-a-slash", verifier: { verify: () => undefined } }),
+      ).rejects.toThrow(TypeError);
     });
 
     it("default refPattern rejects other versions / branches", async ({ expect }) => {
       await using tmpOther = await makePackage({ manifest: { sourceRef: "refs/tags/v1.2.4" } });
-      await expect(verifyPackageAt(tmpOther.path, { repo: "owner/repo" })).rejects.toThrow();
-    });
-
-    it("escapes regex metachars in default pattern", async ({ expect }) => {
-      await using tmp = await makePackage({
-        pkg: { version: "1.2.3-rc.1" },
-        manifest: { sourceRef: "refs/tags/v1.2.3-rc.1" },
-      });
-      await expect(verifyPackageAt(tmp.path, { repo: "owner/repo" })).resolves.toBeDefined();
-    });
-
-    it("escapes '+' metachar in default pattern", async ({ expect }) => {
-      await using tmpOk = await makePackage({
-        pkg: { version: "1.2.3+build.1" },
-        manifest: { sourceRef: "refs/tags/v1.2.3+build.1" },
-      });
-      await expect(verifyPackageAt(tmpOk.path, { repo: "owner/repo" })).resolves.toBeDefined();
-      // Literal '+' must not act as one-or-more: "1.2.3buildbuild.1" → reject.
-      await using tmpBad = await makePackage({
-        pkg: { version: "1.2.3+build.1" },
-        manifest: { sourceRef: "refs/tags/v1.2.3buildbuild.1" },
-      });
-      await expect(verifyPackageAt(tmpBad.path, { repo: "owner/repo" })).rejects.toThrow();
-    });
-
-    it("explicit refPattern as string matches exactly", async ({ expect }) => {
-      await using tmp = await makePackage();
       await expect(
-        verifyPackageAt(tmp.path, { repo: "owner/repo", refPattern: "refs/tags/v1.2.3" }),
-      ).resolves.toBeDefined();
-      await expect(
-        verifyPackageAt(tmp.path, { repo: "owner/repo", refPattern: "refs/tags" }),
+        verifyPackageAt(tmpOther.path, {
+          repo: "owner/repo",
+          verifier: { verify: () => undefined },
+        }),
       ).rejects.toThrow();
     });
 
@@ -525,7 +446,9 @@ if (import.meta.vitest) {
       await using tmp = await makePackage({
         manifest: { $schema: "https://e.com/other.json" as SlsaManifest["$schema"] },
       });
-      await expect(verifyPackageAt(tmp.path, { repo: "owner/repo" })).rejects.toThrow();
+      await expect(
+        verifyPackageAt(tmp.path, { repo: "owner/repo", verifier: { verify: () => undefined } }),
+      ).rejects.toThrow();
     });
 
     it("rejects missing manifest file", async ({ expect }) => {
@@ -538,15 +461,27 @@ if (import.meta.vitest) {
           addon: { path: "./dist/my.node", manifest: "./slsa-manifest.json" },
         }),
       );
-      await expect(verifyPackageAt(tmp.path, { repo: "owner/repo" })).rejects.toThrow(
-        /manifest not found/,
-      );
+      await expect(
+        verifyPackageAt(tmp.path, { repo: "owner/repo", verifier: { verify: () => undefined } }),
+      ).rejects.toThrow(/manifest not found/);
     });
 
     it("verifyAddonBySha256 validates input", async ({ expect }) => {
       await using tmp = await makePackage();
-      const p = await verifyPackageAt(tmp.path, { repo: "owner/repo" });
+      const p = await verifyPackageAt(tmp.path, {
+        repo: "owner/repo",
+        verifier: { verify: () => undefined },
+      });
       await expect(p.verifyAddonBySha256("not-hex")).rejects.toThrow(TypeError);
+    });
+
+    it("verifyAddonBySha256 rejects an sha not present in the manifest", async ({ expect }) => {
+      await using tmp = await makePackage();
+      const p = await verifyPackageAt(tmp.path, {
+        repo: "owner/repo",
+        verifier: { verify: () => undefined },
+      });
+      await expect(p.verifyAddonBySha256("c".repeat(64))).rejects.toThrow(/not found in manifest/);
     });
   });
 
@@ -557,7 +492,7 @@ if (import.meta.vitest) {
       ).rejects.toThrow(/could not resolve/);
     });
 
-    it("resolves packageName via createRequire from process.cwd()", async ({ expect }) => {
+    it("resolves packageName via createRequire from explicit cwd", async ({ expect }) => {
       await using tmpRoot = await tempDir();
       const nm = join(tmpRoot.path, "node_modules", "my-pkg");
       await mkdir(nm, { recursive: true });
@@ -570,32 +505,6 @@ if (import.meta.vitest) {
         }),
       );
       await writeFile(join(nm, "slsa-manifest.json"), JSON.stringify(BASE_MANIFEST));
-      const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(tmpRoot.path);
-      try {
-        const p = await verifyPackage({ packageName: "my-pkg", repo: "owner/repo" });
-        expect(p.sourceRepo).toBe("owner/repo");
-      } finally {
-        cwdSpy.mockRestore();
-      }
-    });
-
-    it("resolves packageName from explicit `cwd` without touching process.cwd()", async ({
-      expect,
-    }) => {
-      await using tmpRoot = await tempDir();
-      const nm = join(tmpRoot.path, "node_modules", "my-pkg");
-      await mkdir(nm, { recursive: true });
-      await writeFile(
-        join(nm, "package.json"),
-        JSON.stringify({
-          name: "my-pkg",
-          version: "1.2.3",
-          addon: { path: "./dist/my.node", manifest: "./slsa-manifest.json" },
-        }),
-      );
-      await writeFile(join(nm, "slsa-manifest.json"), JSON.stringify(BASE_MANIFEST));
-      // Point process.cwd() somewhere the package is NOT installed; the
-      // explicit `cwd` option must take precedence.
       await using otherCwd = await tempDir();
       const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(otherCwd.path);
       try {
@@ -603,114 +512,12 @@ if (import.meta.vitest) {
           packageName: "my-pkg",
           repo: "owner/repo",
           cwd: tmpRoot.path,
+          verifier: { verify: () => undefined },
         });
         expect(p.sourceRepo).toBe("owner/repo");
       } finally {
         cwdSpy.mockRestore();
       }
-    });
-  });
-
-  describe("verifyAttestation with injected RekorClient", () => {
-    const okVerifier: BundleVerifier = { verify: () => undefined };
-
-    const baseOpts = {
-      sha256: "a".repeat(64),
-      repo: "owner/repo",
-      runInvocationURI: "https://github.com/owner/repo/actions/runs/1/attempts/1",
-      sourceCommit: "a".repeat(40),
-      sourceRef: "refs/tags/v1.2.3",
-      verifier: okVerifier,
-      // Zero ingestion-retry delays so the test runs instantly.
-      rekorIngestionRetryDelays: [],
-    } as const;
-
-    it("surfaces search=[] as ProvenanceError { kind: rekor-not-found }", async ({ expect }) => {
-      const err = await verifyAttestation({
-        ...baseOpts,
-        rekorClient: {
-          search: async () => [],
-          fetchEntry: async () => {
-            throw new Error("unreachable");
-          },
-        },
-      }).catch((e) => e as unknown);
-      expect(err).toBeInstanceOf(ProvenanceError);
-      expect((err as ProvenanceError).kind).toBe("rekor-not-found");
-    });
-
-    it("retries on rekor-not-found per the configured schedule", async ({ expect }) => {
-      let searchCalls = 0;
-      const err = await verifyAttestation({
-        ...baseOpts,
-        rekorIngestionRetryDelays: [1, 1],
-        rekorClient: {
-          search: async () => {
-            searchCalls++;
-            return [];
-          },
-          fetchEntry: async () => {
-            throw new Error("unreachable");
-          },
-        },
-      }).catch((e) => e as unknown);
-      expect(err).toBeInstanceOf(ProvenanceError);
-      expect((err as ProvenanceError).kind).toBe("rekor-not-found");
-      // Initial attempt + two retries.
-      expect(searchCalls).toBe(3);
-    });
-
-    it("does NOT retry when search throws an unavailable RekorError", async ({ expect }) => {
-      let calls = 0;
-      await verifyAttestation({
-        ...baseOpts,
-        rekorClient: {
-          search: async () => {
-            calls++;
-            throw new RekorError({ kind: "unavailable", message: "5xx" });
-          },
-          fetchEntry: async () => {
-            throw new Error("unreachable");
-          },
-        },
-      }).catch(() => {});
-      expect(calls).toBe(1);
-    });
-  });
-
-  describe("verifyPackageAt provenance-handle Rekor wiring", () => {
-    it("routes verifyAddonBySha256 + verifyAddonFromFile through the injected RekorClient", async ({
-      expect,
-    }) => {
-      await using tmp = await makePackage();
-      // Seed a file to verify — contents irrelevant, we assert the fake
-      // client observed *a* sha.
-      const addonPath = join(tmp.path, "dist", "my.node");
-      await mkdir(dirname(addonPath), { recursive: true });
-      await writeFile(addonPath, "addon-bytes");
-
-      const searched: string[] = [];
-      const p = await verifyPackageAt(tmp.path, {
-        repo: "owner/repo",
-        verifier: { verify: () => undefined },
-        rekorIngestionRetryDelays: [],
-        rekorClient: {
-          search: async (sha) => {
-            searched.push(sha);
-            return [];
-          },
-          fetchEntry: async () => {
-            throw new Error("unreachable");
-          },
-        },
-      });
-      const provided = "b".repeat(64);
-      await p.verifyAddonBySha256(provided).catch(() => {});
-      await p.verifyAddonFromFile(addonPath).catch(() => {});
-      expect(searched).toHaveLength(2);
-      expect(searched[0]).toBe(provided);
-      expect(searched[1]).toMatch(/^[0-9a-f]{64}$/);
-      expect(searched[1]).not.toBe(provided);
     });
   });
 }

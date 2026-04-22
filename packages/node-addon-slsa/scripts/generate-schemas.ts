@@ -14,8 +14,9 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { z } from "zod/v4";
 
-import { BRAND_PAGES_BASE } from "../../internal/src/verify/brand.ts";
 import { PublishedSchemas } from "../../internal/src/verify/schemas.ts";
+
+const PAGES_BASE = "https://vadimpiven.github.io/node-addon-slsa";
 
 const outDir = new URL("../docs/schema/", import.meta.url);
 mkdirSync(outDir, { recursive: true });
@@ -25,8 +26,8 @@ for (const [name, schema] of Object.entries(PublishedSchemas)) {
   // Zod's toJSONSchema() omits $id and top-level $schema; inject them so the
   // file self-describes with the URL the verifier pins (exact-string match).
   const withIds = {
-    $schema: "https://json-schema.org/draft/2020-12/schema",
-    $id: `${BRAND_PAGES_BASE}/schema/${name}`,
+    $schema: "http://json-schema.org/draft-07/schema#",
+    $id: `${PAGES_BASE}/schema/${name}`,
     ...json,
   };
   writeFileSync(new URL(name, outDir), JSON.stringify(withIds, null, 2) + "\n");
