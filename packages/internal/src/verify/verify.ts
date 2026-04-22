@@ -43,7 +43,11 @@ import { verifyAddonBundle } from "./bundle.ts";
 import type { CertificateOIDExpectations } from "./certificates.ts";
 import type { ResolvedConfig } from "./config.ts";
 import { resolveConfig } from "./config.ts";
-import { DEFAULT_ATTEST_SIGNER_PATTERN, DEFAULT_MANIFEST_PATH } from "./constants.ts";
+import {
+  DEFAULT_ATTEST_SIGNER_PATTERN,
+  DEFAULT_MANIFEST_PATH,
+  escapeRegExp,
+} from "./constants.ts";
 import { SLSA_MANIFEST_V1_SCHEMA_URL, SlsaManifestSchemaV1, type SlsaManifest } from "./schemas.ts";
 
 /** Load sigstore trust material (Fulcio CAs, Rekor public keys) from the TUF repository. */
@@ -64,10 +68,6 @@ export function createBundleVerifier(trustMaterial: TrustMaterial): BundleVerifi
       verifier.verify(toSignedEntity(bundleFromJSON(bundle)));
     },
   };
-}
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /** Normalize a `RegExp | string` pattern to a `RegExp`. Strings are anchored and escaped. */

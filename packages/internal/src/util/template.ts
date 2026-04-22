@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-/** `{key}` placeholder substitution for URL templates (Rekor entry URL, addon artifact URL). */
+/** `{key}` placeholder substitution for pack output path templates. */
 
 /**
  * Substitute `{key}` placeholders with `vars[key]`. Throws if any placeholder

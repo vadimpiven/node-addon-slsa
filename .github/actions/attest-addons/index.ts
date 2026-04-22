@@ -2,8 +2,7 @@
 
 /**
  * Reference composition of the internal primitives for the attest step
- * of the reusable `publish.yaml` workflow. Fork authors can copy this
- * shape to build a custom publisher.
+ * of the reusable `publish.yaml` workflow.
  *
  * Flow: fetch each declared addon URL (with CDN-propagation-aware
  * retries), SHA-256 the body under a size cap, mint one sigstore bundle

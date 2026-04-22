@@ -11,7 +11,7 @@
  * `maxRedirections: 5`. Redirects are NOT authorization-aware — callers
  * must not pass credentialed headers to URLs whose redirect targets they
  * don't control. All of this package's production callers hit public
- * endpoints (GitHub release assets → public CDN, public Rekor, npmjs.org
+ * endpoints (GitHub release assets → public CDN, TUF mirror, npmjs.org
  * via `@actions/attest`), so the limitation is contractual only.
  */
 

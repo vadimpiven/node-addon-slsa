@@ -2,8 +2,7 @@
 
 /**
  * Reference composition of the internal primitives for the verify step
- * of the reusable `publish.yaml` workflow. Fork authors can copy this
- * shape to build a custom verifier.
+ * of the reusable `publish.yaml` workflow.
  *
  * Trust-critical: for each declared addon URL, fetch the binary under a
  * size cap, hash it, then fetch the sidecar sigstore bundle at the
@@ -47,8 +46,8 @@ function readNumberInput(name: string, fallback: number): number {
 
 /**
  * Entry point invoked by the action runner. Reads inputs and env,
- * verifies every addon against Rekor, and emits the SLSA manifest JSON
- * via the `manifest` output.
+ * runs the full sigstore bundle verification for every declared addon,
+ * and emits the SLSA manifest JSON via the `manifest` output.
  */
 export async function main(): Promise<void> {
   const packageName = getInput("package-name", { required: true });

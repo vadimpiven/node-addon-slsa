@@ -3,7 +3,7 @@
 /**
  * Branded types, runtime validators, and option interfaces.
  * Public surface takes plain strings; branded types live under `/internal`
- * for workspace code (verify-addons, CLI) and fork tooling.
+ * for workspace code (verify-addons, CLI).
  */
 
 import type { SerializedBundle } from "@sigstore/bundle";

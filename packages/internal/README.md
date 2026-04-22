@@ -45,26 +45,26 @@ The grouping below mirrors the barrel:
   [`src/util/`](./src/util) has `tempDir`, `assertWithinDir`,
   `createHashPassthrough`, `ProvenanceError`, the `errorMessage` formatter.
 
-## If you're here to build your own publisher
+## Reference composition
 
-Read these three files in order:
+Read these three files in order to understand how the published actions
+and CLI compose the internal primitives:
 
 1. [`src/verify/verify.ts`](./src/verify/verify.ts) — the shape of
    `verifyAttestation` (hash + expected repo/commit/ref → sidecar bundle
    verification, which internally runs the TUF / Fulcio / Rekor-inclusion
    chain) and `verifyPackageAt` (manifest file → provenance handle).
 2. [`.github/actions/verify-addons/index.ts`](../../.github/actions/verify-addons/index.ts)
-   — the reference composition: fetch + hash + `verifyAttestation` + manifest
-   emission. This is the template for a custom verifier.
+   — composition for the verify side: fetch + hash + `verifyAttestation` +
+   manifest emission.
 3. [`.github/actions/attest-addons/index.ts`](../../.github/actions/attest-addons/index.ts)
    — minting side: fetch + hash + `@actions/attest.attestProvenance`.
-   A custom publisher will mirror this.
 
 The [`publish.yaml`](../../.github/workflows/publish.yaml) reusable
-workflow shows how the two halves compose at the workflow level, including
-`DEFAULT_ATTEST_SIGNER_PATTERN` — the Build Signer URI regex
-`verifyAttestation` pins against. If you fork, this is the string that
-must match your own workflow's ref.
+workflow shows how the two halves compose at the workflow level.
+`DEFAULT_ATTEST_SIGNER_PATTERN` is the Build Signer URI pin that binds
+every attestation to this repo's `publish.yaml`; it is not configurable
+by consumers.
 
 ## Development
 

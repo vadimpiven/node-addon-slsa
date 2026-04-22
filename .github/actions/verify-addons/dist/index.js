@@ -64373,8 +64373,7 @@ __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __we
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 /**
  * Reference composition of the internal primitives for the verify step
- * of the reusable `publish.yaml` workflow. Fork authors can copy this
- * shape to build a custom verifier.
+ * of the reusable `publish.yaml` workflow.
  *
  * Trust-critical: for each declared addon URL, fetch the binary under a
  * size cap, hash it, then fetch the sidecar sigstore bundle at the
@@ -64400,8 +64399,8 @@ function readNumberInput(name, fallback) {
 }
 /**
  * Entry point invoked by the action runner. Reads inputs and env,
- * verifies every addon against Rekor, and emits the SLSA manifest JSON
- * via the `manifest` output.
+ * runs the full sigstore bundle verification for every declared addon,
+ * and emits the SLSA manifest JSON via the `manifest` output.
  */
 async function main() {
     const packageName = (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .getInput */ .V4)("package-name", { required: true });
@@ -67711,10 +67710,10 @@ __nccwpck_require__.d(__webpack_exports__, {
   f9: () => (/* binding */ Uh),
   uT: () => (/* binding */ qc),
   gJ: () => (/* binding */ Wc),
-  Oz: () => (/* binding */ bg),
+  Oz: () => (/* binding */ yg),
   ac: () => (/* binding */ Hh),
   ak: () => (/* binding */ tg),
-  oe: () => (/* binding */ cg)
+  oe: () => (/* binding */ sg)
 });
 
 // UNUSED EXPORTS: AddonInventorySchema, ArchSchema, DEFAULT_ATTEST_SIGNER_PATTERN, DEFAULT_MANIFEST_PATH, HttpError, PlatformSchema, ProvenanceError, PublishedSchemas, SlsaManifestSchemaV1, assertWithinDir, createBundleVerifier, createHashPassthrough, evalTemplate, extractExpectedRepo, isEnoent, isEnotdir, isProvenanceError, log, readPackageJson, safeUnlink, tempDir, verifyPackage, verifyPackageAt, warn, withRetry
@@ -103767,15 +103766,12 @@ function ng(e) {
 	} };
 }
 function rg(e) {
-	return e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	return e instanceof RegExp ? e : RegExp(`^${kh(e)}$`);
 }
 function ig(e) {
-	return e instanceof RegExp ? e : RegExp(`^${rg(e)}$`);
+	return RegExp(`^refs/tags/v?${kh(e)}$`);
 }
 function ag(e) {
-	return RegExp(`^refs/tags/v?${rg(e)}$`);
-}
-function og(e) {
 	return (t, n) => {
 		let r = n - 1;
 		return r >= e.length ? { retry: !1 } : t instanceof Gc && t.kind === "status" && t.status === 404 ? {
@@ -103784,11 +103780,11 @@ function og(e) {
 		} : { retry: !1 };
 	};
 }
-function sg(e) {
+function og(e) {
 	return qc({ dispatcher: e.dispatcher });
 }
-async function cg(e) {
-	let t = nh(e.sha256), n = rh(e.repo), r = ih(e.runInvocationURI), i = ah(e.sourceCommit), a = oh(e.sourceRef), o = eg(e), s = o.verifier ?? ng(o.trustMaterial ?? await tg()), c = sg(o), l = {
+async function sg(e) {
+	let t = nh(e.sha256), n = rh(e.repo), r = ih(e.runInvocationURI), i = ah(e.sourceCommit), a = oh(e.sourceRef), o = eg(e), s = o.verifier ?? ng(o.trustMaterial ?? await tg()), c = og(o), l = {
 		sourceCommit: i,
 		sourceRef: a,
 		runInvocationURI: r,
@@ -103801,15 +103797,15 @@ async function cg(e) {
 		expect: l,
 		http: c,
 		verifier: s
-	}), og(o.bundleFetchRetryDelays), e.signal ? { signal: e.signal } : void 0);
+	}), ag(o.bundleFetchRetryDelays), e.signal ? { signal: e.signal } : void 0);
 }
-async function lg(e) {
+async function cg(e) {
 	let { stream: t, digest: n } = ph();
 	return await h(o(e), t, async (e) => {
 		for await (let t of e);
 	}), n();
 }
-async function ug(e, t) {
+async function lg(e, t) {
 	let n = p(e, t), r;
 	try {
 		r = await c(n, "utf8");
@@ -103829,12 +103825,12 @@ async function ug(e, t) {
     `);
 	}
 }
-function dg(e, t) {
+function ug(e, t) {
 	for (let n of Object.values(e.addons)) for (let e of Object.values(n ?? {})) if (e && e.sha256.toLowerCase() === t.toLowerCase()) return e;
 	throw new j(`sha256 ${t} not found in manifest's addon inventory — the binary does not match any declared addon.`);
 }
-async function fg(e, t) {
-	let n = await dh(e), r = await ug(e, n.addon.manifest ?? "slsa-manifest.json");
+async function dg(e, t) {
+	let n = await dh(e), r = await lg(e, n.addon.manifest ?? "slsa-manifest.json");
 	if (r.packageName !== n.name) throw new j(E`
       manifest.packageName does not match installed package.json name.
       manifest.packageName: ${r.packageName}
@@ -103851,19 +103847,19 @@ async function fg(e, t) {
       manifest.sourceRepo: ${r.sourceRepo}
       expected:            ${i}
     `);
-	let a = ig(t.refPattern ?? ag(n.version));
+	let a = rg(t.refPattern ?? ig(n.version));
 	if (!a.test(r.sourceRef)) throw new j(E`
       manifest.sourceRef does not match expected refPattern.
       manifest.sourceRef: ${r.sourceRef}
       pattern:            ${a.source}
     `);
-	let o = ih(r.runInvocationURI), s = eg(t), c = s.verifier ?? ng(s.trustMaterial ?? await tg()), l = sg(s), u = {
+	let o = ih(r.runInvocationURI), s = eg(t), c = s.verifier ?? ng(s.trustMaterial ?? await tg()), l = og(s), u = {
 		sourceCommit: r.sourceCommit,
 		sourceRef: r.sourceRef,
 		runInvocationURI: o,
 		attestSignerPattern: Ah
 	}, d = async (e) => {
-		let n = dg(r, e);
+		let n = ug(r, e);
 		await Jc(() => $h({
 			sha256: e,
 			bundleUrl: n.bundleUrl,
@@ -103871,7 +103867,7 @@ async function fg(e, t) {
 			expect: u,
 			http: l,
 			verifier: c
-		}), og(s.bundleFetchRetryDelays), t.signal ? { signal: t.signal } : void 0);
+		}), ag(s.bundleFetchRetryDelays), t.signal ? { signal: t.signal } : void 0);
 	};
 	return {
 		packageName: r.packageName,
@@ -103880,10 +103876,10 @@ async function fg(e, t) {
 		sourceRef: r.sourceRef,
 		runInvocationURI: r.runInvocationURI,
 		verifyAddonBySha256: async (e) => d(nh(e)),
-		verifyAddonFromFile: async (e) => d(await lg(e))
+		verifyAddonFromFile: async (e) => d(await cg(e))
 	};
 }
-async function pg(e) {
+async function fg(e) {
 	let t = e.cwd ?? process.cwd(), n = a(t + "/"), r;
 	try {
 		r = n.resolve(`${e.packageName}/package.json`);
@@ -103893,17 +103889,17 @@ async function pg(e) {
       Ensure the package is installed, or pass { cwd } explicitly.
     `, { cause: n });
 	}
-	return fg(d(r), e);
+	return dg(d(r), e);
 }
 //#endregion
 //#region src/util/fs.ts
-function mg(e) {
+function pg(e) {
 	return e instanceof Error && "code" in e && e.code === "ENOENT";
 }
-function hg(e) {
+function mg(e) {
 	return e instanceof Error && "code" in e && e.code === "ENOTDIR";
 }
-async function gg(e = "slsa-") {
+async function hg(e = "slsa-") {
 	let t = await s(f(b(), e));
 	return {
 		path: t,
@@ -103913,7 +103909,7 @@ async function gg(e = "slsa-") {
 		})
 	};
 }
-function _g({ baseDir: e, target: t, label: n }) {
+function gg({ baseDir: e, target: t, label: n }) {
 	let r = p(e), i = p(t);
 	if (!i.startsWith(r + m)) throw Error(E`
         ${n} escapes the package directory — possible path traversal.
@@ -103923,17 +103919,17 @@ function _g({ baseDir: e, target: t, label: n }) {
         If you did not author this package, report this to the maintainer.
       `);
 }
-async function vg(e, t) {
+async function _g(e, t) {
 	try {
 		await u(e);
 	} catch (e) {
-		mg(e) || _h(`failed to clean up ${t}: ${e}`);
+		pg(e) || _h(`failed to clean up ${t}: ${e}`);
 	}
 }
 //#endregion
 //#region src/util/addon-fetch.ts
-var yg = 500;
-async function bg(e, t, n) {
+var vg = 500;
+async function yg(e, t, n) {
 	return Jc(async () => {
 		let r = await e.request(t, {
 			timeoutMs: n.maxBinaryMs,
@@ -103950,17 +103946,17 @@ async function bg(e, t, n) {
 			r.body.destroy();
 		}
 		return a.digest("hex");
-	}, (e, t) => t >= 1 + (n.retryCount ?? 3) ? { retry: !1 } : e instanceof Gc && (e.kind === "network" || e.kind === "status" && (e.status !== void 0 && e.status >= 500 || n.retryOn404 && e.status === 404)) ? xg(t) : { retry: !1 });
+	}, (e, t) => t >= 1 + (n.retryCount ?? 3) ? { retry: !1 } : e instanceof Gc && (e.kind === "network" || e.kind === "status" && (e.status !== void 0 && e.status >= 500 || n.retryOn404 && e.status === 404)) ? bg(t) : { retry: !1 });
 }
-function xg(e) {
+function bg(e) {
 	return {
 		retry: !0,
-		delayMs: Yc(e, yg)
+		delayMs: Yc(e, vg)
 	};
 }
 //#endregion
 //#region src/util/template.ts
-function Sg(e, t) {
+function xg(e, t) {
 	let n = e;
 	for (let [e, r] of Object.entries(t)) n = n.replaceAll(`{${e}}`, r);
 	let r = n.match(/\{[a-zA-Z_]\w*\}/g);

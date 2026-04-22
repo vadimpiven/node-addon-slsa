@@ -46,7 +46,8 @@ export const MAX_JSON_RESPONSE_BYTES = 50 * 1024 * 1024;
  */
 export const BUNDLE_FETCH_RETRY_DELAYS: readonly number[] = [2_000, 5_000, 10_000, 15_000];
 
-function escapeRegExp(s: string): string {
+/** Escape regex metacharacters so a literal string matches exactly inside a pattern. */
+export function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 

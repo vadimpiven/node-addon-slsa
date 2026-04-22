@@ -2,7 +2,7 @@
 
 /**
  * Zod schemas: SLSA manifest (source of truth for the JSON Schema published
- * to GitHub Pages) and Rekor API responses.
+ * to GitHub Pages) and the in-toto Statement decoded from sigstore bundles.
  */
 
 import { z } from "zod/v4";
