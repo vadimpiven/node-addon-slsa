@@ -17,7 +17,7 @@
  */
 
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import { attestProvenance, type Subject } from "@actions/attest";
 import { getInput, setFailed, setOutput } from "@actions/core";
@@ -83,12 +83,14 @@ export async function main(): Promise<void> {
 
   // Persist the bundle per-addon. The bundle JSON is identical across
   // subjects (single multi-subject attestation); we write one copy per
-  // sidecar destination so the upload step is a straight mapping.
+  // sidecar destination, named by the final path segment of `bundleUrl`
+  // so the caller's upload step (`gh release upload <path>`) drops the
+  // asset at the filename the URL promises.
   await mkdir(bundleDir, { recursive: true });
   const bundleJson = JSON.stringify(result.bundle);
   const records = await Promise.all(
     hashed.map(async ({ platform, arch, url, bundleUrl, sha256 }) => {
-      const filename = `${platform}-${arch}-${sha256}.sigstore`;
+      const filename = basename(new URL(bundleUrl).pathname);
       const path = join(bundleDir, filename);
       await writeFile(path, bundleJson);
       return { platform, arch, url, bundleUrl, sha256, path };

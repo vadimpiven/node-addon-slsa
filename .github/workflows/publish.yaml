@@ -45,11 +45,12 @@ jobs:
     runs-on: "ubuntu-24.04"
     timeout-minutes: 20
     permissions:
-      contents: "read"
+      contents: "write" # upload sidecar sigstore bundles to the caller's GitHub Release
       id-token: "write" # Sigstore OIDC + npm trusted publishing
       attestations: "write" # @actions/attest writes to the GitHub Attestations API
     steps:
       - name: "Attest addons (public-good sigstore)"
+        id: "attest"
         # Runs early — only needs `addons`. Failing here skips the tarball
         # download and Node setup. The Fulcio cert's Build Signer URI records
         # this reusable workflow's ref, which is what `verifyPackage` enforces
@@ -67,9 +68,28 @@ jobs:
         uses: "vadimpiven/node-addon-slsa/.github/actions/attest-addons@311ea9782fd47be1b9c1c221c14bb9469f56402f" # v0.9.0
         with:
           addons: "${{ inputs.addons }}"
+          bundle-dir: "${{ runner.temp }}/slsa-bundles"
           max-binary-bytes: "${{ inputs.max-binary-bytes }}"
           max-binary-seconds: "${{ inputs.max-binary-seconds }}"
           retry-count: "${{ inputs.retry-count }}"
+      - name: "Upload sidecar bundles to caller's GitHub Release"
+        shell: "bash"
+        env:
+          GH_TOKEN: "${{ github.token }}"
+          BUNDLES: "${{ steps.attest.outputs.bundles }}"
+          REPO: "${{ github.repository }}"
+          TAG: "${{ github.ref_name }}"
+        # Upload each bundle to the URL its owner declared in `addons:`.
+        # attest-addons already names files to match the final path segment
+        # of `bundleUrl`, so `gh release upload` drops each asset at the
+        # filename the URL promises. `--clobber` makes the step idempotent
+        # across workflow retries. `verify-addons` (next step) fetches the
+        # same URLs over HTTPS; if the upload fails the verify step fails
+        # loudly on 404 before we publish to npm.
+        run: |
+          set -euo pipefail
+          mapfile -t paths < <(jq -r '.[].path' <<<"$BUNDLES")
+          gh release upload "$TAG" "${paths[@]}" --repo "$REPO" --clobber
       - name: "Download pre-packed tarball"
         uses: "actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53" # v6.0.0
         with:

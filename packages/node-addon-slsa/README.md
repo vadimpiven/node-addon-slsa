@@ -150,7 +150,7 @@ jobs:
     needs: [build-addon, pack-tarball]
     uses: vadimpiven/node-addon-slsa/.github/workflows/publish.yaml@<commit-sha>
     permissions:
-      contents: read
+      contents: write # upload sidecar sigstore bundles to the release
       id-token: write # sigstore OIDC + npm trusted publishing
       attestations: write
     with:
@@ -174,9 +174,12 @@ comment, not a mutable tag — SHAs are immutable and audit-friendly.
 Each matrix runner produces a platform-specific binary and uploads it
 to the GitHub Release at a deterministic URL. The `publish.yaml`
 reusable workflow re-fetches each URL, attests the bytes against
-Sigstore/Rekor (signer pinned to this workflow), writes the SLSA
-manifest into the tarball, and publishes the npm package via trusted
-publishing. At install time `slsa wget` reads the manifest, picks the
+Sigstore/Rekor (signer pinned to this workflow), uploads each
+`.node.gz.sigstore` sidecar bundle to the URL the caller declared in
+`bundleUrl`, writes the SLSA manifest into the tarball, and publishes
+the npm package via trusted publishing. `contents: write` on the
+`publish` job is required for the sidecar-bundle upload. At install
+time `slsa wget` reads the manifest, picks the
 `process.platform`/`process.arch` entry, downloads the binary, and
 verifies its sidecar sigstore bundle.
 
