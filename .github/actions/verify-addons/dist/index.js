@@ -64379,9 +64379,10 @@ __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __we
  * size cap, hash it, then fetch the sidecar sigstore bundle at the
  * declared `bundleUrl`, run the full `@sigstore/verify` chain against
  * TUF-backed trust material, and check the Fulcio cert's OIDs against
- * this run's commit / ref / run-invocation-URI and the Build Signer
- * pattern (`DEFAULT_ATTEST_SIGNER_PATTERN`). Emits the SLSA manifest as
- * a JSON string; the enclosing workflow writes it into the tarball.
+ * this run's commit / ref / run-invocation-URI and a Build Signer
+ * pattern derived from `GITHUB_REPOSITORY` + `attest-workflow`. Emits
+ * the SLSA manifest as a JSON string; the enclosing workflow writes it
+ * into the tarball.
  */
 
 
@@ -64405,6 +64406,7 @@ function readNumberInput(name, fallback) {
 async function main() {
     const packageName = (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .getInput */ .V4)("package-name", { required: true });
     const addonsRaw = (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .getInput */ .V4)("addons", { required: true });
+    const attestWorkflow = (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .getInput */ .V4)("attest-workflow", { required: true });
     const maxBinaryBytes = readNumberInput("max-binary-bytes", _node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_2__/* .DEFAULT_MAX_BINARY_BYTES */ .HJ);
     const maxBinaryMs = readNumberInput("max-binary-seconds", _node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_2__/* .DEFAULT_MAX_BINARY_SECONDS */ .rM) * 1000;
     const addons = _node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_2__/* .AddonUrlMapSchema */ .lr.parse(JSON.parse(addonsRaw));
@@ -64428,6 +64430,7 @@ async function main() {
     // One HttpClient for addon fetches + bundle fetches; `verifyAttestation`
     // builds its own from the passed `dispatcher`.
     const http = (0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_2__/* .createHttpClient */ .uT)({ dispatcher: (0,undici__WEBPACK_IMPORTED_MODULE_1__/* .getGlobalDispatcher */ .xo)() });
+    const attestSignerPattern = (0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_2__/* .buildAttestSignerPattern */ .ar)({ repo, workflow: attestWorkflow });
     const verified = await Promise.all(entries.map(async ({ platform, arch, url, bundleUrl }) => {
         const sha256 = await (0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_2__/* .fetchAndHashAddon */ .Oz)(http, url, {
             maxBinaryBytes,
@@ -64441,6 +64444,7 @@ async function main() {
             runInvocationURI: runURI,
             sourceCommit: commit,
             sourceRef: ref,
+            attestSignerPattern,
             trustMaterial,
             dispatcher: (0,undici__WEBPACK_IMPORTED_MODULE_1__/* .getGlobalDispatcher */ .xo)(),
         });
@@ -67708,6 +67712,7 @@ __nccwpck_require__.d(__webpack_exports__, {
   rM: () => (/* binding */ Eh),
   Wx: () => (/* binding */ Ph),
   f9: () => (/* binding */ Uh),
+  ar: () => (/* binding */ Ah),
   uT: () => (/* binding */ qc),
   gJ: () => (/* binding */ Wc),
   Oz: () => (/* binding */ yg),
@@ -67716,7 +67721,7 @@ __nccwpck_require__.d(__webpack_exports__, {
   oe: () => (/* binding */ sg)
 });
 
-// UNUSED EXPORTS: AddonInventorySchema, ArchSchema, DEFAULT_ATTEST_SIGNER_PATTERN, DEFAULT_MANIFEST_PATH, HttpError, PlatformSchema, ProvenanceError, PublishedSchemas, SlsaManifestSchemaV1, assertWithinDir, createBundleVerifier, createHashPassthrough, evalTemplate, extractExpectedRepo, isEnoent, isEnotdir, isProvenanceError, log, readPackageJson, safeUnlink, tempDir, verifyPackage, verifyPackageAt, warn, withRetry
+// UNUSED EXPORTS: AddonInventorySchema, ArchSchema, DEFAULT_MANIFEST_PATH, HttpError, PlatformSchema, ProvenanceError, PublishedSchemas, SlsaManifestSchemaV1, assertWithinDir, createBundleVerifier, createHashPassthrough, evalTemplate, extractExpectedRepo, isEnoent, isEnotdir, isProvenanceError, log, readPackageJson, safeUnlink, tempDir, verifyPackage, verifyPackageAt, warn, withRetry
 
 // EXTERNAL MODULE: ../../../packages/internal/dist/chunk-CzB3-c9G.js
 var chunk_CzB3_c9G = __nccwpck_require__(149);
@@ -103553,7 +103558,8 @@ function oh(e) {
 //#region src/package.ts
 var sh = Kp().regex(eh).transform((e) => e), ch = bm({
 	path: Kp().refine((e) => !e.split(/[/\\]/).includes("..") && e.endsWith(".node"), { message: "addon.path must be a relative .node file path" }),
-	manifest: Kp().optional()
+	manifest: Kp().optional(),
+	attestWorkflow: Kp().regex(/^[A-Za-z0-9._-]+\.ya?ml$/, { message: "addon.attestWorkflow must be a workflow filename like \"release.yaml\"" })
 }), lh = Sm([Kp(), bm({ url: Kp().optional() })]), uh = bm({
 	name: Kp().min(1),
 	version: sh,
@@ -103627,7 +103633,11 @@ var vh = "1.3.6.1.4.1.57264.1.9", yh = "1.3.6.1.4.1.57264.1.12", bh = "1.3.6.1.4
 function kh(e) {
 	return e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-var Ah = RegExp(`^${kh("https://github.com/vadimpiven/node-addon-slsa/.github/workflows/publish.yaml")}@` + String.raw`[0-9a-f]{40}$`);
+function Ah(e) {
+	if (e.workflow.includes("/") || e.workflow.includes("\\")) throw TypeError(`attest workflow must be a bare filename: ${e.workflow}`);
+	let t = `https://github.com/${e.repo}/.github/workflows/${e.workflow}`;
+	return RegExp(`^${kh(t)}@[0-9a-f]{40}$`);
+}
 //#endregion
 //#region src/verify/certificates.ts
 function jh(e, t) {
@@ -103788,7 +103798,7 @@ async function sg(e) {
 		sourceCommit: i,
 		sourceRef: a,
 		runInvocationURI: r,
-		attestSignerPattern: Ah
+		attestSignerPattern: rg(e.attestSignerPattern)
 	};
 	await Jc(() => $h({
 		sha256: t,
@@ -103853,18 +103863,21 @@ async function dg(e, t) {
       manifest.sourceRef: ${r.sourceRef}
       pattern:            ${a.source}
     `);
-	let o = ih(r.runInvocationURI), s = eg(t), c = s.verifier ?? ng(s.trustMaterial ?? await tg()), l = og(s), u = {
+	let o = ih(r.runInvocationURI), s = eg(t), c = s.verifier ?? ng(s.trustMaterial ?? await tg()), l = og(s), u = t.attestSignerPattern ? rg(t.attestSignerPattern) : Ah({
+		repo: r.sourceRepo,
+		workflow: n.addon.attestWorkflow
+	}), d = {
 		sourceCommit: r.sourceCommit,
 		sourceRef: r.sourceRef,
 		runInvocationURI: o,
-		attestSignerPattern: Ah
-	}, d = async (e) => {
+		attestSignerPattern: u
+	}, f = async (e) => {
 		let n = ug(r, e);
 		await Jc(() => $h({
 			sha256: e,
 			bundleUrl: n.bundleUrl,
 			repo: i,
-			expect: u,
+			expect: d,
 			http: l,
 			verifier: c
 		}), ag(s.bundleFetchRetryDelays), t.signal ? { signal: t.signal } : void 0);
@@ -103875,8 +103888,8 @@ async function dg(e, t) {
 		sourceCommit: r.sourceCommit,
 		sourceRef: r.sourceRef,
 		runInvocationURI: r.runInvocationURI,
-		verifyAddonBySha256: async (e) => d(nh(e)),
-		verifyAddonFromFile: async (e) => d(await cg(e))
+		verifyAddonBySha256: async (e) => f(nh(e)),
+		verifyAddonFromFile: async (e) => f(await cg(e))
 	};
 }
 async function fg(e) {

@@ -43,7 +43,7 @@ import { verifyAddonBundle } from "./bundle.ts";
 import type { CertificateOIDExpectations } from "./certificates.ts";
 import type { ResolvedConfig } from "./config.ts";
 import { resolveConfig } from "./config.ts";
-import { DEFAULT_ATTEST_SIGNER_PATTERN, DEFAULT_MANIFEST_PATH, escapeRegExp } from "./constants.ts";
+import { buildAttestSignerPattern, DEFAULT_MANIFEST_PATH, escapeRegExp } from "./constants.ts";
 import { SLSA_MANIFEST_V1_SCHEMA_URL, SlsaManifestSchemaV1, type SlsaManifest } from "./schemas.ts";
 
 /** Load sigstore trust material (Fulcio CAs, Rekor public keys) from the TUF repository. */
@@ -102,6 +102,15 @@ export type VerifyAttestationOptions = VerifyOptions & {
   readonly runInvocationURI: string;
   readonly sourceCommit: string;
   readonly sourceRef: string;
+  /**
+   * Fulcio Build Signer URI pin (OID 1.3.6.1.4.1.57264.1.9). Attestations
+   * whose `job_workflow_ref` claim doesn't match this pattern are
+   * rejected. Build with `buildAttestSignerPattern` (from
+   * `node-addon-slsa/advanced`) for the common "one workflow in one
+   * repo" case, or pass a regex directly for advanced multi-workflow
+   * setups.
+   */
+  readonly attestSignerPattern: RegExp | string;
 };
 
 function httpFromConfig(config: ResolvedConfig): HttpClient {
@@ -127,7 +136,7 @@ export async function verifyAttestation(options: VerifyAttestationOptions): Prom
     sourceCommit: commit,
     sourceRef: ref,
     runInvocationURI: runURI,
-    attestSignerPattern: DEFAULT_ATTEST_SIGNER_PATTERN,
+    attestSignerPattern: toRegExp(options.attestSignerPattern),
   };
   await withRetry(
     () =>
@@ -163,6 +172,14 @@ export type VerifyPackageOptions = VerifyOptions & {
    * `require.resolve('./package.json')` directory, or the project root.
    */
   readonly cwd?: string;
+  /**
+   * Override the Fulcio Build Signer URI pin. When omitted, the pattern
+   * is derived from `manifest.sourceRepo` + `pkg.addon.attestWorkflow`
+   * via `buildAttestSignerPattern` (from `node-addon-slsa/advanced`).
+   * Override to accept attestations from additional workflows, or to
+   * tighten the pattern further.
+   */
+  readonly attestSignerPattern?: RegExp | string;
 };
 
 /** Provenance handle returned by {@link verifyPackage}. */
@@ -281,11 +298,17 @@ export async function verifyPackageAt(
   const verifier =
     config.verifier ?? createBundleVerifier(config.trustMaterial ?? (await loadTrustMaterial()));
   const http = httpFromConfig(config);
+  const attestSignerPattern = options.attestSignerPattern
+    ? toRegExp(options.attestSignerPattern)
+    : buildAttestSignerPattern({
+        repo: manifest.sourceRepo,
+        workflow: pkg.addon.attestWorkflow,
+      });
   const expect: CertificateOIDExpectations = {
     sourceCommit: manifest.sourceCommit,
     sourceRef: manifest.sourceRef,
     runInvocationURI: runURI,
-    attestSignerPattern: DEFAULT_ATTEST_SIGNER_PATTERN,
+    attestSignerPattern,
   };
 
   const runVerify = async (sha: Sha256Hex): Promise<void> => {
@@ -383,7 +406,11 @@ if (import.meta.vitest) {
     const pkg = {
       name: "my-pkg",
       version: "1.2.3",
-      addon: { path: "./dist/my.node", manifest: "./slsa-manifest.json" },
+      addon: {
+        path: "./dist/my.node",
+        manifest: "./slsa-manifest.json",
+        attestWorkflow: "release.yaml",
+      },
       ...overrides.pkg,
     };
     const manifest = { ...BASE_MANIFEST, ...overrides.manifest };
@@ -458,7 +485,11 @@ if (import.meta.vitest) {
         JSON.stringify({
           name: "x",
           version: "1.0.0",
-          addon: { path: "./dist/my.node", manifest: "./slsa-manifest.json" },
+          addon: {
+            path: "./dist/my.node",
+            manifest: "./slsa-manifest.json",
+            attestWorkflow: "release.yaml",
+          },
         }),
       );
       await expect(
@@ -501,7 +532,11 @@ if (import.meta.vitest) {
         JSON.stringify({
           name: "my-pkg",
           version: "1.2.3",
-          addon: { path: "./dist/my.node", manifest: "./slsa-manifest.json" },
+          addon: {
+            path: "./dist/my.node",
+            manifest: "./slsa-manifest.json",
+            attestWorkflow: "release.yaml",
+          },
         }),
       );
       await writeFile(join(nm, "slsa-manifest.json"), JSON.stringify(BASE_MANIFEST));

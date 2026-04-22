@@ -7,8 +7,13 @@ on:
           Nested JSON: `{ [platform]: { [arch]: { url, bundleUrl } } }`
           using Node's process.platform / process.arch. `url` is the public
           URL the caller has already uploaded the `.node.gz` binary to;
-          `bundleUrl` is the public URL its sidecar sigstore bundle will
-          be served at (typically the binary URL with `.sigstore` appended).
+          `bundleUrl` is the public URL its sidecar sigstore bundle is
+          served at (typically the binary URL with `.sigstore` appended).
+          The caller mints bundles themselves (via the `attest-addons`
+          action in their own workflow), uploads both the binary and the
+          bundle to their CDN / GitHub Release, then calls this workflow —
+          which re-fetches both from the public URLs, verifies, writes
+          the manifest, and publishes to npm.
         required: true
         type: string
       tarball-artifact:
@@ -33,11 +38,6 @@ on:
         required: false
         default: 300
         type: number
-      retry-count:
-        description: "Retries per addon URL, covering CDN propagation after upload."
-        required: false
-        default: 10
-        type: number
 permissions: {}
 jobs:
   publish:
@@ -45,51 +45,9 @@ jobs:
     runs-on: "ubuntu-24.04"
     timeout-minutes: 20
     permissions:
-      contents: "write" # upload sidecar sigstore bundles to the caller's GitHub Release
-      id-token: "write" # Sigstore OIDC + npm trusted publishing
-      attestations: "write" # @actions/attest writes to the GitHub Attestations API
+      contents: "read"
+      id-token: "write" # npm trusted publishing
     steps:
-      - name: "Attest addons (public-good sigstore)"
-        id: "attest"
-        # Runs early — only needs `addons`. Failing here skips the tarball
-        # download and Node setup. The Fulcio cert's Build Signer URI records
-        # this reusable workflow's ref, which is what `verifyPackage` enforces
-        # via `DEFAULT_ATTEST_SIGNER_PATTERN`.
-        #
-        # Cross-repo `uses:` avoids the reusable-workflow self-location
-        # problem: `github.workflow_ref`/`workflow_sha` resolve to the caller
-        # inside `workflow_call`, so there's no context variable for the
-        # callee's own ref. Pinned to the previous release's sha because GHA
-        # org policy enforces "full-length commit SHA" pins at runtime (not
-        # just lint), ruling out tag refs like `@v0.8.4`, and a commit can't
-        # contain its own sha. When the action code changes, bump in two
-        # commits: first the action change (tag it), then update this sha
-        # to that commit.
-        uses: "vadimpiven/node-addon-slsa/.github/actions/attest-addons@311ea9782fd47be1b9c1c221c14bb9469f56402f" # v0.9.0
-        with:
-          addons: "${{ inputs.addons }}"
-          bundle-dir: "${{ runner.temp }}/slsa-bundles"
-          max-binary-bytes: "${{ inputs.max-binary-bytes }}"
-          max-binary-seconds: "${{ inputs.max-binary-seconds }}"
-          retry-count: "${{ inputs.retry-count }}"
-      - name: "Upload sidecar bundles to caller's GitHub Release"
-        shell: "bash"
-        env:
-          GH_TOKEN: "${{ github.token }}"
-          BUNDLES: "${{ steps.attest.outputs.bundles }}"
-          REPO: "${{ github.repository }}"
-          TAG: "${{ github.ref_name }}"
-        # Upload each bundle to the URL its owner declared in `addons:`.
-        # attest-addons already names files to match the final path segment
-        # of `bundleUrl`, so `gh release upload` drops each asset at the
-        # filename the URL promises. `--clobber` makes the step idempotent
-        # across workflow retries. `verify-addons` (next step) fetches the
-        # same URLs over HTTPS; if the upload fails the verify step fails
-        # loudly on 404 before we publish to npm.
-        run: |
-          set -euo pipefail
-          mapfile -t paths < <(jq -r '.[].path' <<<"$BUNDLES")
-          gh release upload "$TAG" "${paths[@]}" --repo "$REPO" --clobber
       - name: "Download pre-packed tarball"
         uses: "actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53" # v6.0.0
         with:
@@ -128,7 +86,7 @@ jobs:
           mkdir -p "$workdir"
           tar -xzf "${tarballs[0]}" -C "$workdir"
           echo "package-dir=$workdir/package" >>"$GITHUB_OUTPUT"
-      - name: "Read name and manifest path from package.json"
+      - name: "Read package.json fields: name, manifest path, attest workflow"
         id: "pkg"
         shell: "bash"
         env:
@@ -137,20 +95,40 @@ jobs:
         # in node-addon-slsa's constants.ts — the consumer-side loader
         # falls back on the same string, so drifting it here would silently
         # break installation of any package that doesn't set
-        # `addon.manifest` explicitly.
+        # `addon.manifest` explicitly. `addon.attestWorkflow` is required
+        # (no default); it's the filename of the caller's workflow that
+        # minted attestations, used to pin the Fulcio Build Signer URI.
         run: |
           set -euo pipefail
           pkg_json="$PACKAGE_DIR/package.json"
           name=$(jq -r '.name' "$pkg_json")
           manifest_rel=$(jq -r '.addon.manifest // "slsa-manifest.json"' "$pkg_json")
-          echo "name=$name" >>"$GITHUB_OUTPUT"
-          echo "manifest-rel=$manifest_rel" >>"$GITHUB_OUTPUT"
-      - name: "Verify addons (Rekor) and build SLSA manifest"
+          attest_workflow=$(jq -r '.addon.attestWorkflow // empty' "$pkg_json")
+          if [[ -z "$attest_workflow" ]]; then
+            echo 'package.json is missing addon.attestWorkflow (required since v0.10)' >&2
+            exit 1
+          fi
+          {
+            echo "name=$name"
+            echo "manifest-rel=$manifest_rel"
+            echo "attest-workflow=$attest_workflow"
+          } >>"$GITHUB_OUTPUT"
+      - name: "Verify addons (sigstore) and build SLSA manifest"
         id: "verify"
+        # Cross-repo `uses:` avoids the reusable-workflow self-location
+        # problem: `github.workflow_ref`/`workflow_sha` resolve to the caller
+        # inside `workflow_call`, so there's no context variable for the
+        # callee's own ref. Pinned to a release sha because GHA org policy
+        # enforces "full-length commit SHA" pins at runtime (not just lint),
+        # ruling out tag refs like `@v0.9.0`, and a commit can't contain
+        # its own sha. When the action code changes, bump in two commits:
+        # first the action change (tag it), then update this sha to the
+        # new commit.
         uses: "vadimpiven/node-addon-slsa/.github/actions/verify-addons@311ea9782fd47be1b9c1c221c14bb9469f56402f" # v0.9.0
         with:
           package-name: "${{ steps.pkg.outputs.name }}"
           addons: "${{ inputs.addons }}"
+          attest-workflow: "${{ steps.pkg.outputs.attest-workflow }}"
           max-binary-bytes: "${{ inputs.max-binary-bytes }}"
           max-binary-seconds: "${{ inputs.max-binary-seconds }}"
       - name: "Embed SLSA manifest"

@@ -24,6 +24,10 @@
  * ```
  */
 
-export { loadTrustMaterial, createBundleVerifier } from "@node-addon-slsa/internal";
+export {
+  buildAttestSignerPattern,
+  createBundleVerifier,
+  loadTrustMaterial,
+} from "@node-addon-slsa/internal";
 export type { BundleVerifier, TrustMaterial } from "@node-addon-slsa/internal";
 export type { Dispatcher } from "undici";

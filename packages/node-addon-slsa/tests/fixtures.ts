@@ -23,7 +23,11 @@ export const FAKE_URL =
 export type TestPackageJson = {
   readonly name: string;
   readonly version: string;
-  readonly addon: { readonly path: string; readonly manifest?: string };
+  readonly addon: {
+    readonly path: string;
+    readonly manifest?: string;
+    readonly attestWorkflow: string;
+  };
   readonly repository: { readonly url: string };
 };
 
@@ -31,7 +35,7 @@ export function testPkg(version: string): TestPackageJson {
   return {
     name: "node-reqwest",
     version,
-    addon: { path: "./dist/node_reqwest.node" },
+    addon: { path: "./dist/node_reqwest.node", attestWorkflow: "release.yaml" },
     repository: { url: "git+https://github.com/vadimpiven/node_reqwest.git" },
   };
 }

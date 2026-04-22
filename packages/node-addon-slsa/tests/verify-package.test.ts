@@ -54,7 +54,11 @@ async function makePackage(): Promise<{ path: string } & AsyncDisposable> {
     JSON.stringify({
       name: "my-pkg",
       version: "1.2.3",
-      addon: { path: "./dist/my.node", manifest: "./slsa-manifest.json" },
+      addon: {
+        path: "./dist/my.node",
+        manifest: "./slsa-manifest.json",
+        attestWorkflow: "release.yaml",
+      },
     }),
   );
   await writeFile(join(tmp.path, "slsa-manifest.json"), JSON.stringify(BASE_MANIFEST));
@@ -173,7 +177,11 @@ describe("verifyPackage (top-level)", () => {
       JSON.stringify({
         name: "my-pkg",
         version: "1.2.3",
-        addon: { path: "./dist/my.node", manifest: "./slsa-manifest.json" },
+        addon: {
+          path: "./dist/my.node",
+          manifest: "./slsa-manifest.json",
+          attestWorkflow: "release.yaml",
+        },
       }),
     );
     await writeFile(join(nm, "slsa-manifest.json"), JSON.stringify(BASE_MANIFEST));
