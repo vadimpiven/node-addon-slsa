@@ -186,6 +186,69 @@ if (import.meta.vitest) {
     },
   };
 
+  describe("flattenAddonUrlMap", () => {
+    it("flattens nested map into ordered tuples", ({ expect }) => {
+      const map: AddonUrlMap = {
+        linux: {
+          x64: { url: "https://e.com/a.node.gz", bundleUrl: "https://e.com/a.node.gz.sigstore" },
+          arm64: { url: "https://e.com/b.node.gz", bundleUrl: "https://e.com/b.node.gz.sigstore" },
+        },
+        darwin: {
+          arm64: { url: "https://e.com/c.node.gz", bundleUrl: "https://e.com/c.node.gz.sigstore" },
+        },
+      };
+      const flat = flattenAddonUrlMap(map);
+      expect(flat).toEqual([
+        {
+          platform: "linux",
+          arch: "x64",
+          url: "https://e.com/a.node.gz",
+          bundleUrl: "https://e.com/a.node.gz.sigstore",
+        },
+        {
+          platform: "linux",
+          arch: "arm64",
+          url: "https://e.com/b.node.gz",
+          bundleUrl: "https://e.com/b.node.gz.sigstore",
+        },
+        {
+          platform: "darwin",
+          arch: "arm64",
+          url: "https://e.com/c.node.gz",
+          bundleUrl: "https://e.com/c.node.gz.sigstore",
+        },
+      ]);
+    });
+
+    it("treats a platform with no arches as empty", ({ expect }) => {
+      const map: AddonUrlMap = { linux: {} };
+      expect(flattenAddonUrlMap(map)).toEqual([]);
+    });
+  });
+
+  describe("buildAddonInventory", () => {
+    it("reassembles triples into nested inventory", ({ expect }) => {
+      const entry = (suffix: string): AddonEntry => ({
+        url: `https://e.com/${suffix}.node.gz`,
+        bundleUrl: `https://e.com/${suffix}.node.gz.sigstore`,
+        sha256: suffix.repeat(64).slice(0, 64),
+      });
+      const inv = buildAddonInventory([
+        { platform: "linux", arch: "x64", entry: entry("a") },
+        { platform: "linux", arch: "arm64", entry: entry("b") },
+        { platform: "darwin", arch: "arm64", entry: entry("c") },
+      ]);
+      expect(inv).toEqual({
+        linux: { x64: entry("a"), arm64: entry("b") },
+        darwin: { arm64: entry("c") },
+      });
+    });
+
+    it("returns empty inventory for empty input", ({ expect }) => {
+      expect(buildAddonInventory([])).toEqual({});
+    });
+  });
+
   describe("SlsaManifestSchemaV1", () => {
     it("parses valid manifest", ({ expect }) => {
       expect(SlsaManifestSchemaV1.parse(VALID)).toEqual(VALID);
