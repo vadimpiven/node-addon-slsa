@@ -15,7 +15,7 @@ export type FetchAndHashAddonOptions = {
   readonly maxBinaryMs: number;
   /** Human-readable label (e.g. `linux/x64`) used in error messages. */
   readonly label: string;
-  /** Retries per URL — addon URLs 404 briefly after a release is cut. */
+  /** Retries per URL — addon URLs 404 briefly after a release is cut. Default: 3. */
   readonly retryCount?: number | undefined;
   /** Retry on 404 for CDN-propagation flows. Default: false. */
   readonly retryOn404?: boolean | undefined;
@@ -65,7 +65,7 @@ export async function fetchAndHashAddon(
     // Retry transient network/5xx; retry 404 only when the caller opts
     // in (publish-side CDN propagation). 4xx otherwise is a caller error.
     (err, attempt) => {
-      const maxAttempts = 1 + (opts.retryCount ?? 0);
+      const maxAttempts = 1 + (opts.retryCount ?? 3);
       if (attempt >= maxAttempts) return { retry: false };
       if (err instanceof HttpError) {
         if (err.kind === "network") return backoff(attempt);

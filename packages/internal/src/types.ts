@@ -53,6 +53,9 @@ export type SourceRef = string & { readonly [__sourceRefBrand]: true };
 /** Shared with other modules for Zod schema composition. */
 export const SEMVER_RE = /^\d+\.\d+\.\d+(-[\w.]+)?(\+[\w.]+)?$/;
 
+/** GitHub `owner/repo` slug pattern. Shared between branded validator and Zod schema. */
+export const GITHUB_REPO_RE = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/;
+
 /** Validate and brand a lowercase 64-hex SHA-256 string. */
 export function sha256Hex(value: string): Sha256Hex {
   if (!/^[a-f0-9]{64}$/.test(value)) {
@@ -71,7 +74,7 @@ export function semVerString(value: string): SemVerString {
 
 /** Validate and brand a GitHub `owner/repo` slug. */
 export function githubRepo(value: string): GitHubRepo {
-  if (!/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(value)) {
+  if (!GITHUB_REPO_RE.test(value)) {
     throw new TypeError(`invalid GitHub repo: ${value}`);
   }
   return value as GitHubRepo;

@@ -67704,17 +67704,17 @@ var t = Object.defineProperty, n = Object.getOwnPropertyDescriptor, r = Object.g
 
 // EXPORTS
 __nccwpck_require__.d(__webpack_exports__, {
-  lr: () => (/* binding */ Bh),
-  HJ: () => (/* binding */ wh),
-  rM: () => (/* binding */ Th),
-  Wx: () => (/* binding */ Nh),
-  f9: () => (/* binding */ Hh),
+  lr: () => (/* binding */ Vh),
+  HJ: () => (/* binding */ Th),
+  rM: () => (/* binding */ Eh),
+  Wx: () => (/* binding */ Ph),
+  f9: () => (/* binding */ Uh),
   uT: () => (/* binding */ qc),
   gJ: () => (/* binding */ Wc),
-  Oz: () => (/* binding */ yg),
-  ac: () => (/* binding */ Vh),
-  ak: () => (/* binding */ eg),
-  oe: () => (/* binding */ sg)
+  Oz: () => (/* binding */ bg),
+  ac: () => (/* binding */ Hh),
+  ak: () => (/* binding */ tg),
+  oe: () => (/* binding */ cg)
 });
 
 // UNUSED EXPORTS: AddonInventorySchema, ArchSchema, DEFAULT_ATTEST_SIGNER_PATTERN, DEFAULT_MANIFEST_PATH, HttpError, PlatformSchema, ProvenanceError, PublishedSchemas, SlsaManifestSchemaV1, assertWithinDir, createBundleVerifier, createHashPassthrough, evalTemplate, extractExpectedRepo, isEnoent, isEnotdir, isProvenanceError, log, readPackageJson, safeUnlink, tempDir, verifyPackage, verifyPackageAt, warn, withRetry
@@ -103529,42 +103529,42 @@ function $m(e) {
 }
 //#endregion
 //#region src/types.ts
-var eh = /^\d+\.\d+\.\d+(-[\w.]+)?(\+[\w.]+)?$/;
-function th(e) {
+var eh = /^\d+\.\d+\.\d+(-[\w.]+)?(\+[\w.]+)?$/, th = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/;
+function nh(e) {
 	if (!/^[a-f0-9]{64}$/.test(e)) throw TypeError(`invalid SHA-256 hex digest: ${e}`);
 	return e;
 }
-function nh(e) {
-	if (!/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(e)) throw TypeError(`invalid GitHub repo: ${e}`);
-	return e;
-}
 function rh(e) {
-	if (!/^https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+\/actions\/runs\/\d+\/attempts\/\d+$/.test(e)) throw TypeError(`invalid run invocation URI: ${e}`);
+	if (!th.test(e)) throw TypeError(`invalid GitHub repo: ${e}`);
 	return e;
 }
 function ih(e) {
-	if (!/^[0-9a-f]{40}$/.test(e)) throw TypeError(`invalid source commit SHA: ${e}`);
+	if (!/^https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+\/actions\/runs\/\d+\/attempts\/\d+$/.test(e)) throw TypeError(`invalid run invocation URI: ${e}`);
 	return e;
 }
 function ah(e) {
+	if (!/^[0-9a-f]{40}$/.test(e)) throw TypeError(`invalid source commit SHA: ${e}`);
+	return e;
+}
+function oh(e) {
 	if (!e.startsWith("refs/tags/")) throw TypeError(`invalid source ref (must start with refs/tags/): ${e}`);
 	return e;
 }
 //#endregion
 //#region src/package.ts
-var oh = Kp().regex(eh).transform((e) => e), sh = bm({
+var sh = Kp().regex(eh).transform((e) => e), ch = bm({
 	path: Kp().refine((e) => !e.split(/[/\\]/).includes("..") && e.endsWith(".node"), { message: "addon.path must be a relative .node file path" }),
 	manifest: Kp().optional()
-}), ch = Sm([Kp(), bm({ url: Kp().optional() })]), lh = bm({
+}), lh = Sm([Kp(), bm({ url: Kp().optional() })]), uh = bm({
 	name: Kp().min(1),
-	version: oh,
-	addon: sh,
-	repository: ch.optional()
+	version: sh,
+	addon: ch,
+	repository: lh.optional()
 });
-async function uh(e) {
+async function dh(e) {
 	let t = await c(f(e, "package.json"), "utf8");
 	try {
-		return lh.parse(JSON.parse(t));
+		return uh.parse(JSON.parse(t));
 	} catch (t) {
 		if (t instanceof kp) {
 			let n = t.issues.map((e) => `  ${e.path.length > 0 ? `${e.path.join(".")}: ` : ""}${e.message}`).join("\n");
@@ -103576,33 +103576,33 @@ async function uh(e) {
 		throw t;
 	}
 }
-function dh(e) {
+function fh(e) {
 	if (!e) return null;
 	let t = (typeof e == "string" ? e : e.url ?? "").match(/^(?:git\+)?(?:https?|git|ssh):\/\/(?:[^@/]*@)?github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$|^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/);
 	if (!t) return null;
 	let n = t[1] ?? t[3], r = t[2] ?? t[4];
 	if (!n || !r) return null;
 	try {
-		return nh(`${n}/${r}`);
+		return rh(`${n}/${r}`);
 	} catch {
 		return null;
 	}
 }
 //#endregion
 //#region src/util/hash.ts
-function fh() {
+function ph() {
 	let e = v("sha256");
 	return {
 		stream: new g({ transform(t, n, r) {
 			e.update(t), r(null, t);
 		} }),
-		digest: () => th(e.digest("hex"))
+		digest: () => nh(e.digest("hex"))
 	};
 }
 //#endregion
 //#region src/util/json.ts
-var ph = fo();
-async function mh(e, t) {
+var mh = fo();
+async function hh(e, t) {
 	let n = [], r = 0;
 	for await (let i of e) {
 		let a = Buffer.isBuffer(i) ? i : Buffer.from(i);
@@ -103613,53 +103613,53 @@ async function mh(e, t) {
 }
 //#endregion
 //#region src/util/log.ts
-function hh(e) {
+function gh(e) {
 	external_node_process_namespaceObject.env.SLSA_DEBUG === "1" && external_node_process_namespaceObject.stderr.write(`[slsa] ${e}\n`);
 }
-function gh(e) {
+function _h(e) {
 	y.stderr.write(`[slsa] ${e}\n`);
 }
-var _h = "1.3.6.1.4.1.57264.1.9", vh = "1.3.6.1.4.1.57264.1.12", yh = "1.3.6.1.4.1.57264.1.13", bh = "1.3.6.1.4.1.57264.1.14", xh = "1.3.6.1.4.1.57264.1.21", Sh = "https://token.actions.githubusercontent.com", Ch = "slsa-manifest.json", wh = 256 * 1024 * 1024, Th = 300, Eh = 50 * 1024 * 1024, Dh = [
+var vh = "1.3.6.1.4.1.57264.1.9", yh = "1.3.6.1.4.1.57264.1.12", bh = "1.3.6.1.4.1.57264.1.13", xh = "1.3.6.1.4.1.57264.1.14", Sh = "1.3.6.1.4.1.57264.1.21", Ch = "https://token.actions.githubusercontent.com", wh = "slsa-manifest.json", Th = 256 * 1024 * 1024, Eh = 300, Dh = 50 * 1024 * 1024, Oh = [
 	2e3,
 	5e3,
 	1e4,
 	15e3
 ];
-function Oh(e) {
+function kh(e) {
 	return e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-var kh = RegExp(`^${Oh("https://github.com/vadimpiven/node-addon-slsa/.github/workflows/publish.yaml")}@` + String.raw`[0-9a-f]{40}$`);
+var Ah = RegExp(`^${kh("https://github.com/vadimpiven/node-addon-slsa/.github/workflows/publish.yaml")}@` + String.raw`[0-9a-f]{40}$`);
 //#endregion
 //#region src/verify/certificates.ts
-function Ah(e, t) {
+function jh(e, t) {
 	let n = e.extension(t);
 	if (!n) return null;
 	let r = n.valueObj.subs?.[0];
 	return r ? r.value.toString("utf8") : n.value.toString("ascii");
 }
-function jh(e, t, n, r) {
-	let i = Ah(e, t);
+function Mh(e, t, n, r) {
+	let i = jh(e, t);
 	if (i !== n) throw new j(E`
         ${r} mismatch.
         Expected: ${n}
         Got: ${i ?? "<missing>"}
       `);
 }
-function Mh(e, t, n) {
-	let r = Ah(e, "1.3.6.1.4.1.57264.1.8") ?? Ah(e, "1.3.6.1.4.1.57264.1.1");
+function Nh(e, t, n) {
+	let r = jh(e, "1.3.6.1.4.1.57264.1.8") ?? jh(e, "1.3.6.1.4.1.57264.1.1");
 	if (r !== "https://token.actions.githubusercontent.com") throw new j(E`
         Certificate issuer mismatch.
-        Expected: ${Sh}
+        Expected: ${Ch}
         Got: ${r ?? "<missing>"}
       `);
-	let i = Ah(e, vh), a = `https://github.com/${t}`;
+	let i = jh(e, yh), a = `https://github.com/${t}`;
 	if (i?.toLowerCase() !== a.toLowerCase()) throw new j(E`
         Source repository mismatch.
         Expected: ${a}
         Got: ${i ?? "<missing>"}
       `);
-	jh(e, yh, n.sourceCommit, "Source commit"), jh(e, bh, n.sourceRef, "Source ref"), jh(e, xh, n.runInvocationURI, "Run invocation URI");
-	let o = Ah(e, _h);
+	Mh(e, bh, n.sourceCommit, "Source commit"), Mh(e, xh, n.sourceRef, "Source ref"), Mh(e, Sh, n.runInvocationURI, "Run invocation URI");
+	let o = jh(e, vh);
 	if (!o || !n.attestSignerPattern.test(o)) throw new j(E`
         Build Signer URI does not match the attestation signer pattern.
         Pattern: ${n.attestSignerPattern.source}
@@ -103668,30 +103668,30 @@ function Mh(e, t, n) {
 }
 //#endregion
 //#region src/verify/schemas.ts
-var Nh = "https://vadimpiven.github.io/node-addon-slsa/schema/slsa-manifest.v1.json", Ph = Om([
+var Ph = "https://vadimpiven.github.io/node-addon-slsa/schema/slsa-manifest.v1.json", Fh = Om([
 	"darwin",
 	"linux",
 	"win32"
-]), Fh = Om([
+]), Ih = Om([
 	"x64",
 	"arm64",
 	"arm",
 	"ia32"
-]), Ih = Kp().url().refine((e) => e.startsWith("https://"), { message: "url must use https://" }), Lh = Ih.refine((e) => {
+]), Lh = Kp().url().refine((e) => e.startsWith("https://"), { message: "url must use https://" }), Rh = Lh.refine((e) => {
 	try {
 		return new URL(e).pathname.toLowerCase().endsWith(".node.gz");
 	} catch {
 		return !1;
 	}
-}, { message: "addon url path must end with .node.gz" }), Rh = Ih, zh = Em(Ph, Em(Fh, bm({
-	url: Lh,
-	bundleUrl: Rh,
+}, { message: "addon url path must end with .node.gz" }), zh = Lh, Bh = Em(Fh, Em(Ih, bm({
+	url: Rh,
+	bundleUrl: zh,
 	sha256: Kp().regex(/^[0-9a-f]{64}$/)
-}))), Bh = Em(Ph, Em(Fh, bm({
-	url: Lh,
-	bundleUrl: Rh
+}))), Vh = Em(Fh, Em(Ih, bm({
+	url: Rh,
+	bundleUrl: zh
 })));
-function Vh(e) {
+function Hh(e) {
 	return Object.entries(e).flatMap(([e, t]) => Object.entries(t ?? {}).map(([t, n]) => ({
 		platform: e,
 		arch: t,
@@ -103699,7 +103699,7 @@ function Vh(e) {
 		bundleUrl: n.bundleUrl
 	})));
 }
-function Hh(e) {
+function Uh(e) {
 	let t = {};
 	for (let { platform: n, arch: r, entry: i } of e) {
 		let e = t[n] ??= {};
@@ -103707,15 +103707,15 @@ function Hh(e) {
 	}
 	return t;
 }
-var Uh = Kp().min(1), Wh = Kp().regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/), Gh = Kp().regex(/^https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+\/actions\/runs\/\d+\/attempts\/\d+$/), Kh = bm({
-	$schema: Am(Nh),
-	packageName: Uh,
-	runInvocationURI: Gh,
-	sourceRepo: Wh,
+var Wh = Kp().min(1), Gh = Kp().regex(th), Kh = Kp().regex(/^https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+\/actions\/runs\/\d+\/attempts\/\d+$/), qh = bm({
+	$schema: Am(Ph),
+	packageName: Wh,
+	runInvocationURI: Kh,
+	sourceRepo: Gh,
 	sourceCommit: Kp().regex(/^[0-9a-f]{40}$/),
 	sourceRef: Kp().regex(/^refs\/tags\/[A-Za-z0-9._/-]+$/),
-	addons: zh
-}), qh = { "slsa-manifest.v1.json": Kh }, Jh = bm({
+	addons: Bh
+}), Jh = { "slsa-manifest.v1.json": qh }, Yh = bm({
 	_type: Kp(),
 	subject: vm(bm({
 		name: Kp().optional(),
@@ -103725,57 +103725,57 @@ var Uh = Kp().min(1), Wh = Kp().regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/), Gh 
 });
 //#endregion
 //#region src/verify/bundle.ts
-function Yh(e, t) {
+function Xh(e, t) {
 	let n = e.dsseEnvelope;
 	if (!n) throw new j("Bundle is missing dsseEnvelope; only DSSE-kind bundles are supported.");
-	let r = JSON.parse(Buffer.from(n.payload, "base64").toString("utf8")), i = Jh.parse(r), a = t.toLowerCase();
+	let r = JSON.parse(Buffer.from(n.payload, "base64").toString("utf8")), i = Yh.parse(r), a = t.toLowerCase();
 	if (!i.subject.some((e) => e.digest.sha256.toLowerCase() === a)) throw new j(`Bundle's in-toto Statement does not attest the requested artifact: want=${a} subject.digest.sha256=[${i.subject.map((e) => e.digest.sha256).join(", ")}]`);
 }
-function Xh(e) {
+function Zh(e) {
 	let t = e.verificationMaterial.certificate?.rawBytes;
 	if (!t) throw new j("Bundle is missing verificationMaterial.certificate.rawBytes; public-good Sigstore uses Fulcio-issued short-lived certs.");
-	return ph.X509Certificate.parse(Buffer.from(t, "base64"));
+	return mh.X509Certificate.parse(Buffer.from(t, "base64"));
 }
-async function Zh(e, t) {
-	return hh(`fetching bundle ${t}`), await mh((await e.request(t)).body, Eh);
+async function Qh(e, t) {
+	return gh(`fetching bundle ${t}`), await hh((await e.request(t)).body, Dh);
 }
-async function Qh(e) {
-	let { sha256: t, bundleUrl: n, repo: r, expect: i, http: a, verifier: o } = e, s = await Zh(a, n);
-	Yh(s, t), o.verify(s), Mh(Xh(s), r, i);
+async function $h(e) {
+	let { sha256: t, bundleUrl: n, repo: r, expect: i, http: a, verifier: o } = e, s = await Qh(a, n);
+	Xh(s, t), o.verify(s), Nh(Zh(s), r, i);
 }
 //#endregion
 //#region src/verify/config.ts
-function $h(e) {
+function eg(e) {
 	return {
 		timeoutMs: e?.timeoutMs ?? 3e4,
 		signal: e?.signal,
 		trustMaterial: e?.trustMaterial,
 		verifier: e?.verifier,
 		dispatcher: e?.dispatcher,
-		bundleFetchRetryDelays: e?.bundleFetchRetryDelays ?? Dh
+		bundleFetchRetryDelays: e?.bundleFetchRetryDelays ?? Oh
 	};
 }
 //#endregion
 //#region src/verify/verify.ts
-async function eg() {
+async function tg() {
 	return (0, Hc.toTrustMaterial)(await (0, Vc.getTrustedRoot)());
 }
-function tg(e) {
+function ng(e) {
 	let t = new Hc.Verifier(e);
 	return { verify(e) {
 		t.verify((0, Hc.toSignedEntity)((0, Bc.bundleFromJSON)(e)));
 	} };
 }
-function ng(e) {
+function rg(e) {
 	return e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-function rg(e) {
-	return e instanceof RegExp ? e : RegExp(`^${ng(e)}$`);
-}
 function ig(e) {
-	return RegExp(`^refs/tags/v?${ng(e)}$`);
+	return e instanceof RegExp ? e : RegExp(`^${rg(e)}$`);
 }
 function ag(e) {
+	return RegExp(`^refs/tags/v?${rg(e)}$`);
+}
+function og(e) {
 	return (t, n) => {
 		let r = n - 1;
 		return r >= e.length ? { retry: !1 } : t instanceof Gc && t.kind === "status" && t.status === 404 ? {
@@ -103784,32 +103784,32 @@ function ag(e) {
 		} : { retry: !1 };
 	};
 }
-function og(e) {
+function sg(e) {
 	return qc({ dispatcher: e.dispatcher });
 }
-async function sg(e) {
-	let t = th(e.sha256), n = nh(e.repo), r = rh(e.runInvocationURI), i = ih(e.sourceCommit), a = ah(e.sourceRef), o = $h(e), s = o.verifier ?? tg(o.trustMaterial ?? await eg()), c = og(o), l = {
+async function cg(e) {
+	let t = nh(e.sha256), n = rh(e.repo), r = ih(e.runInvocationURI), i = ah(e.sourceCommit), a = oh(e.sourceRef), o = eg(e), s = o.verifier ?? ng(o.trustMaterial ?? await tg()), c = sg(o), l = {
 		sourceCommit: i,
 		sourceRef: a,
 		runInvocationURI: r,
-		attestSignerPattern: kh
+		attestSignerPattern: Ah
 	};
-	await Jc(() => Qh({
+	await Jc(() => $h({
 		sha256: t,
 		bundleUrl: e.bundleUrl,
 		repo: n,
 		expect: l,
 		http: c,
 		verifier: s
-	}), ag(o.bundleFetchRetryDelays), e.signal ? { signal: e.signal } : void 0);
+	}), og(o.bundleFetchRetryDelays), e.signal ? { signal: e.signal } : void 0);
 }
-async function cg(e) {
-	let { stream: t, digest: n } = fh();
+async function lg(e) {
+	let { stream: t, digest: n } = ph();
 	return await h(o(e), t, async (e) => {
 		for await (let t of e);
 	}), n();
 }
-async function lg(e, t) {
+async function ug(e, t) {
 	let n = p(e, t), r;
 	try {
 		r = await c(n, "utf8");
@@ -103821,7 +103821,7 @@ async function lg(e, t) {
     `);
 	}
 	try {
-		return Kh.parse(JSON.parse(r));
+		return qh.parse(JSON.parse(r));
 	} catch (e) {
 		throw new j(E`
       manifest at ${t} failed schema validation.
@@ -103829,12 +103829,12 @@ async function lg(e, t) {
     `);
 	}
 }
-function ug(e, t) {
+function dg(e, t) {
 	for (let n of Object.values(e.addons)) for (let e of Object.values(n ?? {})) if (e && e.sha256.toLowerCase() === t.toLowerCase()) return e;
 	throw new j(`sha256 ${t} not found in manifest's addon inventory — the binary does not match any declared addon.`);
 }
-async function dg(e, t) {
-	let n = await uh(e), r = await lg(e, n.addon.manifest ?? "slsa-manifest.json");
+async function fg(e, t) {
+	let n = await dh(e), r = await ug(e, n.addon.manifest ?? "slsa-manifest.json");
 	if (r.packageName !== n.name) throw new j(E`
       manifest.packageName does not match installed package.json name.
       manifest.packageName: ${r.packageName}
@@ -103842,7 +103842,7 @@ async function dg(e, t) {
     `);
 	let i;
 	try {
-		i = nh(t.repo);
+		i = rh(t.repo);
 	} catch (e) {
 		throw TypeError(`invalid repo option: ${t.repo}`, { cause: e });
 	}
@@ -103851,27 +103851,27 @@ async function dg(e, t) {
       manifest.sourceRepo: ${r.sourceRepo}
       expected:            ${i}
     `);
-	let a = rg(t.refPattern ?? ig(n.version));
+	let a = ig(t.refPattern ?? ag(n.version));
 	if (!a.test(r.sourceRef)) throw new j(E`
       manifest.sourceRef does not match expected refPattern.
       manifest.sourceRef: ${r.sourceRef}
       pattern:            ${a.source}
     `);
-	let o = rh(r.runInvocationURI), s = $h(t), c = s.verifier ?? tg(s.trustMaterial ?? await eg()), l = og(s), u = {
+	let o = ih(r.runInvocationURI), s = eg(t), c = s.verifier ?? ng(s.trustMaterial ?? await tg()), l = sg(s), u = {
 		sourceCommit: r.sourceCommit,
 		sourceRef: r.sourceRef,
 		runInvocationURI: o,
-		attestSignerPattern: kh
+		attestSignerPattern: Ah
 	}, d = async (e) => {
-		let n = ug(r, e);
-		await Jc(() => Qh({
+		let n = dg(r, e);
+		await Jc(() => $h({
 			sha256: e,
 			bundleUrl: n.bundleUrl,
 			repo: i,
 			expect: u,
 			http: l,
 			verifier: c
-		}), ag(s.bundleFetchRetryDelays), t.signal ? { signal: t.signal } : void 0);
+		}), og(s.bundleFetchRetryDelays), t.signal ? { signal: t.signal } : void 0);
 	};
 	return {
 		packageName: r.packageName,
@@ -103879,11 +103879,11 @@ async function dg(e, t) {
 		sourceCommit: r.sourceCommit,
 		sourceRef: r.sourceRef,
 		runInvocationURI: r.runInvocationURI,
-		verifyAddonBySha256: async (e) => d(th(e)),
-		verifyAddonFromFile: async (e) => d(await cg(e))
+		verifyAddonBySha256: async (e) => d(nh(e)),
+		verifyAddonFromFile: async (e) => d(await lg(e))
 	};
 }
-async function fg(e) {
+async function pg(e) {
 	let t = e.cwd ?? process.cwd(), n = a(t + "/"), r;
 	try {
 		r = n.resolve(`${e.packageName}/package.json`);
@@ -103893,17 +103893,17 @@ async function fg(e) {
       Ensure the package is installed, or pass { cwd } explicitly.
     `, { cause: n });
 	}
-	return dg(d(r), e);
+	return fg(d(r), e);
 }
 //#endregion
 //#region src/util/fs.ts
-function pg(e) {
+function mg(e) {
 	return e instanceof Error && "code" in e && e.code === "ENOENT";
 }
-function mg(e) {
+function hg(e) {
 	return e instanceof Error && "code" in e && e.code === "ENOTDIR";
 }
-async function hg(e = "slsa-") {
+async function gg(e = "slsa-") {
 	let t = await s(f(b(), e));
 	return {
 		path: t,
@@ -103913,7 +103913,7 @@ async function hg(e = "slsa-") {
 		})
 	};
 }
-function gg({ baseDir: e, target: t, label: n }) {
+function _g({ baseDir: e, target: t, label: n }) {
 	let r = p(e), i = p(t);
 	if (!i.startsWith(r + m)) throw Error(E`
         ${n} escapes the package directory — possible path traversal.
@@ -103923,17 +103923,17 @@ function gg({ baseDir: e, target: t, label: n }) {
         If you did not author this package, report this to the maintainer.
       `);
 }
-async function _g(e, t) {
+async function vg(e, t) {
 	try {
 		await u(e);
 	} catch (e) {
-		pg(e) || gh(`failed to clean up ${t}: ${e}`);
+		mg(e) || _h(`failed to clean up ${t}: ${e}`);
 	}
 }
 //#endregion
 //#region src/util/addon-fetch.ts
-var vg = 500;
-async function yg(e, t, n) {
+var yg = 500;
+async function bg(e, t, n) {
 	return Jc(async () => {
 		let r = await e.request(t, {
 			timeoutMs: n.maxBinaryMs,
@@ -103950,17 +103950,17 @@ async function yg(e, t, n) {
 			r.body.destroy();
 		}
 		return a.digest("hex");
-	}, (e, t) => t >= 1 + (n.retryCount ?? 0) ? { retry: !1 } : e instanceof Gc && (e.kind === "network" || e.kind === "status" && (e.status !== void 0 && e.status >= 500 || n.retryOn404 && e.status === 404)) ? bg(t) : { retry: !1 });
+	}, (e, t) => t >= 1 + (n.retryCount ?? 3) ? { retry: !1 } : e instanceof Gc && (e.kind === "network" || e.kind === "status" && (e.status !== void 0 && e.status >= 500 || n.retryOn404 && e.status === 404)) ? xg(t) : { retry: !1 });
 }
-function bg(e) {
+function xg(e) {
 	return {
 		retry: !0,
-		delayMs: Yc(e, vg)
+		delayMs: Yc(e, yg)
 	};
 }
 //#endregion
 //#region src/util/template.ts
-function xg(e, t) {
+function Sg(e, t) {
 	let n = e;
 	for (let [e, r] of Object.entries(t)) n = n.replaceAll(`{${e}}`, r);
 	let r = n.match(/\{[a-zA-Z_]\w*\}/g);

@@ -214,7 +214,7 @@ describe("verify-addons main()", () => {
   });
 
   it("errors with URL + status on non-2xx HTTP", async ({ expect }) => {
-    interceptAddon(() => ({ statusCode: 503, data: "boom" }), 3);
+    interceptAddon(() => ({ statusCode: 503, data: "boom" }), 4);
     wireEnv({ addons: { linux: { x64: { url: ADDON_URL, bundleUrl: BUNDLE_URL } } } });
     const err = await main().catch((e: Error) => e);
     expect(err).toBeInstanceOf(Error);

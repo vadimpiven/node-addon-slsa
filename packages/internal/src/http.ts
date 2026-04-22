@@ -37,11 +37,6 @@ export type HttpResult = {
 
 /** Options every {@link HttpClient.request} accepts. */
 export type HttpRequestOptions = {
-  readonly method?: "GET" | "POST";
-  /** Stringified body. Paired with {@link contentType}. */
-  readonly body?: string;
-  /** Sole request header we expose — enough for Rekor's JSON POST. */
-  readonly contentType?: string;
   readonly signal?: AbortSignal;
   /** Overall request budget including redirects. */
   readonly timeoutMs?: number;
@@ -109,7 +104,6 @@ export function createHttpClient(opts?: {
   const dispatcher = base.compose(interceptors.redirect({ maxRedirections: 5 }));
   return {
     async request(url, options = {}): Promise<HttpResult> {
-      const method = options.method ?? "GET";
       const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
       const stallTimeoutMs = options.stallTimeoutMs ?? DEFAULT_STALL_TIMEOUT_MS;
 
@@ -117,23 +111,9 @@ export function createHttpClient(opts?: {
       const timer = globalThis.setTimeout(() => ac.abort(), timeoutMs);
       const signal = options.signal ? AbortSignal.any([ac.signal, options.signal]) : ac.signal;
 
-      // Refuse header-smuggling attempts: we only expose `contentType`,
-      // so any CR/LF in its value would splice extra header lines into
-      // the request (and could add Authorization cross-origin).
-      if (options.contentType !== undefined && /[\r\n]/.test(options.contentType)) {
-        throw new HttpError({
-          kind: "network",
-          url,
-          message: `${method} ${url} → contentType contains CR/LF`,
-        });
-      }
       try {
         const response = await request(url, {
-          method,
-          ...(options.body !== undefined && { body: options.body }),
-          ...(options.contentType !== undefined && {
-            headers: { "content-type": options.contentType },
-          }),
+          method: "GET",
           signal,
           dispatcher,
           headersTimeout: stallTimeoutMs,
@@ -145,7 +125,7 @@ export function createHttpClient(opts?: {
             kind: "status",
             url,
             status: response.statusCode,
-            message: `${method} ${url} → HTTP ${response.statusCode}`,
+            message: `GET ${url} → HTTP ${response.statusCode}`,
           });
         }
         return {
@@ -158,7 +138,7 @@ export function createHttpClient(opts?: {
         throw new HttpError({
           kind: "network",
           url,
-          message: `${method} ${url} → ${errorMessage(err)}`,
+          message: `GET ${url} → ${errorMessage(err)}`,
           cause: err,
         });
       } finally {

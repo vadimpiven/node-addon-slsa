@@ -7,6 +7,8 @@
 
 import { z } from "zod/v4";
 
+import { GITHUB_REPO_RE } from "../types.ts";
+
 /** URL embedded in every manifest's `$schema` field; compared by exact string equality. */
 export const SLSA_MANIFEST_V1_SCHEMA_URL =
   "https://vadimpiven.github.io/node-addon-slsa/schema/slsa-manifest.v1.json";
@@ -122,7 +124,7 @@ export function buildAddonInventory(
 }
 
 const PackageNameSchema = z.string().min(1);
-const GitHubRepoSchema = z.string().regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/);
+const GitHubRepoSchema = z.string().regex(GITHUB_REPO_RE);
 const RunInvocationURISchema = z
   .string()
   .regex(

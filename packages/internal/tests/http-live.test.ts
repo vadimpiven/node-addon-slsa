@@ -162,37 +162,4 @@ describe("createHttpClient", () => {
     expect(err).toBeInstanceOf(HttpError);
     expect((err as HttpError).kind).toBe("network");
   });
-
-  it("sends POST with content-type and body", async ({ expect }) => {
-    const seen: { method: string; contentType: string; body: string } = {
-      method: "",
-      contentType: "",
-      body: "",
-    };
-    await withServer(
-      async (req, res) => {
-        seen.method = req.method ?? "";
-        seen.contentType = (req.headers["content-type"] ?? "") as string;
-        const chunks: Buffer[] = [];
-        for await (const chunk of req) chunks.push(chunk as Buffer);
-        seen.body = Buffer.concat(chunks).toString();
-        res.writeHead(200);
-        res.end();
-      },
-      async (base) => {
-        const http = createHttpClient();
-        const result = await http.request(`${base}/rpc`, {
-          method: "POST",
-          contentType: "application/json",
-          body: JSON.stringify({ hi: 1 }),
-        });
-        // Drain the empty body rather than `destroy()` — `destroy()` on
-        // an unread BodyReadable emits a background AbortError.
-        for await (const _ of result.body) void _;
-        expect(seen.method).toBe("POST");
-        expect(seen.contentType).toBe("application/json");
-        expect(seen.body).toBe('{"hi":1}');
-      },
-    );
-  });
 });

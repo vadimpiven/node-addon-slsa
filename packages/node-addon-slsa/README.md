@@ -84,8 +84,7 @@ compromised, verification may pass for malicious artifacts.
     }
   },
   "addon": {
-    "path": "./dist/my_addon.node",
-    "url": "https://github.com/owner/repo/releases/download/v{version}/my_addon-v{version}-{platform}-{arch}.node.gz"
+    "path": "./dist/my_addon.node"
   },
   "scripts": {
     "postinstall": "slsa wget",
@@ -97,17 +96,17 @@ compromised, verification may pass for malicious artifacts.
 }
 ```
 
-- **`addon.path`** — where the addon is installed (relative to package root)
-- **`addon.url`** — download template; `{version}`, `{platform}`, `{arch}`
-  resolve at install time. Any origin is accepted — verification is
-  hash-based against the sigstore/Rekor attestation, so the download
-  host is a mirror, not a trust anchor. GitHub Releases is the usual
-  choice; custom CDNs work the same as long as the bytes match.
-- **`postinstall`** — `slsa wget` downloads, verifies, and installs the
-  binary on `npm install`. Pair it with [`requireAddon`](#3-loading-the-addon):
-  pnpm ≥ 10 blocks `postinstall` scripts by default, so consumers
-  may never run this hook.
-- **`pack-addon`** — `slsa pack` gzip-compresses the binary for release
+- **`addon.path`** — where the addon is installed (relative to package root).
+- **`addon.manifest`** (optional) — path to the generated SLSA manifest
+  inside the published tarball. Defaults to `./slsa-manifest.json`. The
+  manifest carries each platform/arch binary's download URL, sidecar
+  sigstore bundle URL, and SHA-256; the publish workflow produces it, so
+  do not commit it by hand.
+- **`postinstall`** — `slsa wget` reads the manifest, downloads the
+  binary for the current platform/arch, and verifies its provenance.
+  Pair with [`requireAddon`](#3-loading-the-addon): pnpm ≥ 10 blocks
+  `postinstall` scripts by default, so consumers may never run this hook.
+- **`pack-addon`** — `slsa pack` gzip-compresses the binary for release.
 - **`repository`** — github.com URL (HTTPS, SSH, with or without `.git`).
   Determines the expected source repository for attestation checks.
 
@@ -158,8 +157,14 @@ jobs:
       tarball-artifact: my-tarball # must match the upload-artifact name
       addons: |
         {
-          "linux":  { "x64":   "https://github.com/owner/repo/releases/download/v${{ github.ref_name }}/my_addon-v${{ github.ref_name }}-linux-x64.node.gz" },
-          "darwin": { "arm64": "https://github.com/owner/repo/releases/download/v${{ github.ref_name }}/my_addon-v${{ github.ref_name }}-darwin-arm64.node.gz" }
+          "linux":  { "x64":   {
+            "url":       "https://github.com/owner/repo/releases/download/v${{ github.ref_name }}/my_addon-v${{ github.ref_name }}-linux-x64.node.gz",
+            "bundleUrl": "https://github.com/owner/repo/releases/download/v${{ github.ref_name }}/my_addon-v${{ github.ref_name }}-linux-x64.node.gz.sigstore"
+          } },
+          "darwin": { "arm64": {
+            "url":       "https://github.com/owner/repo/releases/download/v${{ github.ref_name }}/my_addon-v${{ github.ref_name }}-darwin-arm64.node.gz",
+            "bundleUrl": "https://github.com/owner/repo/releases/download/v${{ github.ref_name }}/my_addon-v${{ github.ref_name }}-darwin-arm64.node.gz.sigstore"
+          } }
         }
 ```
 
@@ -169,9 +174,11 @@ comment, not a mutable tag — SHAs are immutable and audit-friendly.
 Each matrix runner produces a platform-specific binary and uploads it
 to the GitHub Release at a deterministic URL. The `publish.yaml`
 reusable workflow re-fetches each URL, attests the bytes against
-Sigstore/Rekor (signer pinned to this workflow), and publishes the npm
-package via trusted publishing. `{platform}` and `{arch}` in `addon.url`
-resolve to `process.platform` and `process.arch` at install time.
+Sigstore/Rekor (signer pinned to this workflow), writes the SLSA
+manifest into the tarball, and publishes the npm package via trusted
+publishing. At install time `slsa wget` reads the manifest, picks the
+`process.platform`/`process.arch` entry, downloads the binary, and
+verifies its sidecar sigstore bundle.
 
 ### 3. Loading the addon
 
@@ -256,10 +263,9 @@ await verifyPackage({
 #### Error handling
 
 - `ProvenanceError` — verification failed (tampered artifact, mismatched
-  provenance). Do not retry. The `kind` field discriminates the failure
-  mode: `"rekor-not-found"` means no Rekor entry exists for the hash (the
-  publish-side path retries briefly for sigstore ingestion lag; install
-  side treats it as final), `"other"` covers any other mismatch.
+  provenance, missing/invalid sigstore bundle). Do not retry. The `kind`
+  field is reserved for future fine-grained discrimination; currently
+  `"other"` covers every failure mode.
 - `Error` — transient issue (network timeout, service unavailable).
   Safe to retry.
 
