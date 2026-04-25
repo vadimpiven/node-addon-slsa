@@ -91,21 +91,23 @@ jobs:
         shell: "bash"
         env:
           PACKAGE_DIR: "${{ steps.extract.outputs.package-dir }}"
-        # The default `slsa-manifest.json` matches `DEFAULT_MANIFEST_PATH`
-        # in node-addon-slsa's constants.ts — the consumer-side loader
-        # falls back on the same string, so drifting it here would silently
-        # break installation of any package that doesn't set
-        # `addon.manifest` explicitly. `addon.attestWorkflow` is required
-        # (no default); it's the filename of the caller's workflow that
-        # minted attestations, used to pin the Fulcio Build Signer URI.
+        # `addon.manifest` and `addon.attestWorkflow` are both required
+        # (no defaults). `manifest` is where this workflow embeds the
+        # SLSA manifest in the tarball, mirrored at install time by the
+        # node-addon-slsa loader. `attestWorkflow` is the filename of
+        # the caller's workflow that minted attestations, used to pin
+        # the Fulcio Build Signer URI.
         run: |
           set -euo pipefail
           pkg_json="$PACKAGE_DIR/package.json"
           name=$(jq -r '.name' "$pkg_json")
-          manifest_rel=$(jq -r '.addon.manifest // "slsa-manifest.json"' "$pkg_json")
+          manifest_rel=$(jq -r '.addon.manifest // empty' "$pkg_json")
           attest_workflow=$(jq -r '.addon.attestWorkflow // empty' "$pkg_json")
-          if [[ -z "$attest_workflow" ]]; then
-            echo 'package.json is missing addon.attestWorkflow (required since v0.10)' >&2
+          missing=()
+          [[ -z "$manifest_rel" ]] && missing+=(addon.manifest)
+          [[ -z "$attest_workflow" ]] && missing+=(addon.attestWorkflow)
+          if (( ${#missing[@]} > 0 )); then
+            echo "package.json is missing required field(s): ${missing[*]}" >&2
             exit 1
           fi
           {

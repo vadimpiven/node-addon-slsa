@@ -85,6 +85,7 @@ compromised, verification may pass for malicious artifacts.
   },
   "addon": {
     "path": "./dist/my_addon.node",
+    "manifest": "./dist/slsa-manifest.json",
     "attestWorkflow": "release.yaml"
   },
   "scripts": {
@@ -105,11 +106,10 @@ compromised, verification may pass for malicious artifacts.
   `<repo>/.github/workflows/<attestWorkflow>@<40-hex>`; attestations
   minted by any other workflow in the same repo (including a malicious
   new one) are rejected.
-- **`addon.manifest`** (optional) — path to the generated SLSA manifest
-  inside the published tarball. Defaults to `./slsa-manifest.json`. The
-  manifest carries each platform/arch binary's download URL, sidecar
-  sigstore bundle URL, and SHA-256; the publish workflow produces it, so
-  do not commit it by hand.
+- **`addon.manifest`** — path to the generated SLSA manifest inside the
+  published tarball. The manifest carries each platform/arch binary's
+  download URL, sidecar sigstore bundle URL, and SHA-256; the publish
+  workflow produces it, so do not commit it by hand.
 - **`postinstall`** — `slsa wget` reads the manifest, downloads the
   binary for the current platform/arch, and verifies its provenance.
   Pair with [`requireAddon`](#3-loading-the-addon): pnpm ≥ 10 blocks

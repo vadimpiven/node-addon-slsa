@@ -16,21 +16,27 @@ const SemVerStringSchema = z
   .transform((v) => v as SemVerString);
 
 /**
- * `addon` block in package.json. `path` is the `.node` location inside
- * `node_modules/<pkg>/`; `manifest` is the SLSA manifest path inside the
- * same tarball (default: `slsa-manifest.json`). `attestWorkflow` is the
- * filename of the GitHub Actions workflow that mints provenance
- * attestations for this package — the consumer-side verifier pins the
- * Fulcio Build Signer URI to `<repo>/.github/workflows/<attestWorkflow>`,
- * so attestations produced by any other workflow (including new evil
- * workflows added to the same repo) are rejected. URLs are read from
- * the manifest at install time, not from here.
+ * `addon` block in package.json. All fields are required: hidden
+ * conventions cause silent install failures when they drift, and an
+ * explicit declaration is one extra line per consumer.
+ *
+ * `path` is the `.node` location inside `node_modules/<pkg>/`;
+ * `manifest` is the SLSA manifest path inside the same tarball;
+ * `attestWorkflow` is the filename of the GitHub Actions workflow that
+ * mints provenance attestations for this package — the consumer-side
+ * verifier pins the Fulcio Build Signer URI to
+ * `<repo>/.github/workflows/<attestWorkflow>`, so attestations produced
+ * by any other workflow (including new evil workflows added to the
+ * same repo) are rejected. URLs are read from the manifest at install
+ * time, not from here.
  */
 const AddonConfigSchema = z.object({
   path: z.string().refine((path) => !path.split(/[/\\]/).includes("..") && path.endsWith(".node"), {
     message: "addon.path must be a relative .node file path",
   }),
-  manifest: z.string().optional(),
+  manifest: z.string().refine((p) => !p.split(/[/\\]/).includes("..") && p.endsWith(".json"), {
+    message: "addon.manifest must be a relative .json file path",
+  }),
   attestWorkflow: z.string().regex(/^[A-Za-z0-9._-]+\.ya?ml$/, {
     message: 'addon.attestWorkflow must be a workflow filename like "release.yaml"',
   }),
@@ -138,7 +144,11 @@ if (import.meta.vitest) {
     const validPkg = {
       name: "test-pkg",
       version: "1.0.0",
-      addon: { path: "./dist/test.node", attestWorkflow: "release.yaml" },
+      addon: {
+        path: "./dist/test.node",
+        manifest: "./slsa-manifest.json",
+        attestWorkflow: "release.yaml",
+      },
       repository: { url: "git+https://github.com/owner/repo.git" },
     };
 
@@ -150,7 +160,7 @@ if (import.meta.vitest) {
       expect(result.addon.path).toBe("./dist/test.node");
     });
 
-    it("accepts optional manifest path", async ({ expect }) => {
+    it("accepts a custom manifest path", async ({ expect }) => {
       await using tmp = await tempDir();
       await writeFile(
         join(tmp.path, "package.json"),
@@ -167,6 +177,36 @@ if (import.meta.vitest) {
       expect(result.addon.manifest).toBe("./custom/slsa.json");
     });
 
+    it("rejects traversal in addon.manifest", async ({ expect }) => {
+      await using tmp = await tempDir();
+      await writeFile(
+        join(tmp.path, "package.json"),
+        JSON.stringify({
+          ...validPkg,
+          addon: {
+            path: "./dist/test.node",
+            manifest: "../../etc/passwd.json",
+            attestWorkflow: "release.yaml",
+          },
+        }),
+      );
+      await expect(readPackageJson(tmp.path)).rejects.toThrow(
+        /addon\.manifest must be a relative \.json file path/,
+      );
+    });
+
+    it("rejects a missing addon.manifest", async ({ expect }) => {
+      await using tmp = await tempDir();
+      await writeFile(
+        join(tmp.path, "package.json"),
+        JSON.stringify({
+          ...validPkg,
+          addon: { path: "./dist/test.node", attestWorkflow: "release.yaml" },
+        }),
+      );
+      await expect(readPackageJson(tmp.path)).rejects.toThrow(/addon\.manifest/);
+    });
+
     it("throws for missing package.json", async ({ expect }) => {
       await using tmp = await tempDir();
       await expect(readPackageJson(tmp.path)).rejects.toThrow();
@@ -178,7 +218,11 @@ if (import.meta.vitest) {
         join(tmp.path, "package.json"),
         JSON.stringify({
           ...validPkg,
-          addon: { path: "../etc/evil.node", attestWorkflow: "release.yaml" },
+          addon: {
+            path: "../etc/evil.node",
+            manifest: "./slsa-manifest.json",
+            attestWorkflow: "release.yaml",
+          },
         }),
       );
       await expect(readPackageJson(tmp.path)).rejects.toThrow();

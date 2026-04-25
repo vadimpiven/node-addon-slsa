@@ -22,9 +22,6 @@ export const OID_RUN_INVOCATION_URI = "1.3.6.1.4.1.57264.1.21";
 /** Expected OIDC issuer for GitHub Actions identity tokens. */
 export const GITHUB_ACTIONS_ISSUER = "https://token.actions.githubusercontent.com";
 
-/** Default manifest path inside the published tarball; overridden by `addon.manifest`. */
-export const DEFAULT_MANIFEST_PATH = "slsa-manifest.json";
-
 /**
  * Default per-binary download cap (256 MiB). Shared by the publish-side
  * `verify-addons` action and the consumer-side `slsa wget` / `requireAddon`

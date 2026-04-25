@@ -25,7 +25,7 @@ export type TestPackageJson = {
   readonly version: string;
   readonly addon: {
     readonly path: string;
-    readonly manifest?: string;
+    readonly manifest: string;
     readonly attestWorkflow: string;
   };
   readonly repository: { readonly url: string };
@@ -35,7 +35,11 @@ export function testPkg(version: string): TestPackageJson {
   return {
     name: "node-reqwest",
     version,
-    addon: { path: "./dist/node_reqwest.node", attestWorkflow: "release.yaml" },
+    addon: {
+      path: "./dist/node_reqwest.node",
+      manifest: "./slsa-manifest.json",
+      attestWorkflow: "release.yaml",
+    },
     repository: { url: "git+https://github.com/vadimpiven/node_reqwest.git" },
   };
 }
