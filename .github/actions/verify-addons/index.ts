@@ -14,7 +14,7 @@
  * into the tarball.
  */
 
-import { getInput, setFailed, setOutput } from "@actions/core";
+import { getInput, info, setFailed, setOutput } from "@actions/core";
 import { getGlobalDispatcher } from "undici";
 
 import {
@@ -79,14 +79,24 @@ export async function main(): Promise<void> {
     throw new Error("addons input has no URLs; expected at least one platform/arch leaf");
   }
 
+  info(`Verifying ${entries.length} addon binary(ies) for ${packageName}.`);
+  info(`  repo:    ${repo}`);
+  info(`  ref:     ${ref}`);
+  info(`  commit:  ${commit}`);
+  info(`  signer:  .github/workflows/${attestWorkflow}`);
+
+  info(`[1/2] Loading Sigstore trust material (TUF root)…`);
   const trustMaterial = await loadTrustMaterial();
+  info(`  ✓ loaded`);
   // One HttpClient for addon fetches + bundle fetches; `verifyAttestation`
   // builds its own from the passed `dispatcher`.
   const http = createHttpClient({ dispatcher: getGlobalDispatcher() });
   const attestSignerPattern = buildAttestSignerPattern({ repo, workflow: attestWorkflow });
 
+  info(`[2/2] Downloading and verifying each binary's signature chain (parallel)…`);
   const verified = await Promise.all(
     entries.map(async ({ platform, arch, url, bundleUrl }) => {
+      info(`  → ${platform}/${arch}  ${url}`);
       const sha256 = await fetchAndHashAddon(http, url, {
         maxBinaryBytes,
         maxBinaryMs,
@@ -103,9 +113,11 @@ export async function main(): Promise<void> {
         trustMaterial,
         dispatcher: getGlobalDispatcher(),
       });
+      info(`  ✓ ${platform}/${arch}  sha256=${sha256}`);
       return { platform, arch, entry: { url, bundleUrl, sha256 } satisfies AddonEntry };
     }),
   );
+  info(`Done: ${verified.length} binary(ies) verified.`);
 
   const manifest: SlsaManifest = {
     $schema: SLSA_MANIFEST_V1_SCHEMA_URL,
