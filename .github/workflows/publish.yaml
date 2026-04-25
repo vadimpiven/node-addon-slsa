@@ -126,7 +126,7 @@ jobs:
         # its own sha. When the action code changes, bump in two commits:
         # first the action change (tag it), then update this sha to the
         # new commit.
-        uses: "vadimpiven/node-addon-slsa/.github/actions/verify-addons@7c57383ec4db05c000363c2c694cd5b1e2074c44" # v0.10.0
+        uses: "vadimpiven/node-addon-slsa/.github/actions/verify-addons@24492d401336b7632717f2870be7d467e6a8d70c" # v0.11.0
         with:
           package-name: "${{ steps.pkg.outputs.name }}"
           addons: "${{ inputs.addons }}"
