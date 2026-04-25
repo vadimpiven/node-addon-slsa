@@ -34,11 +34,9 @@ const AddonConfigSchema = z.object({
   path: z.string().refine((path) => !path.split(/[/\\]/).includes("..") && path.endsWith(".node"), {
     message: "addon.path must be a relative .node file path",
   }),
-  manifest: z
-    .string()
-    .refine((p) => !p.split(/[/\\]/).includes("..") && p.endsWith(".json"), {
-      message: "addon.manifest must be a relative .json file path",
-    }),
+  manifest: z.string().refine((p) => !p.split(/[/\\]/).includes("..") && p.endsWith(".json"), {
+    message: "addon.manifest must be a relative .json file path",
+  }),
   attestWorkflow: z.string().regex(/^[A-Za-z0-9._-]+\.ya?ml$/, {
     message: 'addon.attestWorkflow must be a workflow filename like "release.yaml"',
   }),
