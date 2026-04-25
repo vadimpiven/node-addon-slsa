@@ -12,13 +12,11 @@
  * `github.com`, `rekor.sigstore.dev`, and the sigstore TUF CDN, so it
  * isn't deterministic enough for ordinary CI.
  *
- * This test currently asserts *fail-closed* behavior against a release
- * produced by a workflow other than this toolkit's own `publish.yaml`.
- * The Build Signer URI OID pin (`DEFAULT_ATTEST_SIGNER_PATTERN`) refuses
- * any cert whose `job_workflow_ref` doesn't point at vadimpiven's
- * reusable workflow at a 40-hex commit SHA, so verification correctly
- * rejects a package that wasn't published via this toolkit. When a
- * compatible test package is published, flip the assertion to `resolves`.
+ * This test currently asserts *fail-closed* behavior: it pins the
+ * caller-side `attestSignerPattern` / `addon.attestWorkflow` to a
+ * workflow filename that did NOT mint the published bundle, so the
+ * Build Signer URI OID check rejects it. When a compatible test
+ * package is published, flip the assertion to `resolves`.
  */
 
 import { createHash } from "node:crypto";
@@ -29,6 +27,7 @@ import { Agent, fetch as undiciFetch } from "undici";
 import { describe, it } from "vitest";
 
 import {
+  buildAttestSignerPattern,
   ProvenanceError,
   tempDir,
   verifyAttestation,
@@ -102,6 +101,10 @@ describe.skipIf(!LIVE)("node-reqwest@0.0.18 live integration", () => {
         runInvocationURI: TARGET.runInvocationURI,
         sourceCommit: TARGET.sourceCommit,
         sourceRef: TARGET.sourceRef,
+        attestSignerPattern: buildAttestSignerPattern({
+          repo: TARGET.repo,
+          workflow: "nonexistent.yaml",
+        }),
         signal: ac.signal,
       }),
     ).rejects.toThrow(ProvenanceError);
@@ -120,7 +123,7 @@ describe.skipIf(!LIVE)("node-reqwest@0.0.18 live integration", () => {
       JSON.stringify({
         name: TARGET.packageName,
         version: TARGET.version,
-        addon: { path: "./dist/node_reqwest.node" },
+        addon: { path: "./dist/node_reqwest.node", attestWorkflow: "nonexistent.yaml" },
       }),
     );
     await writeFile(
@@ -134,7 +137,11 @@ describe.skipIf(!LIVE)("node-reqwest@0.0.18 live integration", () => {
         sourceRef: TARGET.sourceRef,
         addons: {
           [TARGET.addon.platform]: {
-            [TARGET.addon.arch]: { url: TARGET.addon.url, sha256 },
+            [TARGET.addon.arch]: {
+              url: TARGET.addon.url,
+              bundleUrl: `${TARGET.addon.url}.sigstore`,
+              sha256,
+            },
           },
         },
       }),

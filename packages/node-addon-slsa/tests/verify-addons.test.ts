@@ -74,6 +74,7 @@ type Env = {
 function wireEnv(env: Env): void {
   vi.stubEnv("INPUT_PACKAGE-NAME", env.packageName ?? "my-addon");
   vi.stubEnv("INPUT_ADDONS", JSON.stringify(env.addons));
+  vi.stubEnv("INPUT_ATTEST-WORKFLOW", "release.yaml");
   vi.stubEnv("INPUT_MAX-BINARY-BYTES", env.maxBinaryBytes ?? "");
   vi.stubEnv("INPUT_MAX-BINARY-SECONDS", env.maxBinarySeconds ?? "");
   vi.stubEnv("GITHUB_REPOSITORY", "owner/repo");

@@ -121,8 +121,10 @@ describe("attest-addons main()", () => {
     expect(opts.subjects).toHaveLength(2);
 
     // Bundle file written per addon, same contents (single multi-subject bundle).
+    // Filenames match the basename of each `bundleUrl` so the upload step
+    // (`gh release upload <path>`) drops each asset at the URL it promises.
     const files = await readdir(bundles.path);
-    expect(files).toHaveLength(2);
+    expect(files.sort()).toEqual(["a.node.gz.sigstore", "b.node.gz.sigstore"]);
     const first = await readFile(join(bundles.path, files[0]!), "utf8");
     const second = await readFile(join(bundles.path, files[1]!), "utf8");
     expect(first).toBe(second);

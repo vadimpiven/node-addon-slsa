@@ -130,13 +130,19 @@ export function verifyCertificateOIDs(
 if (import.meta.vitest) {
   const { describe, it } = import.meta.vitest;
   const { runInvocationURI } = await import("../types.ts");
-  const { DEFAULT_ATTEST_SIGNER_PATTERN, SIGNER_BASE } = await import("./constants.ts");
+  const { buildAttestSignerPattern } = await import("./constants.ts");
+
+  const SIGNER_BASE = "https://github.com/owner/repo/.github/workflows/release.yaml";
+  const attestSignerPattern = buildAttestSignerPattern({
+    repo: "owner/repo",
+    workflow: "release.yaml",
+  });
 
   const expect_ok = {
     sourceCommit: "a".repeat(40),
     sourceRef: "refs/tags/v1.2.3",
     runInvocationURI: runInvocationURI("https://github.com/owner/repo/actions/runs/1/attempts/1"),
-    attestSignerPattern: DEFAULT_ATTEST_SIGNER_PATTERN,
+    attestSignerPattern,
   };
 
   function mockCert(values: Record<string, string | null>): X509ExtensionReader {

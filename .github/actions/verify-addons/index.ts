@@ -8,9 +8,10 @@
  * size cap, hash it, then fetch the sidecar sigstore bundle at the
  * declared `bundleUrl`, run the full `@sigstore/verify` chain against
  * TUF-backed trust material, and check the Fulcio cert's OIDs against
- * this run's commit / ref / run-invocation-URI and the Build Signer
- * pattern (`DEFAULT_ATTEST_SIGNER_PATTERN`). Emits the SLSA manifest as
- * a JSON string; the enclosing workflow writes it into the tarball.
+ * this run's commit / ref / run-invocation-URI and a Build Signer
+ * pattern derived from `GITHUB_REPOSITORY` + `attest-workflow`. Emits
+ * the SLSA manifest as a JSON string; the enclosing workflow writes it
+ * into the tarball.
  */
 
 import { getInput, setFailed, setOutput } from "@actions/core";
@@ -22,6 +23,7 @@ import {
   DEFAULT_MAX_BINARY_SECONDS,
   SLSA_MANIFEST_V1_SCHEMA_URL,
   buildAddonInventory,
+  buildAttestSignerPattern,
   createHttpClient,
   errorMessage,
   fetchAndHashAddon,
@@ -52,6 +54,7 @@ function readNumberInput(name: string, fallback: number): number {
 export async function main(): Promise<void> {
   const packageName = getInput("package-name", { required: true });
   const addonsRaw = getInput("addons", { required: true });
+  const attestWorkflow = getInput("attest-workflow", { required: true });
   const maxBinaryBytes = readNumberInput("max-binary-bytes", DEFAULT_MAX_BINARY_BYTES);
   const maxBinaryMs = readNumberInput("max-binary-seconds", DEFAULT_MAX_BINARY_SECONDS) * 1000;
 
@@ -80,6 +83,7 @@ export async function main(): Promise<void> {
   // One HttpClient for addon fetches + bundle fetches; `verifyAttestation`
   // builds its own from the passed `dispatcher`.
   const http = createHttpClient({ dispatcher: getGlobalDispatcher() });
+  const attestSignerPattern = buildAttestSignerPattern({ repo, workflow: attestWorkflow });
 
   const verified = await Promise.all(
     entries.map(async ({ platform, arch, url, bundleUrl }) => {
@@ -95,6 +99,7 @@ export async function main(): Promise<void> {
         runInvocationURI: runURI,
         sourceCommit: commit,
         sourceRef: ref,
+        attestSignerPattern,
         trustMaterial,
         dispatcher: getGlobalDispatcher(),
       });

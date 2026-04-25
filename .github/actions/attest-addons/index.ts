@@ -1,23 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 /**
- * Reference composition of the internal primitives for the attest step
- * of the reusable `publish.yaml` workflow.
+ * Consumer-side attest step. The consumer's release workflow calls this
+ * action after uploading `.node.gz` binaries to their CDN, then uploads
+ * each minted sigstore bundle to the declared `bundleUrl` and hands off
+ * to this toolkit's reusable `publish.yaml`.
  *
  * Flow: fetch each declared addon URL (with CDN-propagation-aware
  * retries), SHA-256 the body under a size cap, mint one sigstore bundle
  * covering all subjects on the public-good Sigstore instance, then
- * serialize the bundle to disk at a predictable path so the caller's
- * workflow can upload it as a sidecar release asset. Output `bundles` is
- * a JSON array mapping each subject to its chosen `bundleUrl` and the
- * on-disk path — the upload step consumes it.
+ * serialize the bundle to disk at a predictable path. Output `bundles`
+ * is a JSON array mapping each subject to its chosen `bundleUrl` and
+ * the on-disk path — the upload step consumes it.
  *
- * Running inside the reusable workflow pins the Fulcio cert's Build
- * Signer URI to this workflow (via `DEFAULT_ATTEST_SIGNER_PATTERN`).
+ * Fulcio's Build Signer URI records THE CONSUMER'S workflow (the one
+ * containing this step) at the runtime commit SHA. Install-side
+ * verification pins against the same workflow via
+ * `package.json#addon.attestWorkflow`.
  */
 
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import { attestProvenance, type Subject } from "@actions/attest";
 import { getInput, setFailed, setOutput } from "@actions/core";
@@ -83,12 +86,14 @@ export async function main(): Promise<void> {
 
   // Persist the bundle per-addon. The bundle JSON is identical across
   // subjects (single multi-subject attestation); we write one copy per
-  // sidecar destination so the upload step is a straight mapping.
+  // sidecar destination, named by the final path segment of `bundleUrl`
+  // so the caller's upload step (`gh release upload <path>`) drops the
+  // asset at the filename the URL promises.
   await mkdir(bundleDir, { recursive: true });
   const bundleJson = JSON.stringify(result.bundle);
   const records = await Promise.all(
     hashed.map(async ({ platform, arch, url, bundleUrl, sha256 }) => {
-      const filename = `${platform}-${arch}-${sha256}.sigstore`;
+      const filename = basename(new URL(bundleUrl).pathname);
       const path = join(bundleDir, filename);
       await writeFile(path, bundleJson);
       return { platform, arch, url, bundleUrl, sha256, path };

@@ -52,49 +52,70 @@ export function escapeRegExp(s: string): string {
 }
 
 /**
- * SHA-only pin for Fulcio cert's Build Signer URI (OID 1.3.6.1.4.1.57264.1.9).
- * Tags are mutable; a retagged `publish.yaml` could mint attestations
- * passing a tag-based pin. GitHub populates `job_workflow_ref` with the
- * literal ref from the caller's `uses:` line, so a SHA-pinned `uses:`
- * produces `@<40-hex>`. Fulcio wraps that claim into the `https://github.com/…`
- * URI form in the extension; the pin anchors on that exact shape.
+ * Build a Fulcio Build Signer URI pin (OID 1.3.6.1.4.1.57264.1.9) for a
+ * specific GitHub Actions workflow. Attestations must originate from
+ * `https://github.com/<repo>/.github/workflows/<workflow>@<40-hex>`; tag
+ * and branch refs are rejected because they are mutable. A retagged
+ * workflow could otherwise mint attestations passing a looser pin.
+ *
+ * GitHub populates Fulcio's `job_workflow_ref` claim with the literal
+ * ref from the caller's `uses:` line; SHA-pinned `uses:` produces the
+ * `@<40-hex>` form this pattern anchors on.
  */
-export const SIGNER_BASE =
-  "https://github.com/vadimpiven/node-addon-slsa/.github/workflows/publish.yaml";
-export const DEFAULT_ATTEST_SIGNER_PATTERN = new RegExp(
-  `^${escapeRegExp(SIGNER_BASE)}@` + String.raw`[0-9a-f]{40}$`,
-);
+export function buildAttestSignerPattern(opts: {
+  readonly repo: string; // "owner/repo"
+  readonly workflow: string; // filename, e.g. "release.yaml", no path segments
+}): RegExp {
+  if (opts.workflow.includes("/") || opts.workflow.includes("\\")) {
+    throw new TypeError(`attest workflow must be a bare filename: ${opts.workflow}`);
+  }
+  const base = `https://github.com/${opts.repo}/.github/workflows/${opts.workflow}`;
+  return new RegExp(`^${escapeRegExp(base)}@[0-9a-f]{40}$`);
+}
 
 if (import.meta.vitest) {
   const { describe, it } = import.meta.vitest;
 
-  describe("DEFAULT_ATTEST_SIGNER_PATTERN", () => {
-    it("accepts the SHA-pinned reusable workflow URI that Fulcio emits", ({ expect }) => {
-      const uri = `${SIGNER_BASE}@${"a".repeat(40)}`;
-      expect(DEFAULT_ATTEST_SIGNER_PATTERN.test(uri)).toBe(true);
+  describe("buildAttestSignerPattern", () => {
+    const pattern = buildAttestSignerPattern({ repo: "owner/repo", workflow: "release.yaml" });
+    const base = "https://github.com/owner/repo/.github/workflows/release.yaml";
+
+    it("accepts a SHA-pinned reusable workflow URI", ({ expect }) => {
+      expect(pattern.test(`${base}@${"a".repeat(40)}`)).toBe(true);
     });
 
     it("rejects values missing the https://github.com/ prefix", ({ expect }) => {
       // Regression: Fulcio emits the wrapped URI, not the raw claim.
-      const uri = `vadimpiven/node-addon-slsa/.github/workflows/publish.yaml@${"a".repeat(40)}`;
-      expect(DEFAULT_ATTEST_SIGNER_PATTERN.test(uri)).toBe(false);
+      const uri = `owner/repo/.github/workflows/release.yaml@${"a".repeat(40)}`;
+      expect(pattern.test(uri)).toBe(false);
     });
 
     it("rejects tag-pinned URIs", ({ expect }) => {
-      expect(DEFAULT_ATTEST_SIGNER_PATTERN.test(`${SIGNER_BASE}@refs/tags/v1.2.3`)).toBe(false);
+      expect(pattern.test(`${base}@refs/tags/v1.2.3`)).toBe(false);
     });
 
     it("rejects branch-pinned URIs", ({ expect }) => {
-      expect(DEFAULT_ATTEST_SIGNER_PATTERN.test(`${SIGNER_BASE}@refs/heads/main`)).toBe(false);
+      expect(pattern.test(`${base}@refs/heads/main`)).toBe(false);
     });
 
     it("rejects URIs from unrelated workflows", ({ expect }) => {
-      const uri = `https://github.com/other/repo/.github/workflows/publish.yaml@${"a".repeat(40)}`;
-      expect(DEFAULT_ATTEST_SIGNER_PATTERN.test(uri)).toBe(false);
+      const uri = `https://github.com/other/repo/.github/workflows/release.yaml@${"a".repeat(40)}`;
+      expect(pattern.test(uri)).toBe(false);
+    });
+
+    it("rejects a different workflow filename in the same repo", ({ expect }) => {
+      const uri = `https://github.com/owner/repo/.github/workflows/evil.yaml@${"a".repeat(40)}`;
+      expect(pattern.test(uri)).toBe(false);
     });
 
     it("rejects short hex", ({ expect }) => {
-      expect(DEFAULT_ATTEST_SIGNER_PATTERN.test(`${SIGNER_BASE}@${"a".repeat(20)}`)).toBe(false);
+      expect(pattern.test(`${base}@${"a".repeat(20)}`)).toBe(false);
+    });
+
+    it("rejects workflow with path separator", ({ expect }) => {
+      expect(() =>
+        buildAttestSignerPattern({ repo: "owner/repo", workflow: "../evil.yaml" }),
+      ).toThrow(TypeError);
     });
   });
 }

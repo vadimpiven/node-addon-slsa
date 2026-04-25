@@ -45,9 +45,9 @@ export {
 } from "./verify/schemas.ts";
 export type { SlsaManifest, AddonInventory, AddonEntry, Platform, Arch } from "./verify/schemas.ts";
 
-// Defaults
+// Defaults / builders
 export {
-  DEFAULT_ATTEST_SIGNER_PATTERN,
+  buildAttestSignerPattern,
   DEFAULT_MANIFEST_PATH,
   DEFAULT_MAX_BINARY_BYTES,
   DEFAULT_MAX_BINARY_SECONDS,

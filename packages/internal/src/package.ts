@@ -18,14 +18,22 @@ const SemVerStringSchema = z
 /**
  * `addon` block in package.json. `path` is the `.node` location inside
  * `node_modules/<pkg>/`; `manifest` is the SLSA manifest path inside the
- * same tarball (default: `slsa-manifest.json`). URLs are read from the
- * manifest at install time, not from here.
+ * same tarball (default: `slsa-manifest.json`). `attestWorkflow` is the
+ * filename of the GitHub Actions workflow that mints provenance
+ * attestations for this package — the consumer-side verifier pins the
+ * Fulcio Build Signer URI to `<repo>/.github/workflows/<attestWorkflow>`,
+ * so attestations produced by any other workflow (including new evil
+ * workflows added to the same repo) are rejected. URLs are read from
+ * the manifest at install time, not from here.
  */
 const AddonConfigSchema = z.object({
   path: z.string().refine((path) => !path.split(/[/\\]/).includes("..") && path.endsWith(".node"), {
     message: "addon.path must be a relative .node file path",
   }),
   manifest: z.string().optional(),
+  attestWorkflow: z.string().regex(/^[A-Za-z0-9._-]+\.ya?ml$/, {
+    message: 'addon.attestWorkflow must be a workflow filename like "release.yaml"',
+  }),
 });
 
 const RepositorySchema = z.union([z.string(), z.object({ url: z.string().optional() })]);
@@ -130,7 +138,7 @@ if (import.meta.vitest) {
     const validPkg = {
       name: "test-pkg",
       version: "1.0.0",
-      addon: { path: "./dist/test.node" },
+      addon: { path: "./dist/test.node", attestWorkflow: "release.yaml" },
       repository: { url: "git+https://github.com/owner/repo.git" },
     };
 
@@ -148,7 +156,11 @@ if (import.meta.vitest) {
         join(tmp.path, "package.json"),
         JSON.stringify({
           ...validPkg,
-          addon: { path: "./dist/test.node", manifest: "./custom/slsa.json" },
+          addon: {
+            path: "./dist/test.node",
+            manifest: "./custom/slsa.json",
+            attestWorkflow: "release.yaml",
+          },
         }),
       );
       const result = await readPackageJson(tmp.path);
@@ -166,7 +178,7 @@ if (import.meta.vitest) {
         join(tmp.path, "package.json"),
         JSON.stringify({
           ...validPkg,
-          addon: { path: "../etc/evil.node" },
+          addon: { path: "../etc/evil.node", attestWorkflow: "release.yaml" },
         }),
       );
       await expect(readPackageJson(tmp.path)).rejects.toThrow();

@@ -108,7 +108,14 @@ if (import.meta.vitest) {
   const { readFile } = await import("node:fs/promises");
   const { join } = await import("node:path");
   const { sha256Hex, runInvocationURI, sourceRef, sourceCommitSha } = await import("../types.ts");
-  const { DEFAULT_ATTEST_SIGNER_PATTERN } = await import("./constants.ts");
+  const { buildAttestSignerPattern } = await import("./constants.ts");
+  // The real published fixture was minted by the pre-v0.10 centralized
+  // publish workflow, so its Build Signer URI points at node-addon-slsa's
+  // own publish.yaml — match that here so fixture assertions stay real.
+  const attestSignerPattern = buildAttestSignerPattern({
+    repo: "vadimpiven/node-addon-slsa",
+    workflow: "publish.yaml",
+  });
 
   /** In-memory HttpClient that returns canned bytes for a URL. */
   const { Readable } = await import("node:stream");
@@ -152,7 +159,7 @@ if (import.meta.vitest) {
           runInvocationURI: runInvocationURI(
             "https://github.com/vadimpiven/node_reqwest/actions/runs/24739695502/attempts/1",
           ),
-          attestSignerPattern: DEFAULT_ATTEST_SIGNER_PATTERN,
+          attestSignerPattern,
         },
         http,
         verifier: passVerifier,
@@ -176,7 +183,7 @@ if (import.meta.vitest) {
             runInvocationURI: runInvocationURI(
               "https://github.com/vadimpiven/node_reqwest/actions/runs/24739695502/attempts/1",
             ),
-            attestSignerPattern: DEFAULT_ATTEST_SIGNER_PATTERN,
+            attestSignerPattern,
           },
           http,
           verifier: passVerifier,
@@ -201,7 +208,7 @@ if (import.meta.vitest) {
             runInvocationURI: runInvocationURI(
               "https://github.com/vadimpiven/node_reqwest/actions/runs/24739695502/attempts/1",
             ),
-            attestSignerPattern: DEFAULT_ATTEST_SIGNER_PATTERN,
+            attestSignerPattern,
           },
           http,
           verifier: passVerifier,

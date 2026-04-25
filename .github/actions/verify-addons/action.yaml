@@ -7,7 +7,7 @@ description: >-
         inclusion proof) against the bundle,
     (4) pin the Fulcio cert's OIDs to this workflow's
         commit / ref / run-invocation-URI and the Build Signer pattern
-        (`DEFAULT_ATTEST_SIGNER_PATTERN`).
+        derived from `attest-workflow` + `GITHUB_REPOSITORY`.
   On success, emits the SLSA manifest as a JSON string; the caller resolves
   the target path and writes the file into the tarball.
 inputs:
@@ -18,6 +18,14 @@ inputs:
     description: >-
       JSON map of verified addon URL + sidecar bundle URL,
       shape `{ [platform]: { [arch]: { url, bundleUrl } } }`.
+    required: true
+  attest-workflow:
+    description: >-
+      Filename (no path segments) of the GitHub Actions workflow in
+      `GITHUB_REPOSITORY` that minted the attestations. Used to build the
+      Fulcio Build Signer URI pin — attestations minted by any other
+      workflow in the same repo are rejected. Read from the tarball's
+      `package.json#addon.attestWorkflow` by the caller.
     required: true
   max-binary-bytes:
     description: "Hard size cap per addon URL in bytes. Requests exceeding this fail before verification. Default 256 MiB."

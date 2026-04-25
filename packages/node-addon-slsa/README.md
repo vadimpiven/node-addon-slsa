@@ -84,7 +84,8 @@ compromised, verification may pass for malicious artifacts.
     }
   },
   "addon": {
-    "path": "./dist/my_addon.node"
+    "path": "./dist/my_addon.node",
+    "attestWorkflow": "release.yaml"
   },
   "scripts": {
     "postinstall": "slsa wget",
@@ -97,6 +98,13 @@ compromised, verification may pass for malicious artifacts.
 ```
 
 - **`addon.path`** — where the addon is installed (relative to package root).
+- **`addon.attestWorkflow`** — filename (no path) of the GitHub Actions
+  workflow in your repo that mints provenance attestations (the one that
+  runs `attest-addons` — see [CI workflow](#2-ci-workflow)). The verifier
+  pins the Fulcio Build Signer URI to
+  `<repo>/.github/workflows/<attestWorkflow>@<40-hex>`; attestations
+  minted by any other workflow in the same repo (including a malicious
+  new one) are rejected.
 - **`addon.manifest`** (optional) — path to the generated SLSA manifest
   inside the published tarball. Defaults to `./slsa-manifest.json`. The
   manifest carries each platform/arch binary's download URL, sidecar
@@ -146,13 +154,40 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  # Must be ONE file named exactly as `addon.attestWorkflow` in
+  # package.json — the install-time verifier pins attestations to this
+  # exact workflow file. Don't rename it without bumping a release.
+  attest-addons:
+    needs: build-addon
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # sigstore OIDC
+      attestations: write
+      contents: write # upload sidecar bundles to the release
+    steps:
+      - name: Attest addons (public-good sigstore)
+        id: attest
+        uses: vadimpiven/node-addon-slsa/.github/actions/attest-addons@<commit-sha>
+        with:
+          addons: ${{ env.ADDONS }}
+          bundle-dir: ${{ runner.temp }}/slsa-bundles
+      - name: Upload sidecar bundles to wherever the addons live
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUNDLES: ${{ steps.attest.outputs.bundles }}
+        # Replace with your CDN upload if addons aren't on GitHub Releases.
+        # Every file under `.path` must land at the URL declared in `.bundleUrl`.
+        run: |
+          set -euo pipefail
+          mapfile -t paths < <(jq -r '.[].path' <<<"$BUNDLES")
+          gh release upload "${{ github.ref_name }}" "${paths[@]}" --clobber
+
   publish:
-    needs: [build-addon, pack-tarball]
+    needs: [attest-addons, pack-tarball]
     uses: vadimpiven/node-addon-slsa/.github/workflows/publish.yaml@<commit-sha>
     permissions:
-      contents: read
-      id-token: write # sigstore OIDC + npm trusted publishing
-      attestations: write
+      id-token: write # npm trusted publishing
     with:
       tarball-artifact: my-tarball # must match the upload-artifact name
       addons: |
@@ -171,14 +206,18 @@ jobs:
 Pin every third-party action to a commit SHA with a trailing `# vX.Y.Z`
 comment, not a mutable tag — SHAs are immutable and audit-friendly.
 
-Each matrix runner produces a platform-specific binary and uploads it
-to the GitHub Release at a deterministic URL. The `publish.yaml`
-reusable workflow re-fetches each URL, attests the bytes against
-Sigstore/Rekor (signer pinned to this workflow), writes the SLSA
-manifest into the tarball, and publishes the npm package via trusted
-publishing. At install time `slsa wget` reads the manifest, picks the
-`process.platform`/`process.arch` entry, downloads the binary, and
-verifies its sidecar sigstore bundle.
+Flow: each matrix runner builds + uploads its `.node.gz` to the caller's
+chosen distribution (GitHub Releases, Cloudflare R2, S3 — anywhere
+public). The `attest-addons` job then fetches each URL, hashes the
+bytes, mints one multi-subject sigstore bundle on the public-good
+instance, and uploads each `.node.gz.sigstore` sidecar to its
+`bundleUrl`. Finally `publish.yaml` re-fetches both (with
+CDN-propagation retries), runs the full sigstore verify chain (TUF →
+Fulcio → Rekor inclusion), pins the Fulcio Build Signer URI to the
+caller's `attestWorkflow`, writes the SLSA manifest into the tarball,
+and publishes to npm via trusted publishing. At install time `slsa
+wget` re-fetches the binary, its bundle, and runs the same chain — no
+token required because bundles inherit the binary's auth model.
 
 ### 3. Loading the addon
 
