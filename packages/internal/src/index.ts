@@ -48,7 +48,6 @@ export type { SlsaManifest, AddonInventory, AddonEntry, Platform, Arch } from ".
 // Defaults / builders
 export {
   buildAttestSignerPattern,
-  DEFAULT_MANIFEST_PATH,
   DEFAULT_MAX_BINARY_BYTES,
   DEFAULT_MAX_BINARY_SECONDS,
 } from "./verify/constants.ts";

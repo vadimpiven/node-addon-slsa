@@ -43,7 +43,7 @@ import { verifyAddonBundle } from "./bundle.ts";
 import type { CertificateOIDExpectations } from "./certificates.ts";
 import type { ResolvedConfig } from "./config.ts";
 import { resolveConfig } from "./config.ts";
-import { buildAttestSignerPattern, DEFAULT_MANIFEST_PATH, escapeRegExp } from "./constants.ts";
+import { buildAttestSignerPattern, escapeRegExp } from "./constants.ts";
 import { SLSA_MANIFEST_V1_SCHEMA_URL, SlsaManifestSchemaV1, type SlsaManifest } from "./schemas.ts";
 
 /** Load sigstore trust material (Fulcio CAs, Rekor public keys) from the TUF repository. */
@@ -255,8 +255,7 @@ export async function verifyPackageAt(
   // Share the strict PackageJsonSchema with the CLI install path so both
   // enforce the same guards (addon.path traversal, SemVer, etc.).
   const pkg = await readPackageJson(packageRoot);
-  const manifestRel = pkg.addon.manifest ?? DEFAULT_MANIFEST_PATH;
-  const manifest = await readManifest(packageRoot, manifestRel);
+  const manifest = await readManifest(packageRoot, pkg.addon.manifest);
 
   if (manifest.packageName !== pkg.name) {
     throw new ProvenanceError(dedent`

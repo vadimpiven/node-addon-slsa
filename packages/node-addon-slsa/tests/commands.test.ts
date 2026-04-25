@@ -83,7 +83,11 @@ describe("wget", () => {
     const pkg = {
       name: "test-pkg",
       version: "1.0.0",
-      addon: { path: "./dist/test.node", attestWorkflow: "release.yaml" },
+      addon: {
+        path: "./dist/test.node",
+        manifest: "./slsa-manifest.json",
+        attestWorkflow: "release.yaml",
+      },
       repository: "https://gitlab.com/owner/repo",
     };
     await writeFile(join(tmp.path, "package.json"), JSON.stringify(pkg));
@@ -272,7 +276,11 @@ describe("pack", () => {
     const pkg = {
       name: "test-pkg",
       version: "1.0.0",
-      addon: { path: "../etc/evil.node", attestWorkflow: "release.yaml" },
+      addon: {
+        path: "../etc/evil.node",
+        manifest: "./slsa-manifest.json",
+        attestWorkflow: "release.yaml",
+      },
       repository: { url: "git+https://github.com/owner/repo.git" },
     };
     await writeFile(join(tmp.path, "package.json"), JSON.stringify(pkg));

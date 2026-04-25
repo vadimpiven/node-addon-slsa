@@ -123,7 +123,11 @@ describe.skipIf(!LIVE)("node-reqwest@0.0.18 live integration", () => {
       JSON.stringify({
         name: TARGET.packageName,
         version: TARGET.version,
-        addon: { path: "./dist/node_reqwest.node", attestWorkflow: "nonexistent.yaml" },
+        addon: {
+          path: "./dist/node_reqwest.node",
+          manifest: "./slsa-manifest.json",
+          attestWorkflow: "nonexistent.yaml",
+        },
       }),
     );
     await writeFile(

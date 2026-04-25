@@ -30,7 +30,6 @@ import {
   assertWithinDir,
   createHashPassthrough,
   createHttpClient,
-  DEFAULT_MANIFEST_PATH,
   DEFAULT_MAX_BINARY_BYTES,
   DEFAULT_MAX_BINARY_SECONDS,
   evalTemplate,
@@ -115,7 +114,7 @@ export async function wget(packageDir: string, options?: VerifyOptions): Promise
     ...options,
   });
 
-  const manifest = await readManifestFile(packageDir, addon.manifest ?? DEFAULT_MANIFEST_PATH);
+  const manifest = await readManifestFile(packageDir, addon.manifest);
   const entry = resolveAddonEntry(manifest);
 
   const resolvedPkgDir = resolve(packageDir);
