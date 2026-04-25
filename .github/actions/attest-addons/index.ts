@@ -23,7 +23,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 import { attestProvenance, type Subject } from "@actions/attest";
-import { getInput, setFailed, setOutput } from "@actions/core";
+import { getInput, info, setFailed, setOutput } from "@actions/core";
 import { getGlobalDispatcher } from "undici";
 
 import {
@@ -60,11 +60,14 @@ export async function main(): Promise<void> {
   if (entries.length === 0) {
     throw new Error("addons input has no URLs; expected at least one platform/arch leaf");
   }
+  info(`Signing ${entries.length} addon binary(ies) with Sigstore.`);
 
   const http = createHttpClient({ dispatcher: getGlobalDispatcher() });
 
+  info(`[1/3] Downloading binaries and computing SHA-256 (parallel)…`);
   const hashed = await Promise.all(
     entries.map(async ({ platform, arch, url, bundleUrl }) => {
+      info(`  → ${platform}/${arch}  ${url}`);
       const sha256 = await fetchAndHashAddon(http, url, {
         maxBinaryBytes,
         maxBinaryMs,
@@ -72,6 +75,7 @@ export async function main(): Promise<void> {
         retryCount,
         retryOn404: true,
       });
+      info(`  ✓ ${platform}/${arch}  sha256=${sha256}`);
       return { platform, arch, url, bundleUrl, sha256 };
     }),
   );
@@ -82,7 +86,9 @@ export async function main(): Promise<void> {
     name: url,
     digest: { sha256 },
   }));
+  info(`[2/3] Minting signed attestation via Sigstore Fulcio + Rekor…`);
   const result = await attestProvenance({ subjects, token, sigstore: "public-good" });
+  info(`  ✓ attestation id: ${result.attestationID}`);
 
   // Persist the bundle per-addon. The bundle JSON is identical across
   // subjects (single multi-subject attestation); we write one copy per
@@ -91,14 +97,17 @@ export async function main(): Promise<void> {
   // asset at the filename the URL promises.
   await mkdir(bundleDir, { recursive: true });
   const bundleJson = JSON.stringify(result.bundle);
+  info(`[3/3] Writing per-binary signature bundles for upload…`);
   const records = await Promise.all(
     hashed.map(async ({ platform, arch, url, bundleUrl, sha256 }) => {
       const filename = basename(new URL(bundleUrl).pathname);
       const path = join(bundleDir, filename);
       await writeFile(path, bundleJson);
+      info(`  ✓ ${path}  →  ${bundleUrl}`);
       return { platform, arch, url, bundleUrl, sha256, path };
     }),
   );
+  info(`Done: ${records.length} bundle(s) ready.`);
 
   setOutput("attestation-id", result.attestationID);
   setOutput("bundles", JSON.stringify(records));

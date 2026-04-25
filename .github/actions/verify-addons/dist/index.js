@@ -64426,12 +64426,21 @@ async function main() {
     if (entries.length === 0) {
         throw new Error("addons input has no URLs; expected at least one platform/arch leaf");
     }
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .info */ .pq)(`Verifying ${entries.length} addon binary(ies) for ${packageName}.`);
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .info */ .pq)(`  repo:    ${repo}`);
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .info */ .pq)(`  ref:     ${ref}`);
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .info */ .pq)(`  commit:  ${commit}`);
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .info */ .pq)(`  signer:  .github/workflows/${attestWorkflow}`);
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .info */ .pq)(`[1/2] Loading Sigstore trust material (TUF root)…`);
     const trustMaterial = await (0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_2__/* .loadTrustMaterial */ .ak)();
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .info */ .pq)(`  ✓ loaded`);
     // One HttpClient for addon fetches + bundle fetches; `verifyAttestation`
     // builds its own from the passed `dispatcher`.
     const http = (0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_2__/* .createHttpClient */ .uT)({ dispatcher: (0,undici__WEBPACK_IMPORTED_MODULE_1__/* .getGlobalDispatcher */ .xo)() });
     const attestSignerPattern = (0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_2__/* .buildAttestSignerPattern */ .ar)({ repo, workflow: attestWorkflow });
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .info */ .pq)(`[2/2] Downloading and verifying each binary's signature chain (parallel)…`);
     const verified = await Promise.all(entries.map(async ({ platform, arch, url, bundleUrl }) => {
+        (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .info */ .pq)(`  → ${platform}/${arch}  ${url}`);
         const sha256 = await (0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_2__/* .fetchAndHashAddon */ .Oz)(http, url, {
             maxBinaryBytes,
             maxBinaryMs,
@@ -64448,8 +64457,10 @@ async function main() {
             trustMaterial,
             dispatcher: (0,undici__WEBPACK_IMPORTED_MODULE_1__/* .getGlobalDispatcher */ .xo)(),
         });
+        (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .info */ .pq)(`  ✓ ${platform}/${arch}  sha256=${sha256}`);
         return { platform, arch, entry: { url, bundleUrl, sha256 } };
     }));
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .info */ .pq)(`Done: ${verified.length} binary(ies) verified.`);
     const manifest = {
         $schema: _node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_2__/* .SLSA_MANIFEST_V1_SCHEMA_URL */ .Wx,
         packageName,
@@ -64714,11 +64725,12 @@ module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("util");
 // EXPORTS
 __nccwpck_require__.d(__webpack_exports__, {
   V4: () => (/* binding */ getInput),
+  pq: () => (/* binding */ info),
   C1: () => (/* binding */ setFailed),
   uH: () => (/* binding */ setOutput)
 });
 
-// UNUSED EXPORTS: ExitCode, addPath, debug, endGroup, error, exportVariable, getBooleanInput, getIDToken, getMultilineInput, getState, group, info, isDebug, markdownSummary, notice, platform, saveState, setCommandEcho, setSecret, startGroup, summary, toPlatformPath, toPosixPath, toWin32Path, warning
+// UNUSED EXPORTS: ExitCode, addPath, debug, endGroup, error, exportVariable, getBooleanInput, getIDToken, getMultilineInput, getState, group, isDebug, markdownSummary, notice, platform, saveState, setCommandEcho, setSecret, startGroup, summary, toPlatformPath, toPosixPath, toWin32Path, warning
 
 ;// CONCATENATED MODULE: external "os"
 const external_os_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("os");
@@ -67578,7 +67590,7 @@ function notice(message, properties = {}) {
  * @param message info message
  */
 function info(message) {
-    process.stdout.write(message + os.EOL);
+    process.stdout.write(message + external_os_namespaceObject.EOL);
 }
 /**
  * Begin an output group.
