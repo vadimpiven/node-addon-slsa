@@ -37,6 +37,7 @@ import {
   type VerifyOptions,
 } from "../types.ts";
 import { errorMessage } from "../util/error.ts";
+import { assertWithinDir } from "../util/fs.ts";
 import { createHashPassthrough } from "../util/hash.ts";
 import { ProvenanceError } from "../util/provenance-error.ts";
 import { verifyAddonBundle } from "./bundle.ts";
@@ -205,7 +206,9 @@ async function hashFile(filePath: string): Promise<Sha256Hex> {
 }
 
 async function readManifest(packageRoot: string, manifestRel: string): Promise<SlsaManifest> {
-  const manifestAbs = resolve(packageRoot, manifestRel);
+  const resolvedRoot = resolve(packageRoot);
+  const manifestAbs = resolve(resolvedRoot, manifestRel);
+  assertWithinDir({ baseDir: resolvedRoot, target: manifestAbs, label: "addon.manifest" });
   let raw: string;
   try {
     raw = await readFile(manifestAbs, "utf8");

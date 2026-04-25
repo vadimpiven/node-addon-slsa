@@ -34,7 +34,11 @@ const AddonConfigSchema = z.object({
   path: z.string().refine((path) => !path.split(/[/\\]/).includes("..") && path.endsWith(".node"), {
     message: "addon.path must be a relative .node file path",
   }),
-  manifest: z.string().min(1, { message: "addon.manifest must be a relative path" }),
+  manifest: z
+    .string()
+    .refine((p) => !p.split(/[/\\]/).includes("..") && p.endsWith(".json"), {
+      message: "addon.manifest must be a relative .json file path",
+    }),
   attestWorkflow: z.string().regex(/^[A-Za-z0-9._-]+\.ya?ml$/, {
     message: 'addon.attestWorkflow must be a workflow filename like "release.yaml"',
   }),
@@ -173,6 +177,24 @@ if (import.meta.vitest) {
       );
       const result = await readPackageJson(tmp.path);
       expect(result.addon.manifest).toBe("./custom/slsa.json");
+    });
+
+    it("rejects traversal in addon.manifest", async ({ expect }) => {
+      await using tmp = await tempDir();
+      await writeFile(
+        join(tmp.path, "package.json"),
+        JSON.stringify({
+          ...validPkg,
+          addon: {
+            path: "./dist/test.node",
+            manifest: "../../etc/passwd.json",
+            attestWorkflow: "release.yaml",
+          },
+        }),
+      );
+      await expect(readPackageJson(tmp.path)).rejects.toThrow(
+        /addon\.manifest must be a relative \.json file path/,
+      );
     });
 
     it("rejects a missing addon.manifest", async ({ expect }) => {

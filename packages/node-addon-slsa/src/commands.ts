@@ -58,7 +58,10 @@ export type PackOptions = {
 };
 
 async function readManifestFile(packageDir: string, manifestRel: string): Promise<SlsaManifest> {
-  const raw = await readFile(resolve(packageDir, manifestRel), "utf8");
+  const resolvedPkgDir = resolve(packageDir);
+  const manifestAbs = resolve(resolvedPkgDir, manifestRel);
+  assertWithinDir({ baseDir: resolvedPkgDir, target: manifestAbs, label: "addon.manifest" });
+  const raw = await readFile(manifestAbs, "utf8");
   return SlsaManifestSchemaV1.parse(JSON.parse(raw));
 }
 
