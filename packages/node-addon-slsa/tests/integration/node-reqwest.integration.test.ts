@@ -27,6 +27,7 @@ import { Agent, fetch as undiciFetch } from "undici";
 import { describe, it } from "vitest";
 
 import {
+  buildAttestSignerPattern,
   ProvenanceError,
   tempDir,
   verifyAttestation,
@@ -100,8 +101,10 @@ describe.skipIf(!LIVE)("node-reqwest@0.0.18 live integration", () => {
         runInvocationURI: TARGET.runInvocationURI,
         sourceCommit: TARGET.sourceCommit,
         sourceRef: TARGET.sourceRef,
-        attestSignerPattern:
-          "^https://github.com/vadimpiven/node_reqwest/\\.github/workflows/nonexistent\\.yaml@[0-9a-f]{40}$",
+        attestSignerPattern: buildAttestSignerPattern({
+          repo: TARGET.repo,
+          workflow: "nonexistent.yaml",
+        }),
         signal: ac.signal,
       }),
     ).rejects.toThrow(ProvenanceError);
