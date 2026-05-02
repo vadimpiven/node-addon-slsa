@@ -129,10 +129,7 @@ jobs:
       - name: "Aggregate descriptors into addons JSON map"
         id: "aggregate"
         # See verify-addons step below for the cross-repo `uses:` rationale.
-        # Pre-release placeholder: SHA + tag will be bumped to v0.12.0 in
-        # the follow-up commit after the release tag is cut (see verify-addons
-        # rationale below).
-        uses: "vadimpiven/node-addon-slsa/.github/actions/aggregate-descriptors@24492d401336b7632717f2870be7d467e6a8d70c" # v0.11.0
+        uses: "vadimpiven/node-addon-slsa/.github/actions/aggregate-descriptors@94cd3546a72ca60b8550bf6e9903d0fcbaae153c" # v0.12.0
         with:
           descriptors: "${{ steps.slurp.outputs.descriptors }}"
           release-base-url: "${{ inputs.release-base-url }}"
@@ -143,7 +140,7 @@ jobs:
         # own ref. SHA-pinned (GHA org policy enforces full-SHA at runtime;
         # a commit cannot contain its own SHA, so bump in two commits when
         # the action changes).
-        uses: "vadimpiven/node-addon-slsa/.github/actions/verify-addons@24492d401336b7632717f2870be7d467e6a8d70c" # v0.11.0
+        uses: "vadimpiven/node-addon-slsa/.github/actions/verify-addons@94cd3546a72ca60b8550bf6e9903d0fcbaae153c" # v0.12.0
         with:
           package-name: "${{ steps.pkg.outputs.name }}"
           addons: "${{ steps.aggregate.outputs.addons }}"
