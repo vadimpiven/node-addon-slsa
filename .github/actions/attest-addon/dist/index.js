@@ -95043,6 +95043,8 @@ async function main() {
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_7__/* .setOutput */ .uH)("url", url);
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_7__/* .setOutput */ .uH)("bundle-url", bundleUrl);
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_7__/* .setOutput */ .uH)("sha256", sha256);
+    if (result.attestationID !== undefined)
+        (0,_actions_core__WEBPACK_IMPORTED_MODULE_7__/* .setOutput */ .uH)("attestation-id", result.attestationID);
 }
 if (!process.env["VITEST"]) {
     try {
@@ -196653,9 +196655,9 @@ var $h = Tm({
 	sha256: Zp().regex(/^[0-9a-f]{64}$/)
 }), eg = Cm($h).min(1);
 function tg(e) {
-	let t = {};
+	let t = Object.create(null);
 	for (let { platform: n, arch: r, url: i, bundleUrl: a } of e) {
-		let e = t[n] ??= {};
+		let e = t[n] ??= Object.create(null);
 		if (e[r] !== void 0) throw Error(`duplicate descriptor for ${n}/${r}`);
 		e[r] = {
 			url: i,

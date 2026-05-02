@@ -104084,9 +104084,9 @@ var $h = Tm({
 	sha256: Zp().regex(/^[0-9a-f]{64}$/)
 }), eg = Cm($h).min(1);
 function tg(e) {
-	let t = {};
+	let t = Object.create(null);
 	for (let { platform: n, arch: r, url: i, bundleUrl: a } of e) {
-		let e = t[n] ??= {};
+		let e = t[n] ??= Object.create(null);
 		if (e[r] !== void 0) throw Error(`duplicate descriptor for ${n}/${r}`);
 		e[r] = {
 			url: i,

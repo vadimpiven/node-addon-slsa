@@ -8,18 +8,12 @@ import {
   errorMessage,
 } from "@node-addon-slsa/internal";
 
-export function aggregate(descriptorsJson: string, releaseBaseUrl: string): string {
+export function aggregate(parsed: unknown, releaseBaseUrl: string): string {
   if (!releaseBaseUrl.startsWith("https://")) {
     throw new Error(`release-base-url must start with https://, got: ${releaseBaseUrl}`);
   }
   const normalized = releaseBaseUrl.endsWith("/") ? releaseBaseUrl : `${releaseBaseUrl}/`;
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(descriptorsJson);
-  } catch (e) {
-    throw new Error(`descriptors input is not valid JSON: ${errorMessage(e)}`);
-  }
   const descriptors = AddonDescriptorListSchema.parse(parsed);
 
   for (const d of descriptors) {
@@ -42,9 +36,17 @@ export function aggregate(descriptorsJson: string, releaseBaseUrl: string): stri
 export async function main(): Promise<void> {
   const descriptorsJson = getInput("descriptors", { required: true });
   const releaseBaseUrl = getInput("release-base-url", { required: true });
-  const descriptorCount = (JSON.parse(descriptorsJson) as unknown[]).length;
-  const addons = aggregate(descriptorsJson, releaseBaseUrl);
-  info(`Aggregated ${descriptorCount} descriptor(s).`);
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(descriptorsJson);
+  } catch (e) {
+    throw new Error(`descriptors input is not valid JSON: ${errorMessage(e)}`);
+  }
+
+  const addons = aggregate(parsed, releaseBaseUrl);
+  const count = Array.isArray(parsed) ? parsed.length : 0;
+  info(`Aggregated ${count} descriptor(s).`);
   setOutput("addons", addons);
 }
 

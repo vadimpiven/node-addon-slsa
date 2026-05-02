@@ -27753,18 +27753,11 @@ __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __we
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 
-function aggregate(descriptorsJson, releaseBaseUrl) {
+function aggregate(parsed, releaseBaseUrl) {
     if (!releaseBaseUrl.startsWith("https://")) {
         throw new Error(`release-base-url must start with https://, got: ${releaseBaseUrl}`);
     }
     const normalized = releaseBaseUrl.endsWith("/") ? releaseBaseUrl : `${releaseBaseUrl}/`;
-    let parsed;
-    try {
-        parsed = JSON.parse(descriptorsJson);
-    }
-    catch (e) {
-        throw new Error(`descriptors input is not valid JSON: ${(0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_1__/* .errorMessage */ .gJ)(e)}`);
-    }
     const descriptors = _node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_1__/* .AddonDescriptorListSchema */ .PS.parse(parsed);
     for (const d of descriptors) {
         for (const [field, value] of [
@@ -27782,9 +27775,16 @@ function aggregate(descriptorsJson, releaseBaseUrl) {
 async function main() {
     const descriptorsJson = (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .getInput */ .V4)("descriptors", { required: true });
     const releaseBaseUrl = (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .getInput */ .V4)("release-base-url", { required: true });
-    const descriptorCount = JSON.parse(descriptorsJson).length;
-    const addons = aggregate(descriptorsJson, releaseBaseUrl);
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .info */ .pq)(`Aggregated ${descriptorCount} descriptor(s).`);
+    let parsed;
+    try {
+        parsed = JSON.parse(descriptorsJson);
+    }
+    catch (e) {
+        throw new Error(`descriptors input is not valid JSON: ${(0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_1__/* .errorMessage */ .gJ)(e)}`);
+    }
+    const addons = aggregate(parsed, releaseBaseUrl);
+    const count = Array.isArray(parsed) ? parsed.length : 0;
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .info */ .pq)(`Aggregated ${count} descriptor(s).`);
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_0__/* .setOutput */ .uH)("addons", addons);
 }
 if (!process.env["VITEST"]) {
@@ -67361,9 +67361,9 @@ var $h = Tm({
 	sha256: Zp().regex(/^[0-9a-f]{64}$/)
 }), eg = Cm($h).min(1);
 function tg(e) {
-	let t = {};
+	let t = Object.create(null);
 	for (let { platform: n, arch: r, url: i, bundleUrl: a } of e) {
-		let e = t[n] ??= {};
+		let e = t[n] ??= Object.create(null);
 		if (e[r] !== void 0) throw Error(`duplicate descriptor for ${n}/${r}`);
 		e[r] = {
 			url: i,

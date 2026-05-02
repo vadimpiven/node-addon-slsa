@@ -142,6 +142,7 @@ export async function main(): Promise<void> {
   setOutput("url", url);
   setOutput("bundle-url", bundleUrl);
   setOutput("sha256", sha256);
+  if (result.attestationID !== undefined) setOutput("attestation-id", result.attestationID);
 }
 
 if (!process.env["VITEST"]) {

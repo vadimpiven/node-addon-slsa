@@ -135,13 +135,17 @@ export type AddonDescriptor = z.infer<typeof AddonDescriptorSchema>;
 
 export const AddonDescriptorListSchema = z.array(AddonDescriptorSchema).min(1);
 
-/** Rejects duplicate `(platform, arch)` — silent overwrite would mask a poisoned descriptor. */
+/**
+ * Rejects duplicate `(platform, arch)` — silent overwrite would mask a poisoned descriptor.
+ * Null-prototype maps so a hypothetical `__proto__` key (already blocked by the enum schemas)
+ * cannot pollute Object.prototype.
+ */
 export function buildAddonUrlMapFromDescriptors(
   descriptors: ReadonlyArray<AddonDescriptor>,
 ): AddonUrlMap {
-  const map: AddonUrlMap = {};
+  const map = Object.create(null) as AddonUrlMap;
   for (const { platform, arch, url, bundleUrl } of descriptors) {
-    const byArch = (map[platform] ??= {});
+    const byArch = (map[platform] ??= Object.create(null) as NonNullable<AddonUrlMap[Platform]>);
     if (byArch[arch] !== undefined) {
       throw new Error(`duplicate descriptor for ${platform}/${arch}`);
     }
