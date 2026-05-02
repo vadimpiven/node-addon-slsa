@@ -26,7 +26,7 @@ Orthogonal primitives for composing custom provenance pipelines:
 branded-type constructors, low-level HTTP and filesystem helpers.
 
 Consumed by
-[`attest-addons`](../.github/actions/attest-addons),
+[`attest-addon`](../.github/actions/attest-addon),
 [`verify-addons`](../.github/actions/verify-addons),
 and [`node-addon-slsa`](./node-addon-slsa) itself. Source-only,
 never published — shapes can change between minor versions.

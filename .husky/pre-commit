@@ -1,5 +1,5 @@
 #!/bin/sh
 mise run fix
 mise run build:actions
-git add .github/actions/attest-addons/dist/ .github/actions/verify-addons/dist/
+git add .github/actions/aggregate-descriptors/dist/ .github/actions/attest-addon/dist/ .github/actions/verify-addons/dist/
 git update-index --again

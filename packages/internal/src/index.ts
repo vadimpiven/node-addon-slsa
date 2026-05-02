@@ -2,7 +2,7 @@
 
 /**
  * Workspace-internal primitives for {@link https://www.npmjs.com/package/node-addon-slsa node-addon-slsa}
- * and its bundled GitHub Actions (`attest-addons`, `verify-addons`).
+ * and its bundled GitHub Actions (`attest-addon`, `verify-addons`).
  * Not a stable public API — shapes change between minor versions.
  *
  * Published consumers should import from `node-addon-slsa` instead.
@@ -37,13 +37,25 @@ export {
   SlsaManifestSchemaV1,
   AddonInventorySchema,
   AddonUrlMapSchema,
+  AddonArtifactUrlSchema,
+  AddonBundleUrlSchema,
+  AddonDescriptorSchema,
+  AddonDescriptorListSchema,
   PlatformSchema,
   ArchSchema,
   PublishedSchemas,
   buildAddonInventory,
+  buildAddonUrlMapFromDescriptors,
   flattenAddonUrlMap,
 } from "./verify/schemas.ts";
-export type { SlsaManifest, AddonInventory, AddonEntry, Platform, Arch } from "./verify/schemas.ts";
+export type {
+  SlsaManifest,
+  AddonInventory,
+  AddonEntry,
+  AddonDescriptor,
+  Platform,
+  Arch,
+} from "./verify/schemas.ts";
 
 // Defaults / builders
 export {

@@ -10,7 +10,7 @@
   "include": [
     "./src/**/*.ts",
     "./tests/**/*.ts",
-    "../../.github/actions/attest-addons/*.ts",
+    "../../.github/actions/attest-addon/*.ts",
     "../../.github/actions/verify-addons/*.ts"
   ]
 }

@@ -39,7 +39,7 @@ const HttpsUrlSchema = z
  * The check keys on the URL's pathname (not the raw string) so query
  * strings / fragments don't bypass it.
  */
-const AddonArtifactUrlSchema = HttpsUrlSchema.refine(
+export const AddonArtifactUrlSchema = HttpsUrlSchema.refine(
   (s) => {
     try {
       return new URL(s).pathname.toLowerCase().endsWith(".node.gz");
@@ -51,7 +51,7 @@ const AddonArtifactUrlSchema = HttpsUrlSchema.refine(
 );
 
 /** Sidecar bundle URL — the sigstore bundle companion to the addon. */
-const AddonBundleUrlSchema = HttpsUrlSchema;
+export const AddonBundleUrlSchema = HttpsUrlSchema;
 
 export const AddonEntrySchema = z.object({
   url: AddonArtifactUrlSchema,
@@ -66,7 +66,7 @@ export const AddonInventorySchema = z.partialRecord(
 );
 export type AddonInventory = z.infer<typeof AddonInventorySchema>;
 
-/** Leaf shape accepted by `verify-addons` / `attest-addons`: binary URL + sidecar bundle URL. */
+/** Leaf shape accepted by `verify-addons` / `attest-addon`: binary URL + sidecar bundle URL. */
 const AddonUrlLeafSchema = z.object({
   url: AddonArtifactUrlSchema,
   bundleUrl: AddonBundleUrlSchema,
@@ -74,7 +74,7 @@ const AddonUrlLeafSchema = z.object({
 export type AddonUrlLeaf = z.infer<typeof AddonUrlLeafSchema>;
 
 /**
- * Declared-URLs shape accepted by `verify-addons` / `attest-addons`: nested
+ * Declared-URLs shape accepted by `verify-addons` / `attest-addon`: nested
  * `{ [platform]: { [arch]: { url, bundleUrl } } }`. Both URLs are mandatory:
  * sigstore bundles are fetched as sidecar artifacts at `bundleUrl` (not from
  * the Attestations API, which requires auth for private source repos).
@@ -121,6 +121,33 @@ export function buildAddonInventory(
     byArch[arch] = entry;
   }
   return inventory;
+}
+
+/** Per-binary descriptor written by `attest-addon`, aggregated by `publish.yaml`. */
+export const AddonDescriptorSchema = z.object({
+  platform: PlatformSchema,
+  arch: ArchSchema,
+  url: AddonArtifactUrlSchema,
+  bundleUrl: AddonBundleUrlSchema,
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+});
+export type AddonDescriptor = z.infer<typeof AddonDescriptorSchema>;
+
+export const AddonDescriptorListSchema = z.array(AddonDescriptorSchema).min(1);
+
+/** Rejects duplicate `(platform, arch)` — silent overwrite would mask a poisoned descriptor. */
+export function buildAddonUrlMapFromDescriptors(
+  descriptors: ReadonlyArray<AddonDescriptor>,
+): AddonUrlMap {
+  const map: AddonUrlMap = {};
+  for (const { platform, arch, url, bundleUrl } of descriptors) {
+    const byArch = (map[platform] ??= {});
+    if (byArch[arch] !== undefined) {
+      throw new Error(`duplicate descriptor for ${platform}/${arch}`);
+    }
+    byArch[arch] = { url, bundleUrl };
+  }
+  return map;
 }
 
 const PackageNameSchema = z.string().min(1);
@@ -246,6 +273,75 @@ if (import.meta.vitest) {
 
     it("returns empty inventory for empty input", ({ expect }) => {
       expect(buildAddonInventory([])).toEqual({});
+    });
+  });
+
+  describe("AddonDescriptorSchema", () => {
+    const VALID_DESCRIPTOR: AddonDescriptor = {
+      platform: "linux",
+      arch: "x64",
+      url: "https://e.com/a.node.gz",
+      bundleUrl: "https://e.com/a.node.gz.sigstore",
+      sha256: "a".repeat(64),
+    };
+
+    it("round-trips a valid descriptor", ({ expect }) => {
+      expect(AddonDescriptorSchema.parse(VALID_DESCRIPTOR)).toEqual(VALID_DESCRIPTOR);
+    });
+
+    it("rejects unknown platform", ({ expect }) => {
+      expect(() =>
+        AddonDescriptorSchema.parse({ ...VALID_DESCRIPTOR, platform: "freebsd" }),
+      ).toThrow();
+    });
+
+    it("rejects non-.node.gz url", ({ expect }) => {
+      expect(() =>
+        AddonDescriptorSchema.parse({ ...VALID_DESCRIPTOR, url: "https://e.com/a.node" }),
+      ).toThrow();
+    });
+
+    it("rejects non-hex sha256", ({ expect }) => {
+      expect(() =>
+        AddonDescriptorSchema.parse({ ...VALID_DESCRIPTOR, sha256: "not-hex" }),
+      ).toThrow();
+    });
+  });
+
+  describe("buildAddonUrlMapFromDescriptors", () => {
+    const desc = (platform: Platform, arch: Arch, suffix: string): AddonDescriptor => ({
+      platform,
+      arch,
+      url: `https://e.com/${suffix}.node.gz`,
+      bundleUrl: `https://e.com/${suffix}.node.gz.sigstore`,
+      sha256: "a".repeat(64),
+    });
+
+    it("aggregates descriptors into a nested url map", ({ expect }) => {
+      const map = buildAddonUrlMapFromDescriptors([
+        desc("linux", "x64", "a"),
+        desc("linux", "arm64", "b"),
+        desc("darwin", "arm64", "c"),
+      ]);
+      expect(map).toEqual({
+        linux: {
+          x64: { url: "https://e.com/a.node.gz", bundleUrl: "https://e.com/a.node.gz.sigstore" },
+          arm64: { url: "https://e.com/b.node.gz", bundleUrl: "https://e.com/b.node.gz.sigstore" },
+        },
+        darwin: {
+          arm64: { url: "https://e.com/c.node.gz", bundleUrl: "https://e.com/c.node.gz.sigstore" },
+        },
+      });
+    });
+
+    it("rejects duplicate (platform, arch) pairs", ({ expect }) => {
+      expect(() =>
+        buildAddonUrlMapFromDescriptors([desc("linux", "x64", "a"), desc("linux", "x64", "b")]),
+      ).toThrow(/duplicate/);
+    });
+
+    it("returns empty map for empty input", ({ expect }) => {
+      expect(buildAddonUrlMapFromDescriptors([])).toEqual({});
     });
   });
 

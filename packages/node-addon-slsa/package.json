@@ -63,6 +63,7 @@
     "ci-test": "pnpm run test"
   },
   "devDependencies": {
+    "@actions/artifact": "catalog:",
     "@actions/attest": "catalog:",
     "@actions/core": "catalog:",
     "@node-addon-slsa/internal": "workspace:*",

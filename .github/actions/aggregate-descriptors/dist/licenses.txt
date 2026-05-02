@@ -1,0 +1,2 @@
+@node-addon-slsa/internal
+Apache-2.0 OR MIT
