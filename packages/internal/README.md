@@ -2,7 +2,7 @@
 
 Workspace-internal primitives for [`node-addon-slsa`](../node-addon-slsa) and
 its bundled GitHub Actions
-([`attest-addons`](../../.github/actions/attest-addons),
+([`attest-addon`](../../.github/actions/attest-addon),
 [`verify-addons`](../../.github/actions/verify-addons)). Private, unpublished,
 and consumed through the pnpm workspace.
 
@@ -57,8 +57,9 @@ and CLI compose the internal primitives:
 2. [`.github/actions/verify-addons/index.ts`](../../.github/actions/verify-addons/index.ts)
    — composition for the verify side: fetch + hash + `verifyAttestation` +
    manifest emission.
-3. [`.github/actions/attest-addons/index.ts`](../../.github/actions/attest-addons/index.ts)
-   — minting side: fetch + hash + `@actions/attest.attestProvenance`.
+3. [`.github/actions/attest-addon/index.ts`](../../.github/actions/attest-addon/index.ts)
+   — minting side: hash local binary + `@actions/attest.attestProvenance`,
+   per-binary descriptor uploaded as a GHA artifact.
 
 The [`publish.yaml`](../../.github/workflows/publish.yaml) reusable
 workflow shows how the two halves compose at the workflow level.

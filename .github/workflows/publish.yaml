@@ -2,18 +2,17 @@ name: "Publish attested native addon"
 on:
   workflow_call:
     inputs:
-      addons:
+      addons-artifact-pattern:
         description: >-
-          Nested JSON: `{ [platform]: { [arch]: { url, bundleUrl } } }`
-          using Node's process.platform / process.arch. `url` is the public
-          URL the caller has already uploaded the `.node.gz` binary to;
-          `bundleUrl` is the public URL its sidecar sigstore bundle is
-          served at (typically the binary URL with `.sigstore` appended).
-          The caller mints bundles themselves (via the `attest-addons`
-          action in their own workflow), uploads both the binary and the
-          bundle to their CDN / GitHub Release, then calls this workflow —
-          which re-fetches both from the public URLs, verifies, writes
-          the manifest, and publishes to npm.
+          Glob for `actions/download-artifact` (e.g. `slsa-addons-*`); each
+          match holds one descriptor JSON from `attest-addon`.
+        required: true
+        type: string
+      release-base-url:
+        description: >-
+          Trust anchor: every descriptor's `url` must start with this prefix.
+          A tampered descriptor pointing at another host is rejected before
+          any addon bytes are fetched.
         required: true
         type: string
       tarball-artifact:
@@ -49,19 +48,14 @@ jobs:
       id-token: "write" # npm trusted publishing
     steps:
       - name: "Download pre-packed tarball"
-        uses: "actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53" # v6.0.0
+        uses: "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" # v8.0.1
         with:
           name: "${{ inputs.tarball-artifact }}"
           path: "./tarball"
       - name: "Set up Node.js + npm registry for trusted publishing"
-        # Pinned to Node 24 LTS, whose bundled npm (≥ 11.x) already meets the
-        # ≥ 11.5.1 requirement for OIDC trusted publishing. Upgrading npm in
-        # place from Node 22's bundled 10.x was flaky (mid-install corruption
-        # of npm's own node_modules; e.g. missing `promise-retry`), so we
-        # avoid the self-upgrade entirely by choosing a Node major that
-        # already ships a suitable npm. `registry-url` writes the .npmrc that
-        # directs `npm publish` at npmjs.org with OIDC auth.
-        uses: "actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f" # v6.3.0
+        # Node 24 ships npm ≥ 11.5.1 (OIDC trusted-publishing minimum).
+        # Avoids the in-place npm self-upgrade, which was flaky on Node 22.
+        uses: "actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e" # v6.4.0
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
@@ -69,11 +63,8 @@ jobs:
       - name: "Extract pre-packed tarball"
         id: "extract"
         shell: "bash"
-        # Exactly one gzipped tarball must be present; fail loudly
-        # otherwise. Accepts both `.tgz` (npm/pnpm default) and `.tar.gz`
-        # (common build-script convention) so callers don't have to
-        # rename their artifact before upload. Extract into $RUNNER_TEMP;
-        # subsequent steps reach the workdir via `dirname(package-dir)`.
+        # Accepts `.tgz` (npm/pnpm) and `.tar.gz` (build-script convention)
+        # so callers don't have to rename before upload.
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -91,12 +82,8 @@ jobs:
         shell: "bash"
         env:
           PACKAGE_DIR: "${{ steps.extract.outputs.package-dir }}"
-        # `addon.manifest` and `addon.attestWorkflow` are both required
-        # (no defaults). `manifest` is where this workflow embeds the
-        # SLSA manifest in the tarball, mirrored at install time by the
-        # node-addon-slsa loader. `attestWorkflow` is the filename of
-        # the caller's workflow that minted attestations, used to pin
-        # the Fulcio Build Signer URI.
+        # `manifest` = embed location (mirrored by the install-time loader);
+        # `attestWorkflow` = filename pinned into the Fulcio Build Signer URI.
         run: |
           set -euo pipefail
           pkg_json="$PACKAGE_DIR/package.json"
@@ -115,21 +102,51 @@ jobs:
             echo "manifest-rel=$manifest_rel"
             echo "attest-workflow=$attest_workflow"
           } >>"$GITHUB_OUTPUT"
+      - name: "Download per-binary descriptor artifacts"
+        uses: "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" # v8.0.1
+        with:
+          pattern: "${{ inputs.addons-artifact-pattern }}"
+          path: "${{ runner.temp }}/slsa-descriptors"
+          merge-multiple: true
+      - name: "Slurp descriptor JSON files"
+        id: "slurp"
+        shell: "bash"
+        env:
+          DESCRIPTOR_DIR: "${{ runner.temp }}/slsa-descriptors"
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=("$DESCRIPTOR_DIR"/*.slsa.json)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "no descriptor files found under $DESCRIPTOR_DIR" >&2
+            exit 1
+          fi
+          {
+            echo "descriptors<<__SLSA_EOF__"
+            jq -s '.' "${files[@]}"
+            echo "__SLSA_EOF__"
+          } >>"$GITHUB_OUTPUT"
+      - name: "Aggregate descriptors into addons JSON map"
+        id: "aggregate"
+        # See verify-addons step below for the cross-repo `uses:` rationale.
+        # Pre-release placeholder: SHA + tag will be bumped to v0.12.0 in
+        # the follow-up commit after the release tag is cut (see verify-addons
+        # rationale below).
+        uses: "vadimpiven/node-addon-slsa/.github/actions/aggregate-descriptors@24492d401336b7632717f2870be7d467e6a8d70c" # v0.11.0
+        with:
+          descriptors: "${{ steps.slurp.outputs.descriptors }}"
+          release-base-url: "${{ inputs.release-base-url }}"
       - name: "Verify addons (sigstore) and build SLSA manifest"
         id: "verify"
-        # Cross-repo `uses:` avoids the reusable-workflow self-location
-        # problem: `github.workflow_ref`/`workflow_sha` resolve to the caller
-        # inside `workflow_call`, so there's no context variable for the
-        # callee's own ref. Pinned to a release sha because GHA org policy
-        # enforces "full-length commit SHA" pins at runtime (not just lint),
-        # ruling out tag refs like `@v0.9.0`, and a commit can't contain
-        # its own sha. When the action code changes, bump in two commits:
-        # first the action change (tag it), then update this sha to the
-        # new commit.
+        # Cross-repo `uses:` — `workflow_ref`/`workflow_sha` resolve to the
+        # caller in a `workflow_call`, so there's no context for the callee's
+        # own ref. SHA-pinned (GHA org policy enforces full-SHA at runtime;
+        # a commit cannot contain its own SHA, so bump in two commits when
+        # the action changes).
         uses: "vadimpiven/node-addon-slsa/.github/actions/verify-addons@24492d401336b7632717f2870be7d467e6a8d70c" # v0.11.0
         with:
           package-name: "${{ steps.pkg.outputs.name }}"
-          addons: "${{ inputs.addons }}"
+          addons: "${{ steps.aggregate.outputs.addons }}"
           attest-workflow: "${{ steps.pkg.outputs.attest-workflow }}"
           max-binary-bytes: "${{ inputs.max-binary-bytes }}"
           max-binary-seconds: "${{ inputs.max-binary-seconds }}"
@@ -139,12 +156,9 @@ jobs:
           MANIFEST: "${{ steps.verify.outputs.manifest }}"
           MANIFEST_REL: "${{ steps.pkg.outputs.manifest-rel }}"
           PACKAGE_DIR: "${{ steps.extract.outputs.package-dir }}"
-        # Two guards before writing:
-        #   1. Traversal: `realpath -m` canonicalises the target (even if it
-        #      doesn't exist yet); it must stay inside the canonical package
-        #      dir. Blocks `addon.manifest: "../escape.json"`.
-        #   2. Overwrite: pre-packed tarballs must not ship a manifest
-        #      (fix caller's "files"/"npmignore" if this fires).
+        # Block `addon.manifest: "../escape.json"` traversal (`realpath -m`
+        # canonicalises a not-yet-existing path); refuse overwrite — the
+        # pre-packed tarball must not already ship a manifest.
         run: |
           set -euo pipefail
           pkg_abs=$(realpath "$PACKAGE_DIR")
@@ -164,10 +178,8 @@ jobs:
         shell: "bash"
         env:
           PACKAGE_DIR: "${{ steps.extract.outputs.package-dir }}"
-        # Deterministic flags (GNU tar on GHA runners) → identical inputs
-        # produce byte-identical tarballs, so auditors can reproduce the
-        # published artifact. `npm publish` re-hashes for `dist.integrity`,
-        # so determinism here is defense-in-depth rather than load-bearing.
+        # Reproducibility, not security: `npm publish` re-hashes for
+        # `dist.integrity`. Helps auditors reproduce the byte-identical tarball.
         run: |
           set -euo pipefail
           workdir=$(dirname "$PACKAGE_DIR")

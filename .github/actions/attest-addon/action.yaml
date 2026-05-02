@@ -1,0 +1,49 @@
+name: "Attest addon (public-good sigstore)"
+description: >-
+  Hash one local addon binary, mint a sigstore bundle on the public-good
+  instance, and upload a descriptor as GHA artifact
+  `slsa-addons-<platform>-<arch>` for the toolkit's `publish.yaml` to
+  aggregate. One invocation per matrix cell.
+inputs:
+  binary:
+    description: "Glob matching exactly one addon binary."
+    required: true
+  url-prefix:
+    description: >-
+      Public URL prefix the binary will be served at. Must be `https://`;
+      a trailing `/` is appended if missing. `url = url-prefix + basename(binary)`.
+    required: true
+  github-token:
+    description: "Sigstore OIDC token."
+    default: "${{ github.token }}"
+    required: false
+  max-binary-bytes:
+    description: "Per-binary size cap. Default 256 MiB."
+    required: false
+    default: "268435456"
+  descriptor-retention-days:
+    description: "Descriptor artifact retention. Default 14d."
+    required: false
+    default: "14"
+outputs:
+  platform:
+    description: "process.platform"
+  arch:
+    description: "process.arch"
+  binary-path:
+    description: "Resolved binary path."
+  bundle-path:
+    description: "Path of the written `.sigstore` bundle."
+  descriptor-path:
+    description: "Path of the written `.slsa.json` descriptor."
+  url:
+    description: "Public binary URL."
+  bundle-url:
+    description: "Public sigstore bundle URL."
+  sha256:
+    description: "Hex SHA-256 of the binary."
+  attestation-id:
+    description: "Numeric ID of the minted attestation."
+runs:
+  using: "node24"
+  main: "dist/index.js"
