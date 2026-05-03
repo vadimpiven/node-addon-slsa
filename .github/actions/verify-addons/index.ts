@@ -193,7 +193,7 @@ export async function main(): Promise<void> {
   info(`[1/3] Loading Sigstore trust material (TUF root)…`);
   const trustMaterial = await loadTrustMaterial();
   const verifier = createBundleVerifier(trustMaterial);
-  info(`  ✓ loaded`);
+  info(`  loaded`);
 
   const attestSignerPattern = buildToolkitAttestSignerPattern();
 
@@ -201,7 +201,7 @@ export async function main(): Promise<void> {
   const verified = await Promise.all(
     loaded.map(async ({ descriptor, bundle }) => {
       const { platform, arch, url, bundleUrl, sha256 } = descriptor;
-      info(`  → ${platform}/${arch}  ${url}`);
+      info(`  ${platform}/${arch}  ${url}`);
       await verifyAttestationFromBundle({
         sha256,
         bundle,
@@ -213,7 +213,7 @@ export async function main(): Promise<void> {
         verifier,
         dispatcher: getGlobalDispatcher(),
       });
-      info(`  ✓ ${platform}/${arch}  sha256=${sha256}`);
+      info(`  ${platform}/${arch}  sha256=${sha256}`);
       return { platform, arch, entry: { url, bundleUrl, sha256 } satisfies AddonEntry };
     }),
   );

@@ -47,11 +47,14 @@ jobs:
       # `uses:` cannot interpolate expressions, so the toolkit is checked
       # out at the same SHA the consumer pinned this reusable workflow to,
       # and the local-path actions below are referenced from that checkout.
+      # `job.workflow_sha` is the SHA of *this* reusable workflow file in
+      # *this* repo (the callee); `github.workflow_sha` would be the
+      # caller's workflow-file SHA, which lives in a different repo.
       - name: "Checkout toolkit"
         uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           repository: "vadimpiven/node-addon-slsa"
-          ref: "${{ github.workflow_sha }}"
+          ref: "${{ job.workflow_sha }}"
           path: "node-addon-slsa-toolkit"
           fetch-depth: 1
           persist-credentials: false
@@ -100,7 +103,14 @@ jobs:
           BUNDLE_PATH: "${{ steps.attest.outputs.bundle-path }}"
         run: |
           set -euo pipefail
-          gh release upload "$GH_REF_NAME" \
+          echo "Uploading binary + sigstore bundle to release $GH_REF_NAME on $GH_REPOSITORY..."
+          if gh release upload "$GH_REF_NAME" \
             --repo "$GH_REPOSITORY" \
             --clobber \
-            "$BINARY_PATH" "$BUNDLE_PATH"
+            "$BINARY_PATH" "$BUNDLE_PATH"; then
+            echo "Uploaded $(basename "$BINARY_PATH") and $(basename "$BUNDLE_PATH")"
+          else
+            status=$?
+            echo "release upload failed (exit $status)" >&2
+            exit "$status"
+          fi

@@ -193,7 +193,10 @@ run = [{ task = "check:zizmor" }]
 [tasks."check:actionlint"]
 description = "Lint GitHub Actions workflows"
 hide = true
-run = "actionlint"
+# actionlint v1.7.12 doesn't yet know `job.workflow_sha` — the documented
+# context for the callee reusable-workflow's own file SHA. Suppress the
+# false-positive until upstream's job-context schema catches up.
+run = 'actionlint -ignore "property \"workflow_sha\" is not defined"'
 sources = [".github/**/*.{yaml,yml}"]
 
 [tasks."fix:actionlint"]
