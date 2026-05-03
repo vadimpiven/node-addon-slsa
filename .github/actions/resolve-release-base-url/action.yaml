@@ -35,4 +35,9 @@ runs:
           url="https://github.com/${GH_REPOSITORY}/releases/download/${GH_REF_NAME}/"
           echo "Resolved release-base-url (default GitHub Release): $url"
         fi
-        echo "url=$url" >>"$GITHUB_OUTPUT"
+        delim="EOF_$(openssl rand -hex 16)"
+        {
+          echo "url<<$delim"
+          printf '%s\n' "$url"
+          echo "$delim"
+        } >>"$GITHUB_OUTPUT"
