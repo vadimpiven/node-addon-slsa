@@ -164,7 +164,7 @@ jobs:
             -czf "$out" \
             -C "$workdir" \
             package
-          echo "✓ repacked: $out ($(stat -c%s "$out" 2>/dev/null || stat -f%z "$out") bytes)"
+          echo "Repacked: $out ($(stat -c%s "$out" 2>/dev/null || stat -f%z "$out") bytes)"
           echo "tarball=$out" >>"$GITHUB_OUTPUT"
       - name: "npm publish"
         shell: "bash"
@@ -181,9 +181,9 @@ jobs:
           [[ -n "$TAG"    ]] && args+=(--tag    "$TAG")
           echo "Publishing $PKG_NAME (tag $GH_REF_NAME) to npmjs.org via trusted publishing..."
           if npm "${args[@]}"; then
-            echo "✓ published $PKG_NAME"
+            echo "Published $PKG_NAME"
           else
             status=$?
-            echo "✗ npm publish failed (exit $status)" >&2
+            echo "npm publish failed (exit $status)" >&2
             exit "$status"
           fi

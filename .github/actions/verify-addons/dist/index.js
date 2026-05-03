@@ -64522,12 +64522,12 @@ async function main() {
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_2__/* .info */ .pq)(`[1/3] Loading Sigstore trust material (TUF root)…`);
     const trustMaterial = await (0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_4__/* .loadTrustMaterial */ .ak)();
     const verifier = (0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_4__/* .createBundleVerifier */ .Bb)(trustMaterial);
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_2__/* .info */ .pq)(`  ✓ loaded`);
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_2__/* .info */ .pq)(`  loaded`);
     const attestSignerPattern = (0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_4__/* .buildToolkitAttestSignerPattern */ .Iu)();
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_2__/* .info */ .pq)(`[2/3] Verifying each binary's signature chain (parallel, in-memory)…`);
     const verified = await Promise.all(loaded.map(async ({ descriptor, bundle }) => {
         const { platform, arch, url, bundleUrl, sha256 } = descriptor;
-        (0,_actions_core__WEBPACK_IMPORTED_MODULE_2__/* .info */ .pq)(`  → ${platform}/${arch}  ${url}`);
+        (0,_actions_core__WEBPACK_IMPORTED_MODULE_2__/* .info */ .pq)(`  ${platform}/${arch}  ${url}`);
         await (0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_4__/* .verifyAttestationFromBundle */ .I4)({
             sha256,
             bundle,
@@ -64539,7 +64539,7 @@ async function main() {
             verifier,
             dispatcher: (0,undici__WEBPACK_IMPORTED_MODULE_3__/* .getGlobalDispatcher */ .xo)(),
         });
-        (0,_actions_core__WEBPACK_IMPORTED_MODULE_2__/* .info */ .pq)(`  ✓ ${platform}/${arch}  sha256=${sha256}`);
+        (0,_actions_core__WEBPACK_IMPORTED_MODULE_2__/* .info */ .pq)(`  ${platform}/${arch}  sha256=${sha256}`);
         return { platform, arch, entry: { url, bundleUrl, sha256 } };
     }));
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_2__/* .info */ .pq)(`[3/3] HEAD reachability smoke check on each release asset…`);

@@ -108,9 +108,9 @@ jobs:
             --repo "$GH_REPOSITORY" \
             --clobber \
             "$BINARY_PATH" "$BUNDLE_PATH"; then
-            echo "✓ uploaded $(basename "$BINARY_PATH") and $(basename "$BUNDLE_PATH")"
+            echo "Uploaded $(basename "$BINARY_PATH") and $(basename "$BUNDLE_PATH")"
           else
             status=$?
-            echo "✗ release upload failed (exit $status)" >&2
+            echo "release upload failed (exit $status)" >&2
             exit "$status"
           fi
