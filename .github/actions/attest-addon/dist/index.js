@@ -13057,10 +13057,10 @@ exports.Agent = Agent;
 var fs = __nccwpck_require__(52638);
 var path = __nccwpck_require__(16928);
 
-var flatten = __nccwpck_require__(34056);
-var difference = __nccwpck_require__(42227);
-var union = __nccwpck_require__(92229);
-var isPlainObject = __nccwpck_require__(11905);
+var flatten = __nccwpck_require__(14897);
+var difference = __nccwpck_require__(59064);
+var union = __nccwpck_require__(18820);
+var isPlainObject = __nccwpck_require__(78440);
 
 var glob = __nccwpck_require__(52766);
 
@@ -13275,7 +13275,7 @@ var path = __nccwpck_require__(16928);
 var isStream = __nccwpck_require__(98796);
 var lazystream = __nccwpck_require__(83071);
 var normalizePath = __nccwpck_require__(11748);
-var defaults = __nccwpck_require__(74750);
+var defaults = __nccwpck_require__(51493);
 
 var Stream = (__nccwpck_require__(2203).Stream);
 var PassThrough = (__nccwpck_require__(42750).PassThrough);
@@ -35137,7 +35137,7 @@ if (typeof Object.create === 'function') {
 
 /***/ }),
 
-/***/ 52777:
+/***/ 73886:
 /***/ ((__unused_webpack_module, exports) => {
 
 
@@ -35155,16 +35155,18 @@ exports.AddressError = AddressError;
 
 /***/ }),
 
-/***/ 50505:
-/***/ ((__unused_webpack_module, exports) => {
+/***/ 75684:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.isInSubnet = isInSubnet;
 exports.isCorrect = isCorrect;
+exports.prefixLengthFromMask = prefixLengthFromMask;
 exports.numberToPaddedHex = numberToPaddedHex;
 exports.stringToPaddedHex = stringToPaddedHex;
 exports.testBit = testBit;
+const address_error_1 = __nccwpck_require__(73886);
 function isInSubnet(address) {
     if (this.subnetMask < address.subnetMask) {
         return false;
@@ -35184,6 +35186,25 @@ function isCorrect(defaultBits) {
         }
         return this.parsedSubnet === String(this.subnetMask);
     };
+}
+/**
+ * Returns the prefix length (number of leading 1 bits) of a contiguous
+ * subnet mask. Throws `AddressError` if the mask is non-contiguous (e.g.
+ * `255.0.255.0`).
+ */
+function prefixLengthFromMask(value, totalBits) {
+    const binary = value.toString(2).padStart(totalBits, '0');
+    if (binary.length > totalBits) {
+        throw new address_error_1.AddressError('Invalid subnet mask.');
+    }
+    const firstZero = binary.indexOf('0');
+    if (firstZero === -1) {
+        return totalBits;
+    }
+    if (binary.slice(firstZero).includes('1')) {
+        throw new address_error_1.AddressError('Invalid subnet mask.');
+    }
+    return firstZero;
 }
 function numberToPaddedHex(number) {
     return number.toString(16).padStart(2, '0');
@@ -35207,7 +35228,7 @@ function testBit(binaryValue, position) {
 
 /***/ }),
 
-/***/ 21436:
+/***/ 56857:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 
@@ -35236,19 +35257,19 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.v6 = exports.AddressError = exports.Address6 = exports.Address4 = void 0;
-var ipv4_1 = __nccwpck_require__(31667);
+var ipv4_1 = __nccwpck_require__(78718);
 Object.defineProperty(exports, "Address4", ({ enumerable: true, get: function () { return ipv4_1.Address4; } }));
-var ipv6_1 = __nccwpck_require__(47157);
+var ipv6_1 = __nccwpck_require__(34260);
 Object.defineProperty(exports, "Address6", ({ enumerable: true, get: function () { return ipv6_1.Address6; } }));
-var address_error_1 = __nccwpck_require__(52777);
+var address_error_1 = __nccwpck_require__(73886);
 Object.defineProperty(exports, "AddressError", ({ enumerable: true, get: function () { return address_error_1.AddressError; } }));
-const helpers = __importStar(__nccwpck_require__(8330));
+const helpers = __importStar(__nccwpck_require__(53351));
 exports.v6 = { helpers };
 //# sourceMappingURL=ip-address.js.map
 
 /***/ }),
 
-/***/ 31667:
+/***/ 78718:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 
@@ -35278,12 +35299,12 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.Address4 = void 0;
-const common = __importStar(__nccwpck_require__(50505));
-const constants = __importStar(__nccwpck_require__(37044));
-const address_error_1 = __nccwpck_require__(52777);
+const common = __importStar(__nccwpck_require__(75684));
+const constants = __importStar(__nccwpck_require__(54073));
+const address_error_1 = __nccwpck_require__(73886);
+const isCorrect4 = common.isCorrect(constants.BITS);
 /**
  * Represents an IPv4 address
- * @class Address4
  * @param {string} address - An IPv4 address string
  */
 class Address4 {
@@ -35296,15 +35317,11 @@ class Address4 {
         this.v4 = true;
         /**
          * Returns true if the address is correct, false otherwise
-         * @memberof Address4
-         * @instance
          * @returns {Boolean}
          */
-        this.isCorrect = common.isCorrect(constants.BITS);
+        this.isCorrect = isCorrect4;
         /**
          * Returns true if the given address is in the subnet of the current address
-         * @memberof Address4
-         * @instance
          * @returns {boolean}
          */
         this.isInSubnet = common.isInSubnet;
@@ -35322,6 +35339,13 @@ class Address4 {
         this.addressMinusSuffix = address;
         this.parsedAddress = this.parse(address);
     }
+    /**
+     * Returns true if the given string is a valid IPv4 address (with optional
+     * CIDR subnet), false otherwise. Host bits in the subnet portion are
+     * allowed (e.g. `192.168.1.5/24` is valid); for strict network-address
+     * validation compare `correctForm()` to `startAddress().correctForm()`,
+     * or use `networkForm()`.
+     */
     static isValid(address) {
         try {
             // eslint-disable-next-line no-new
@@ -35332,8 +35356,11 @@ class Address4 {
             return false;
         }
     }
-    /*
-     * Parses a v4 address
+    /**
+     * Parses an IPv4 address string into its four octet groups and stores the
+     * result on `this.parsedAddress`. Called automatically by the constructor;
+     * you typically don't need to call it directly. Throws `AddressError` if
+     * the input is not a valid IPv4 address.
      */
     parse(address) {
         const groups = address.split('.');
@@ -35343,45 +35370,110 @@ class Address4 {
         return groups;
     }
     /**
-     * Returns the correct form of an address
-     * @memberof Address4
-     * @instance
-     * @returns {String}
+     * Returns the address in correct form: octets joined with `.` and any
+     * leading zeros stripped (e.g. `192.168.1.1`). For IPv4 this matches the
+     * canonical dotted-decimal representation.
      */
     correctForm() {
         return this.parsedAddress.map((part) => parseInt(part, 10)).join('.');
     }
     /**
-     * Converts a hex string to an IPv4 address object
-     * @memberof Address4
-     * @static
+     * Construct an `Address4` from an address and a dotted-decimal subnet
+     * mask given as separate strings (e.g. as returned by Node's
+     * `os.networkInterfaces()`). Throws `AddressError` if the mask is
+     * non-contiguous (e.g. `255.0.255.0`).
+     * @example
+     * var address = Address4.fromAddressAndMask('192.168.1.1', '255.255.255.0');
+     * address.subnetMask; // 24
+     */
+    static fromAddressAndMask(address, mask) {
+        const bits = common.prefixLengthFromMask(new Address4(mask).bigInt(), constants.BITS);
+        return new Address4(`${address}/${bits}`);
+    }
+    /**
+     * Construct an `Address4` from an address and a Cisco-style wildcard mask
+     * given as separate strings (e.g. `0.0.0.255` for a `/24`). The wildcard
+     * mask is the bitwise inverse of the subnet mask. Throws `AddressError`
+     * if the mask is non-contiguous (e.g. `0.255.0.255`).
+     * @example
+     * var address = Address4.fromAddressAndWildcardMask('10.0.0.1', '0.0.0.255');
+     * address.subnetMask; // 24
+     */
+    static fromAddressAndWildcardMask(address, wildcardMask) {
+        const wildcard = new Address4(wildcardMask).bigInt();
+        const allOnes = (BigInt(1) << BigInt(constants.BITS)) - BigInt(1);
+        // eslint-disable-next-line no-bitwise
+        const mask = wildcard ^ allOnes;
+        const bits = common.prefixLengthFromMask(mask, constants.BITS);
+        return new Address4(`${address}/${bits}`);
+    }
+    /**
+     * Construct an `Address4` from a wildcard pattern with trailing `*`
+     * octets. The number of trailing wildcards determines the prefix
+     * length: each `*` represents 8 bits.
+     *
+     * Only trailing whole-octet wildcards are supported. Partial-octet
+     * wildcards (e.g. `192.168.0.1*`) and interior wildcards (e.g.
+     * `192.*.0.1`) throw `AddressError`.
+     * @example
+     * Address4.fromWildcard('192.168.0.*').subnet;   // '/24'
+     * Address4.fromWildcard('192.168.*.*').subnet;   // '/16'
+     * Address4.fromWildcard('*.*.*.*').subnet;       // '/0'
+     */
+    static fromWildcard(input) {
+        const groups = input.split('.');
+        if (groups.length !== constants.GROUPS) {
+            throw new address_error_1.AddressError('Wildcard pattern must have 4 octets');
+        }
+        let firstWildcard = -1;
+        for (let i = 0; i < groups.length; i++) {
+            if (groups[i] === '*') {
+                if (firstWildcard === -1) {
+                    firstWildcard = i;
+                }
+            }
+            else if (firstWildcard !== -1) {
+                throw new address_error_1.AddressError('Wildcard `*` must only appear in trailing octets (e.g. `192.168.0.*`)');
+            }
+        }
+        const trailing = firstWildcard === -1 ? 0 : groups.length - firstWildcard;
+        const replaced = groups.map((g) => (g === '*' ? '0' : g));
+        const subnetBits = constants.BITS - trailing * 8;
+        return new Address4(`${replaced.join('.')}/${subnetBits}`);
+    }
+    /**
+     * Converts a hex string to an IPv4 address object. Accepts 8 hex digits
+     * with optional `:` separators (e.g. `'7f000001'` or `'7f:00:00:01'`).
+     * Throws `AddressError` for any other length or for non-hex characters.
      * @param {string} hex - a hex string to convert
      * @returns {Address4}
      */
     static fromHex(hex) {
-        const padded = hex.replace(/:/g, '').padStart(8, '0');
+        const stripped = hex.replace(/:/g, '');
+        if (!/^[0-9a-fA-F]{8}$/.test(stripped)) {
+            throw new address_error_1.AddressError('IPv4 hex must be exactly 8 hex digits');
+        }
         const groups = [];
-        let i;
-        for (i = 0; i < 8; i += 2) {
-            const h = padded.slice(i, i + 2);
-            groups.push(parseInt(h, 16));
+        for (let i = 0; i < 8; i += 2) {
+            groups.push(parseInt(stripped.slice(i, i + 2), 16));
         }
         return new Address4(groups.join('.'));
     }
     /**
-     * Converts an integer into a IPv4 address object
-     * @memberof Address4
-     * @static
+     * Converts an integer into a IPv4 address object. The integer must be a
+     * non-negative safe integer in the range `[0, 2**32 - 1]`; otherwise
+     * `AddressError` is thrown.
      * @param {integer} integer - a number to convert
      * @returns {Address4}
      */
     static fromInteger(integer) {
-        return Address4.fromHex(integer.toString(16));
+        if (!Number.isInteger(integer) || integer < 0 || integer > 0xffffffff) {
+            throw new address_error_1.AddressError('IPv4 integer must be in the range 0 to 2**32 - 1');
+        }
+        return Address4.fromHex(integer.toString(16).padStart(8, '0'));
     }
     /**
      * Return an address from in-addr.arpa form
-     * @memberof Address4
-     * @static
      * @param {string} arpaFormAddress - an 'in-addr.arpa' form ipv4 address
      * @returns {Adress4}
      * @example
@@ -35396,17 +35488,15 @@ class Address4 {
     }
     /**
      * Converts an IPv4 address object to a hex string
-     * @memberof Address4
-     * @instance
      * @returns {String}
      */
     toHex() {
         return this.parsedAddress.map((part) => common.stringToPaddedHex(part)).join(':');
     }
     /**
-     * Converts an IPv4 address object to an array of bytes
-     * @memberof Address4
-     * @instance
+     * Converts an IPv4 address object to an array of bytes.
+     *
+     * To get a Node.js `Buffer`, wrap the result: `Buffer.from(address.toArray())`.
      * @returns {Array}
      */
     toArray() {
@@ -35414,8 +35504,6 @@ class Address4 {
     }
     /**
      * Converts an IPv4 address object to an IPv6 address group
-     * @memberof Address4
-     * @instance
      * @returns {String}
      */
     toGroup6() {
@@ -35428,8 +35516,6 @@ class Address4 {
     }
     /**
      * Returns the address as a `bigint`
-     * @memberof Address4
-     * @instance
      * @returns {bigint}
      */
     bigInt() {
@@ -35437,8 +35523,6 @@ class Address4 {
     }
     /**
      * Helper function getting start address.
-     * @memberof Address4
-     * @instance
      * @returns {bigint}
      */
     _startAddress() {
@@ -35447,8 +35531,6 @@ class Address4 {
     /**
      * The first address in the range given by this address' subnet.
      * Often referred to as the Network Address.
-     * @memberof Address4
-     * @instance
      * @returns {Address4}
      */
     startAddress() {
@@ -35457,8 +35539,6 @@ class Address4 {
     /**
      * The first host address in the range given by this address's subnet ie
      * the first address after the Network Address
-     * @memberof Address4
-     * @instance
      * @returns {Address4}
      */
     startAddressExclusive() {
@@ -35467,8 +35547,6 @@ class Address4 {
     }
     /**
      * Helper function getting end address.
-     * @memberof Address4
-     * @instance
      * @returns {bigint}
      */
     _endAddress() {
@@ -35477,8 +35555,6 @@ class Address4 {
     /**
      * The last address in the range given by this address' subnet
      * Often referred to as the Broadcast
-     * @memberof Address4
-     * @instance
      * @returns {Address4}
      */
     endAddress() {
@@ -35487,8 +35563,6 @@ class Address4 {
     /**
      * The last host address in the range given by this address's subnet ie
      * the last address prior to the Broadcast Address
-     * @memberof Address4
-     * @instance
      * @returns {Address4}
      */
     endAddressExclusive() {
@@ -35496,19 +35570,47 @@ class Address4 {
         return Address4.fromBigInt(this._endAddress() - adjust);
     }
     /**
-     * Converts a BigInt to a v4 address object
-     * @memberof Address4
-     * @static
+     * The dotted-decimal form of the subnet mask, e.g. `255.255.240.0` for
+     * a `/20`. Returns an `Address4`; call `.correctForm()` for the string.
+     * @returns {Address4}
+     */
+    subnetMaskAddress() {
+        return Address4.fromBigInt(BigInt(`0b${'1'.repeat(this.subnetMask)}${'0'.repeat(constants.BITS - this.subnetMask)}`));
+    }
+    /**
+     * The Cisco-style wildcard mask, e.g. `0.0.0.255` for a `/24`. This is
+     * the bitwise inverse of `subnetMaskAddress()`. Returns an `Address4`;
+     * call `.correctForm()` for the string.
+     * @returns {Address4}
+     */
+    wildcardMask() {
+        return Address4.fromBigInt(BigInt(`0b${'0'.repeat(this.subnetMask)}${'1'.repeat(constants.BITS - this.subnetMask)}`));
+    }
+    /**
+     * The network address in CIDR string form, e.g. `192.168.1.0/24` for
+     * `192.168.1.5/24`. For an address with no explicit subnet the prefix is
+     * `/32`, e.g. `networkForm()` on `192.168.1.5` returns `192.168.1.5/32`.
+     * @returns {string}
+     */
+    networkForm() {
+        return `${this.startAddress().correctForm()}/${this.subnetMask}`;
+    }
+    /**
+     * Converts a BigInt to a v4 address object. The value must be in the
+     * range `[0, 2**32 - 1]`; otherwise `AddressError` is thrown.
      * @param {bigint} bigInt - a BigInt to convert
      * @returns {Address4}
      */
     static fromBigInt(bigInt) {
-        return Address4.fromHex(bigInt.toString(16));
+        if (bigInt < 0n || bigInt > 0xffffffffn) {
+            throw new address_error_1.AddressError('IPv4 BigInt must be in the range 0 to 2**32 - 1');
+        }
+        return Address4.fromHex(bigInt.toString(16).padStart(8, '0'));
     }
     /**
-     * Convert a byte array to an Address4 object
-     * @memberof Address4
-     * @static
+     * Convert a byte array to an Address4 object.
+     *
+     * To convert from a Node.js `Buffer`, spread it: `Address4.fromByteArray([...buf])`.
      * @param {Array<number>} bytes - an array of 4 bytes (0-255)
      * @returns {Address4}
      */
@@ -35526,8 +35628,6 @@ class Address4 {
     }
     /**
      * Convert an unsigned byte array to an Address4 object
-     * @memberof Address4
-     * @static
      * @param {Array<number>} bytes - an array of 4 unsigned bytes (0-255)
      * @returns {Address4}
      */
@@ -35541,8 +35641,6 @@ class Address4 {
     /**
      * Returns the first n bits of the address, defaulting to the
      * subnet mask
-     * @memberof Address4
-     * @instance
      * @returns {String}
      */
     mask(mask) {
@@ -35553,8 +35651,6 @@ class Address4 {
     }
     /**
      * Returns the bits in the given range as a base-2 string
-     * @memberof Address4
-     * @instance
      * @returns {string}
      */
     getBitsBase2(start, end) {
@@ -35562,10 +35658,8 @@ class Address4 {
     }
     /**
      * Return the reversed ip6.arpa form of the address
-     * @memberof Address4
      * @param {Object} options
      * @param {boolean} options.omitSuffix - omit the "in-addr.arpa" suffix
-     * @instance
      * @returns {String}
      */
     reverseForm(options) {
@@ -35580,21 +35674,62 @@ class Address4 {
     }
     /**
      * Returns true if the given address is a multicast address
-     * @memberof Address4
-     * @instance
      * @returns {boolean}
      */
     isMulticast() {
-        return this.isInSubnet(new Address4('224.0.0.0/4'));
+        return this.isInSubnet(MULTICAST_V4);
+    }
+    /**
+     * Returns true if the address is in one of the [RFC 1918](https://datatracker.ietf.org/doc/html/rfc1918) private address ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`).
+     * @returns {boolean}
+     */
+    isPrivate() {
+        return PRIVATE_V4.some((subnet) => this.isInSubnet(subnet));
+    }
+    /**
+     * Returns true if the address is in the loopback range `127.0.0.0/8` ([RFC 1122](https://datatracker.ietf.org/doc/html/rfc1122)).
+     * @returns {boolean}
+     */
+    isLoopback() {
+        return this.isInSubnet(LOOPBACK_V4);
+    }
+    /**
+     * Returns true if the address is in the link-local range `169.254.0.0/16` ([RFC 3927](https://datatracker.ietf.org/doc/html/rfc3927)).
+     * @returns {boolean}
+     */
+    isLinkLocal() {
+        return this.isInSubnet(LINK_LOCAL_V4);
+    }
+    /**
+     * Returns true if the address is the unspecified address `0.0.0.0`.
+     * @returns {boolean}
+     */
+    isUnspecified() {
+        return this.isInSubnet(UNSPECIFIED_V4);
+    }
+    /**
+     * Returns true if the address is the limited broadcast address `255.255.255.255` ([RFC 919](https://datatracker.ietf.org/doc/html/rfc919)).
+     * @returns {boolean}
+     */
+    isBroadcast() {
+        return this.isInSubnet(BROADCAST_V4);
+    }
+    /**
+     * Returns true if the address is in the carrier-grade NAT range `100.64.0.0/10` ([RFC 6598](https://datatracker.ietf.org/doc/html/rfc6598)).
+     * @returns {boolean}
+     */
+    isCGNAT() {
+        return this.isInSubnet(CGNAT_V4);
     }
     /**
      * Returns a zero-padded base-2 string representation of the address
-     * @memberof Address4
-     * @instance
      * @returns {string}
      */
     binaryZeroPad() {
-        return this.bigInt().toString(2).padStart(constants.BITS, '0');
+        if (this._binaryZeroPad === undefined) {
+            this._binaryZeroPad = this.bigInt().toString(2).padStart(constants.BITS, '0');
+        }
+        return this._binaryZeroPad;
     }
     /**
      * Groups an IPv4 address for inclusion at the end of an IPv6 address
@@ -35610,11 +35745,22 @@ class Address4 {
     }
 }
 exports.Address4 = Address4;
+const MULTICAST_V4 = new Address4('224.0.0.0/4');
+const PRIVATE_V4 = [
+    new Address4('10.0.0.0/8'),
+    new Address4('172.16.0.0/12'),
+    new Address4('192.168.0.0/16'),
+];
+const LOOPBACK_V4 = new Address4('127.0.0.0/8');
+const LINK_LOCAL_V4 = new Address4('169.254.0.0/16');
+const UNSPECIFIED_V4 = new Address4('0.0.0.0/32');
+const BROADCAST_V4 = new Address4('255.255.255.255/32');
+const CGNAT_V4 = new Address4('100.64.0.0/10');
 //# sourceMappingURL=ipv4.js.map
 
 /***/ }),
 
-/***/ 47157:
+/***/ 34260:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 
@@ -35645,14 +35791,15 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.Address6 = void 0;
-const common = __importStar(__nccwpck_require__(50505));
-const constants4 = __importStar(__nccwpck_require__(37044));
-const constants6 = __importStar(__nccwpck_require__(5278));
-const helpers = __importStar(__nccwpck_require__(8330));
-const ipv4_1 = __nccwpck_require__(31667);
-const regular_expressions_1 = __nccwpck_require__(73917);
-const address_error_1 = __nccwpck_require__(52777);
-const common_1 = __nccwpck_require__(50505);
+const common = __importStar(__nccwpck_require__(75684));
+const constants4 = __importStar(__nccwpck_require__(54073));
+const constants6 = __importStar(__nccwpck_require__(24487));
+const helpers = __importStar(__nccwpck_require__(53351));
+const ipv4_1 = __nccwpck_require__(78718);
+const regular_expressions_1 = __nccwpck_require__(75076);
+const address_error_1 = __nccwpck_require__(73886);
+const common_1 = __nccwpck_require__(75684);
+const isCorrect6 = common.isCorrect(constants6.BITS);
 function assert(condition) {
     if (!condition) {
         throw new Error('Assertion failed.');
@@ -35696,7 +35843,6 @@ function unsignByte(b) {
 }
 /**
  * Represents an IPv6 address
- * @class Address6
  * @param {string} address - An IPv6 address string
  * @param {number} [groups=8] - How many octets to parse
  * @example
@@ -35713,18 +35859,14 @@ class Address6 {
         // #region Attributes
         /**
          * Returns true if the given address is in the subnet of the current address
-         * @memberof Address6
-         * @instance
          * @returns {boolean}
          */
         this.isInSubnet = common.isInSubnet;
         /**
          * Returns true if the address is correct, false otherwise
-         * @memberof Address6
-         * @instance
          * @returns {boolean}
          */
-        this.isCorrect = common.isCorrect(constants6.BITS);
+        this.isCorrect = isCorrect6;
         if (optionalGroups === undefined) {
             this.groups = constants6.GROUPS;
         }
@@ -35755,6 +35897,13 @@ class Address6 {
         this.addressMinusSuffix = address;
         this.parsedAddress = this.parse(this.addressMinusSuffix);
     }
+    /**
+     * Returns true if the given string is a valid IPv6 address (with optional
+     * CIDR subnet and zone identifier), false otherwise. Host bits in the
+     * subnet portion are allowed (e.g. `2001:db8::1/32` is valid); for strict
+     * network-address validation compare `correctForm()` to
+     * `startAddress().correctForm()`, or use `networkForm()`.
+     */
     static isValid(address) {
         try {
             // eslint-disable-next-line no-new
@@ -35766,9 +35915,8 @@ class Address6 {
         }
     }
     /**
-     * Convert a BigInt to a v6 address object
-     * @memberof Address6
-     * @static
+     * Convert a BigInt to a v6 address object. The value must be in the
+     * range `[0, 2**128 - 1]`; otherwise `AddressError` is thrown.
      * @param {bigint} bigInt - a BigInt to convert
      * @returns {Address6}
      * @example
@@ -35777,19 +35925,21 @@ class Address6 {
      * address.correctForm(); // '::e8:d4a5:1000'
      */
     static fromBigInt(bigInt) {
+        if (bigInt < 0n || bigInt > (1n << BigInt(constants6.BITS)) - 1n) {
+            throw new address_error_1.AddressError('IPv6 BigInt must be in the range 0 to 2**128 - 1');
+        }
         const hex = bigInt.toString(16).padStart(32, '0');
         const groups = [];
-        let i;
-        for (i = 0; i < constants6.GROUPS; i++) {
+        for (let i = 0; i < constants6.GROUPS; i++) {
             groups.push(hex.slice(i * 4, (i + 1) * 4));
         }
         return new Address6(groups.join(':'));
     }
     /**
-     * Convert a URL (with optional port number) to an address object
-     * @memberof Address6
-     * @static
-     * @param {string} url - a URL with optional port number
+     * Parse a URL (with optional bracketed host and port) into an address and
+     * port. Returns either `{ address, port }` on success or
+     * `{ error, address: null, port: null }` if the URL could not be parsed.
+     * Ports are returned as numbers (or `null` if absent or out of range).
      * @example
      * var addressAndPort = Address6.fromURL('http://[ffff::]:8080/foo/');
      * addressAndPort.address.correctForm(); // 'ffff::'
@@ -35849,9 +35999,91 @@ class Address6 {
         };
     }
     /**
+     * Construct an `Address6` from an address and a hex subnet mask given as
+     * separate strings (e.g. as returned by Node's `os.networkInterfaces()`).
+     * Throws `AddressError` if the mask is non-contiguous (e.g.
+     * `ffff::ffff`).
+     * @example
+     * var address = Address6.fromAddressAndMask('fe80::1', 'ffff:ffff:ffff:ffff::');
+     * address.subnetMask; // 64
+     */
+    static fromAddressAndMask(address, mask) {
+        const bits = common.prefixLengthFromMask(new Address6(mask).bigInt(), constants6.BITS);
+        return new Address6(`${address}/${bits}`);
+    }
+    /**
+     * Construct an `Address6` from an address and a Cisco-style wildcard mask
+     * given as separate strings (e.g. `::ffff:ffff:ffff:ffff` for a `/64`).
+     * The wildcard mask is the bitwise inverse of the subnet mask. Throws
+     * `AddressError` if the mask is non-contiguous.
+     * @example
+     * var address = Address6.fromAddressAndWildcardMask('fe80::1', '::ffff:ffff:ffff:ffff');
+     * address.subnetMask; // 64
+     */
+    static fromAddressAndWildcardMask(address, wildcardMask) {
+        const wildcard = new Address6(wildcardMask).bigInt();
+        const allOnes = (BigInt(1) << BigInt(constants6.BITS)) - BigInt(1);
+        // eslint-disable-next-line no-bitwise
+        const mask = wildcard ^ allOnes;
+        const bits = common.prefixLengthFromMask(mask, constants6.BITS);
+        return new Address6(`${address}/${bits}`);
+    }
+    /**
+     * Construct an `Address6` from a wildcard pattern with trailing `*`
+     * groups. The number of trailing wildcards determines the prefix
+     * length: each `*` represents 16 bits. `::` is expanded to zero groups
+     * (not wildcards) before evaluating trailing wildcards.
+     *
+     * Only trailing whole-group wildcards are supported. Partial-group
+     * wildcards (e.g. `2001:db8::0*`) and interior wildcards (e.g.
+     * `*::1`) throw `AddressError`.
+     * @example
+     * Address6.fromWildcard('2001:db8:*:*:*:*:*:*').subnet;  // '/32'
+     * Address6.fromWildcard('2001:db8::*').subnet;           // '/112'
+     * Address6.fromWildcard('*:*:*:*:*:*:*:*').subnet;       // '/0'
+     */
+    static fromWildcard(input) {
+        if (input.includes('%') || input.includes('/')) {
+            throw new address_error_1.AddressError('Wildcard pattern must not include a zone or CIDR suffix');
+        }
+        const halves = input.split('::');
+        if (halves.length > 2) {
+            throw new address_error_1.AddressError("Wildcard pattern cannot contain more than one '::'");
+        }
+        let groups;
+        if (halves.length === 2) {
+            const left = halves[0] === '' ? [] : halves[0].split(':');
+            const right = halves[1] === '' ? [] : halves[1].split(':');
+            const remaining = constants6.GROUPS - left.length - right.length;
+            if (remaining < 1) {
+                throw new address_error_1.AddressError("Wildcard pattern with '::' has too many groups");
+            }
+            groups = [...left, ...new Array(remaining).fill('0'), ...right];
+        }
+        else {
+            groups = input.split(':');
+        }
+        if (groups.length !== constants6.GROUPS) {
+            throw new address_error_1.AddressError('Wildcard pattern must have 8 groups');
+        }
+        let firstWildcard = -1;
+        for (let i = 0; i < groups.length; i++) {
+            if (groups[i] === '*') {
+                if (firstWildcard === -1) {
+                    firstWildcard = i;
+                }
+            }
+            else if (firstWildcard !== -1) {
+                throw new address_error_1.AddressError('Wildcard `*` must only appear in trailing groups (e.g. `2001:db8:*:*:*:*:*:*`)');
+            }
+        }
+        const trailing = firstWildcard === -1 ? 0 : groups.length - firstWildcard;
+        const replaced = groups.map((g) => (g === '*' ? '0' : g));
+        const subnetBits = constants6.BITS - trailing * 16;
+        return new Address6(`${replaced.join(':')}/${subnetBits}`);
+    }
+    /**
      * Create an IPv6-mapped address given an IPv4 address
-     * @memberof Address6
-     * @static
      * @param {string} address - An IPv4 address string
      * @returns {Address6}
      * @example
@@ -35866,8 +36098,6 @@ class Address6 {
     }
     /**
      * Return an address from ip6.arpa form
-     * @memberof Address6
-     * @static
      * @param {string} arpaFormAddress - an 'ip6.arpa' form address
      * @returns {Adress6}
      * @example
@@ -35892,8 +36122,6 @@ class Address6 {
     }
     /**
      * Return the Microsoft UNC transcription of the address
-     * @memberof Address6
-     * @instance
      * @returns {String} the Microsoft UNC transcription of the address
      */
     microsoftTranscription() {
@@ -35901,8 +36129,6 @@ class Address6 {
     }
     /**
      * Return the first n bits of the address, defaulting to the subnet mask
-     * @memberof Address6
-     * @instance
      * @param {number} [mask=subnet] - the number of bits to mask
      * @returns {String} the first n bits of the address as a string
      */
@@ -35911,8 +36137,6 @@ class Address6 {
     }
     /**
      * Return the number of possible subnets of a given size in the address
-     * @memberof Address6
-     * @instance
      * @param {number} [subnetSize=128] - the subnet size
      * @returns {String}
      */
@@ -35928,8 +36152,6 @@ class Address6 {
     }
     /**
      * Helper function getting start address.
-     * @memberof Address6
-     * @instance
      * @returns {bigint}
      */
     _startAddress() {
@@ -35938,8 +36160,6 @@ class Address6 {
     /**
      * The first address in the range given by this address' subnet
      * Often referred to as the Network Address.
-     * @memberof Address6
-     * @instance
      * @returns {Address6}
      */
     startAddress() {
@@ -35948,8 +36168,6 @@ class Address6 {
     /**
      * The first host address in the range given by this address's subnet ie
      * the first address after the Network Address
-     * @memberof Address6
-     * @instance
      * @returns {Address6}
      */
     startAddressExclusive() {
@@ -35958,8 +36176,6 @@ class Address6 {
     }
     /**
      * Helper function getting end address.
-     * @memberof Address6
-     * @instance
      * @returns {bigint}
      */
     _endAddress() {
@@ -35968,8 +36184,6 @@ class Address6 {
     /**
      * The last address in the range given by this address' subnet
      * Often referred to as the Broadcast
-     * @memberof Address6
-     * @instance
      * @returns {Address6}
      */
     endAddress() {
@@ -35978,8 +36192,6 @@ class Address6 {
     /**
      * The last host address in the range given by this address's subnet ie
      * the last address prior to the Broadcast Address
-     * @memberof Address6
-     * @instance
      * @returns {Address6}
      */
     endAddressExclusive() {
@@ -35987,36 +36199,73 @@ class Address6 {
         return Address6.fromBigInt(this._endAddress() - adjust);
     }
     /**
-     * Return the scope of the address
-     * @memberof Address6
-     * @instance
+     * The hex form of the subnet mask, e.g. `ffff:ffff:ffff:ffff::` for a
+     * `/64`. Returns an `Address6`; call `.correctForm()` for the string.
+     * @returns {Address6}
+     */
+    subnetMaskAddress() {
+        return Address6.fromBigInt(BigInt(`0b${'1'.repeat(this.subnetMask)}${'0'.repeat(constants6.BITS - this.subnetMask)}`));
+    }
+    /**
+     * The Cisco-style wildcard mask, e.g. `::ffff:ffff:ffff:ffff` for a
+     * `/64`. This is the bitwise inverse of `subnetMaskAddress()`. Returns
+     * an `Address6`; call `.correctForm()` for the string.
+     * @returns {Address6}
+     */
+    wildcardMask() {
+        return Address6.fromBigInt(BigInt(`0b${'0'.repeat(this.subnetMask)}${'1'.repeat(constants6.BITS - this.subnetMask)}`));
+    }
+    /**
+     * The network address in CIDR string form, e.g. `2001:db8::/32` for
+     * `2001:db8::1/32`. For an address with no explicit subnet the prefix
+     * is `/128`, e.g. `networkForm()` on `2001:db8::1` returns
+     * `2001:db8::1/128`.
+     * @returns {string}
+     */
+    networkForm() {
+        return `${this.startAddress().correctForm()}/${this.subnetMask}`;
+    }
+    /**
+     * Return the scope of the address. The 4-bit scope field
+     * ([RFC 4291 §2.7](https://datatracker.ietf.org/doc/html/rfc4291#section-2.7))
+     * is only defined for multicast addresses; for unicast addresses the scope
+     * is derived from the address type per
+     * [RFC 4007 §6](https://datatracker.ietf.org/doc/html/rfc4007#section-6).
      * @returns {String}
      */
     getScope() {
-        let scope = constants6.SCOPES[parseInt(this.getBits(12, 16).toString(10), 10)];
-        if (this.getType() === 'Global unicast' && scope !== 'Link local') {
-            scope = 'Global';
+        const type = this.getType();
+        if (type === 'Multicast' || type.startsWith('Multicast ')) {
+            const scope = constants6.SCOPES[parseInt(this.getBits(12, 16).toString(10), 10)];
+            return scope || 'Unknown';
         }
-        return scope || 'Unknown';
+        // RFC 4291 §2.5.3: the loopback address is treated as having Link-Local
+        // scope. (Multicast scope 1, "Interface-Local", is a different concept
+        // used only for loopback transmission of multicast.)
+        if (type === 'Link-local unicast' || type === 'Loopback') {
+            return 'Link local';
+        }
+        // RFC 4007 §6: the unspecified address has no scope.
+        if (type === 'Unspecified') {
+            return 'Unknown';
+        }
+        return 'Global';
     }
     /**
      * Return the type of the address
-     * @memberof Address6
-     * @instance
      * @returns {String}
      */
     getType() {
-        for (const subnet of Object.keys(constants6.TYPES)) {
-            if (this.isInSubnet(new Address6(subnet))) {
-                return constants6.TYPES[subnet];
+        for (let i = 0; i < TYPE_SUBNETS.length; i++) {
+            const entry = TYPE_SUBNETS[i];
+            if (this.isInSubnet(entry[0])) {
+                return entry[1];
             }
         }
         return 'Global unicast';
     }
     /**
      * Return the bits in the given range as a BigInt
-     * @memberof Address6
-     * @instance
      * @returns {bigint}
      */
     getBits(start, end) {
@@ -36024,8 +36273,6 @@ class Address6 {
     }
     /**
      * Return the bits in the given range as a base-2 string
-     * @memberof Address6
-     * @instance
      * @returns {String}
      */
     getBitsBase2(start, end) {
@@ -36033,8 +36280,6 @@ class Address6 {
     }
     /**
      * Return the bits in the given range as a base-16 string
-     * @memberof Address6
-     * @instance
      * @returns {String}
      */
     getBitsBase16(start, end) {
@@ -36048,8 +36293,6 @@ class Address6 {
     }
     /**
      * Return the bits that are set past the subnet mask length
-     * @memberof Address6
-     * @instance
      * @returns {String}
      */
     getBitsPastSubnet() {
@@ -36057,10 +36300,8 @@ class Address6 {
     }
     /**
      * Return the reversed ip6.arpa form of the address
-     * @memberof Address6
      * @param {Object} options
      * @param {boolean} options.omitSuffix - omit the "ip6.arpa" suffix
-     * @instance
      * @returns {String}
      */
     reverseForm(options) {
@@ -36086,10 +36327,10 @@ class Address6 {
         return 'ip6.arpa.';
     }
     /**
-     * Return the correct form of the address
-     * @memberof Address6
-     * @instance
-     * @returns {String}
+     * Returns the address in correct form, per
+     * [RFC 5952](https://datatracker.ietf.org/doc/html/rfc5952): leading zeros
+     * stripped, the longest run of zero groups collapsed to `::`, and hex digits
+     * lowercased (e.g. `2001:db8::1`). This is the recommended form for display.
      */
     correctForm() {
         let i;
@@ -36133,8 +36374,6 @@ class Address6 {
     }
     /**
      * Return a zero-padded base-2 string representation of the address
-     * @memberof Address6
-     * @instance
      * @returns {String}
      * @example
      * var address = new Address6('2001:4860:4001:803::1011');
@@ -36143,10 +36382,22 @@ class Address6 {
      * //  0000000000000000000000000000000000000000000000000001000000010001'
      */
     binaryZeroPad() {
-        return this.bigInt().toString(2).padStart(constants6.BITS, '0');
+        if (this._binaryZeroPad === undefined) {
+            this._binaryZeroPad = this.bigInt().toString(2).padStart(constants6.BITS, '0');
+        }
+        return this._binaryZeroPad;
     }
+    /**
+     * Parses a v4-in-v6 string (e.g. `::ffff:192.168.0.1`) by extracting the
+     * trailing IPv4 address into `this.address4` / `this.parsedAddress4` and
+     * returning the address with the v4 portion converted to two v6 groups.
+     * Used internally by `parse()`.
+     */
     // TODO: Improve the semantics of this helper function
     parse4in6(address) {
+        if (address.indexOf('.') === -1) {
+            return address;
+        }
         const groups = address.split(':');
         const lastGroup = groups.slice(-1)[0];
         const address4 = lastGroup.match(constants4.RE_ADDRESS);
@@ -36155,7 +36406,12 @@ class Address6 {
             this.address4 = new ipv4_1.Address4(this.parsedAddress4);
             for (let i = 0; i < this.address4.groups; i++) {
                 if (/^0[0-9]+/.test(this.address4.parsedAddress[i])) {
-                    throw new address_error_1.AddressError("IPv4 addresses can't have leading zeroes.", address.replace(constants4.RE_ADDRESS, this.address4.parsedAddress.map(spanLeadingZeroes4).join('.')));
+                    // The prefix groups haven't been through the bad-character check
+                    // yet, so escape them before including in the error HTML.
+                    const highlighted = this.address4.parsedAddress.map(spanLeadingZeroes4).join('.');
+                    const prefix = groups.slice(0, -1).map(helpers.escapeHtml).join(':');
+                    const separator = groups.length > 1 ? ':' : '';
+                    throw new address_error_1.AddressError("IPv4 addresses can't have leading zeroes.", `${prefix}${separator}${highlighted}`);
                 }
             }
             this.v4 = true;
@@ -36164,6 +36420,13 @@ class Address6 {
         }
         return address;
     }
+    /**
+     * Parses an IPv6 address string into its 8 hexadecimal groups (expanding
+     * any `::` elision and any trailing v4-in-v6 portion) and stores the result
+     * on `this.parsedAddress`. Called automatically by the constructor; you
+     * typically don't need to call it directly. Throws `AddressError` if the
+     * input is malformed.
+     */
     // TODO: Make private?
     parse(address) {
         address = this.parse4in6(address);
@@ -36213,18 +36476,16 @@ class Address6 {
         return groups;
     }
     /**
-     * Return the canonical form of the address
-     * @memberof Address6
-     * @instance
-     * @returns {String}
+     * Returns the canonical (fully expanded) form of the address: all 8 groups,
+     * each padded to 4 hex digits, with no `::` collapsing
+     * (e.g. `2001:0db8:0000:0000:0000:0000:0000:0001`). Useful for sorting and
+     * byte-exact comparison.
      */
     canonicalForm() {
         return this.parsedAddress.map(paddedHex).join(':');
     }
     /**
      * Return the decimal form of the address
-     * @memberof Address6
-     * @instance
      * @returns {String}
      */
     decimal() {
@@ -36232,8 +36493,6 @@ class Address6 {
     }
     /**
      * Return the address as a BigInt
-     * @memberof Address6
-     * @instance
      * @returns {bigint}
      */
     bigInt() {
@@ -36241,8 +36500,6 @@ class Address6 {
     }
     /**
      * Return the last two groups of this address as an IPv4 address string
-     * @memberof Address6
-     * @instance
      * @returns {Address4}
      * @example
      * var address = new Address6('2001:4860:4001::1825:bf11');
@@ -36250,12 +36507,10 @@ class Address6 {
      */
     to4() {
         const binary = this.binaryZeroPad().split('');
-        return ipv4_1.Address4.fromHex(BigInt(`0b${binary.slice(96, 128).join('')}`).toString(16));
+        return ipv4_1.Address4.fromHex(BigInt(`0b${binary.slice(96, 128).join('')}`).toString(16).padStart(8, '0'));
     }
     /**
      * Return the v4-in-v6 form of the address
-     * @memberof Address6
-     * @instance
      * @returns {String}
      */
     to4in6() {
@@ -36269,10 +36524,10 @@ class Address6 {
         return correct + infix + address4.address;
     }
     /**
-     * Return an object containing the Teredo properties of the address
-     * @memberof Address6
-     * @instance
-     * @returns {Object}
+     * Decodes the Teredo tunneling fields embedded in this address. Returns the
+     * Teredo prefix, server IPv4, client IPv4, raw flag bits, cone-NAT flag,
+     * UDP port, and Microsoft-format flag breakdown (reserved, universal/local,
+     * group/individual, nonce). Only meaningful for addresses in `2001::/32`.
      */
     inspectTeredo() {
         /*
@@ -36303,7 +36558,7 @@ class Address6 {
         const server4 = ipv4_1.Address4.fromHex(this.getBitsBase16(32, 64));
         const bitsForClient4 = this.getBits(96, 128);
         // eslint-disable-next-line no-bitwise
-        const client4 = ipv4_1.Address4.fromHex((bitsForClient4 ^ BigInt('0xffffffff')).toString(16));
+        const client4 = ipv4_1.Address4.fromHex((bitsForClient4 ^ BigInt('0xffffffff')).toString(16).padStart(8, '0'));
         const flagsBase2 = this.getBitsBase2(64, 80);
         const coneNat = (0, common_1.testBit)(flagsBase2, 15);
         const reserved = (0, common_1.testBit)(flagsBase2, 14);
@@ -36326,10 +36581,9 @@ class Address6 {
         };
     }
     /**
-     * Return an object containing the 6to4 properties of the address
-     * @memberof Address6
-     * @instance
-     * @returns {Object}
+     * Decodes the 6to4 tunneling fields embedded in this address. Returns the
+     * 6to4 prefix and the embedded IPv4 gateway address. Only meaningful for
+     * addresses in `2002::/16`.
      */
     inspect6to4() {
         /*
@@ -36345,8 +36599,6 @@ class Address6 {
     }
     /**
      * Return a v6 6to4 address from a v6 v4inv6 address
-     * @memberof Address6
-     * @instance
      * @returns {Address6}
      */
     to6to4() {
@@ -36363,9 +36615,80 @@ class Address6 {
         return new Address6(addr6to4);
     }
     /**
-     * Return a byte array
-     * @memberof Address6
-     * @instance
+     * Embed an IPv4 address into a NAT64 IPv6 address using the encoding
+     * defined by [RFC 6052](https://datatracker.ietf.org/doc/html/rfc6052).
+     * The default prefix is the well-known prefix `64:ff9b::/96`. The prefix
+     * length must be one of 32, 40, 48, 56, 64, or 96; for prefixes shorter
+     * than /64 the IPv4 octets are split around the reserved bits 64–71.
+     * @example
+     * Address6.fromAddress4Nat64('192.0.2.33').correctForm(); // '64:ff9b::c000:221'
+     * Address6.fromAddress4Nat64('192.0.2.33', '2001:db8::/32').correctForm(); // '2001:db8:c000:221::'
+     */
+    static fromAddress4Nat64(address, prefix = '64:ff9b::/96') {
+        const v4 = new ipv4_1.Address4(address);
+        const prefix6 = new Address6(prefix);
+        const pl = prefix6.subnetMask;
+        if (pl !== 32 && pl !== 40 && pl !== 48 && pl !== 56 && pl !== 64 && pl !== 96) {
+            throw new address_error_1.AddressError('NAT64 prefix length must be 32, 40, 48, 56, 64, or 96');
+        }
+        const prefixBits = prefix6.binaryZeroPad();
+        const v4Bits = v4.binaryZeroPad();
+        let bits;
+        if (pl === 96) {
+            bits = prefixBits.slice(0, 96) + v4Bits;
+        }
+        else {
+            const beforeU = 64 - pl;
+            bits =
+                prefixBits.slice(0, pl) +
+                    v4Bits.slice(0, beforeU) +
+                    '00000000' +
+                    v4Bits.slice(beforeU) +
+                    '0'.repeat(128 - 72 - (32 - beforeU));
+        }
+        const hex = BigInt(`0b${bits}`).toString(16).padStart(32, '0');
+        const groups = [];
+        for (let i = 0; i < 8; i++) {
+            groups.push(hex.slice(i * 4, (i + 1) * 4));
+        }
+        return new Address6(groups.join(':'));
+    }
+    /**
+     * Extract the embedded IPv4 address from a NAT64 IPv6 address using the
+     * encoding defined by [RFC 6052](https://datatracker.ietf.org/doc/html/rfc6052).
+     * The default prefix is the well-known prefix `64:ff9b::/96`. Returns
+     * `null` if this address is not contained within the given prefix.
+     * @example
+     * new Address6('64:ff9b::c000:221').toAddress4Nat64()!.correctForm(); // '192.0.2.33'
+     */
+    toAddress4Nat64(prefix = '64:ff9b::/96') {
+        const prefix6 = new Address6(prefix);
+        const pl = prefix6.subnetMask;
+        if (pl !== 32 && pl !== 40 && pl !== 48 && pl !== 56 && pl !== 64 && pl !== 96) {
+            throw new address_error_1.AddressError('NAT64 prefix length must be 32, 40, 48, 56, 64, or 96');
+        }
+        if (!this.isInSubnet(prefix6)) {
+            return null;
+        }
+        const bits = this.binaryZeroPad();
+        let v4Bits;
+        if (pl === 96) {
+            v4Bits = bits.slice(96, 128);
+        }
+        else {
+            const beforeU = 64 - pl;
+            v4Bits = bits.slice(pl, pl + beforeU) + bits.slice(72, 72 + (32 - beforeU));
+        }
+        const octets = [];
+        for (let i = 0; i < 4; i++) {
+            octets.push(parseInt(v4Bits.slice(i * 8, (i + 1) * 8), 2).toString());
+        }
+        return new ipv4_1.Address4(octets.join('.'));
+    }
+    /**
+     * Return a byte array.
+     *
+     * To get a Node.js `Buffer`, wrap the result: `Buffer.from(address.toByteArray())`.
      * @returns {Array}
      */
     toByteArray() {
@@ -36379,27 +36702,27 @@ class Address6 {
         return bytes;
     }
     /**
-     * Return an unsigned byte array
-     * @memberof Address6
-     * @instance
+     * Return an unsigned byte array.
+     *
+     * To get a Node.js `Buffer`, wrap the result: `Buffer.from(address.toUnsignedByteArray())`.
      * @returns {Array}
      */
     toUnsignedByteArray() {
         return this.toByteArray().map(unsignByte);
     }
     /**
-     * Convert a byte array to an Address6 object
-     * @memberof Address6
-     * @static
+     * Convert a byte array to an Address6 object.
+     *
+     * To convert from a Node.js `Buffer`, spread it: `Address6.fromByteArray([...buf])`.
      * @returns {Address6}
      */
     static fromByteArray(bytes) {
         return this.fromUnsignedByteArray(bytes.map(unsignByte));
     }
     /**
-     * Convert an unsigned byte array to an Address6 object
-     * @memberof Address6
-     * @static
+     * Convert an unsigned byte array to an Address6 object.
+     *
+     * To convert from a Node.js `Buffer`, spread it: `Address6.fromUnsignedByteArray([...buf])`.
      * @returns {Address6}
      */
     static fromUnsignedByteArray(bytes) {
@@ -36414,8 +36737,6 @@ class Address6 {
     }
     /**
      * Returns true if the address is in the canonical form, false otherwise
-     * @memberof Address6
-     * @instance
      * @returns {boolean}
      */
     isCanonical() {
@@ -36423,8 +36744,6 @@ class Address6 {
     }
     /**
      * Returns true if the address is a link local address, false otherwise
-     * @memberof Address6
-     * @instance
      * @returns {boolean}
      */
     isLinkLocal() {
@@ -36437,53 +36756,81 @@ class Address6 {
     }
     /**
      * Returns true if the address is a multicast address, false otherwise
-     * @memberof Address6
-     * @instance
      * @returns {boolean}
      */
     isMulticast() {
-        return this.getType() === 'Multicast';
+        const type = this.getType();
+        return type === 'Multicast' || type.startsWith('Multicast ');
     }
     /**
-     * Returns true if the address is a v4-in-v6 address, false otherwise
-     * @memberof Address6
-     * @instance
+     * Returns true if the address was written in v4-in-v6 dotted-quad notation
+     * (e.g. `::ffff:127.0.0.1`), false otherwise. This is a notation-level flag
+     * and does not reflect whether the address bits lie in the IPv4-mapped
+     * (`::ffff:0:0/96`) subnet — for that, see {@link isMapped4}.
      * @returns {boolean}
      */
     is4() {
         return this.v4;
     }
     /**
+     * Returns true if the address is an IPv4-mapped IPv6 address in
+     * `::ffff:0:0/96` ([RFC 4291 §2.5.5.2](https://datatracker.ietf.org/doc/html/rfc4291#section-2.5.5.2)),
+     * false otherwise. Unlike {@link is4}, this checks the underlying address
+     * bits rather than the textual notation, so `::ffff:127.0.0.1` and
+     * `::ffff:7f00:1` both return true.
+     * @returns {boolean}
+     */
+    isMapped4() {
+        return this.isInSubnet(IPV4_MAPPED_SUBNET);
+    }
+    /**
      * Returns true if the address is a Teredo address, false otherwise
-     * @memberof Address6
-     * @instance
      * @returns {boolean}
      */
     isTeredo() {
-        return this.isInSubnet(new Address6('2001::/32'));
+        return this.isInSubnet(TEREDO_SUBNET);
     }
     /**
      * Returns true if the address is a 6to4 address, false otherwise
-     * @memberof Address6
-     * @instance
      * @returns {boolean}
      */
     is6to4() {
-        return this.isInSubnet(new Address6('2002::/16'));
+        return this.isInSubnet(SIX_TO_FOUR_SUBNET);
     }
     /**
      * Returns true if the address is a loopback address, false otherwise
-     * @memberof Address6
-     * @instance
      * @returns {boolean}
      */
     isLoopback() {
         return this.getType() === 'Loopback';
     }
+    /**
+     * Returns true if the address is a Unique Local Address in `fc00::/7` ([RFC 4193](https://datatracker.ietf.org/doc/html/rfc4193)). ULAs are the IPv6 equivalent of IPv4 [RFC 1918](https://datatracker.ietf.org/doc/html/rfc1918) private addresses.
+     * @returns {boolean}
+     */
+    isULA() {
+        return this.isInSubnet(ULA_SUBNET);
+    }
+    /**
+     * Returns true if the address is the unspecified address `::`.
+     * @returns {boolean}
+     */
+    isUnspecified() {
+        return this.getType() === 'Unspecified';
+    }
+    /**
+     * Returns true if the address is in the documentation prefix `2001:db8::/32` ([RFC 3849](https://datatracker.ietf.org/doc/html/rfc3849)).
+     * @returns {boolean}
+     */
+    isDocumentation() {
+        return this.isInSubnet(DOCUMENTATION_SUBNET);
+    }
     // #endregion
     // #region HTML
     /**
-     * @returns {String} the address in link form with a default port of 80
+     * Returns the address as an HTTP URL with the host bracketed, e.g.
+     * `http://[2001:db8::1]/`. If `optionalPort` is provided it is appended,
+     * e.g. `http://[2001:db8::1]:8080/`.
      */
     href(optionalPort) {
         if (optionalPort === undefined) {
@@ -36495,7 +36842,12 @@ class Address6 {
         return `http://[${this.correctForm()}]${optionalPort}/`;
     }
     /**
-     * @returns {String} a link suitable for conveying the address via a URL hash
+     * Returns an HTML `<a>` element whose `href` encodes the address in a URL
+     * hash fragment (default prefix `/#address=`). Useful for linking between
+     * pages of an address-inspector UI.
+     * @param options.className - CSS class for the rendered `<a>` element
+     * @param options.prefix - hash prefix prepended to the address (default `/#address=`)
+     * @param options.v4 - when true, render the address in v4-in-v6 form
      */
     link(options) {
         if (!options) {
@@ -36515,10 +36867,13 @@ class Address6 {
             formFunction = this.to4in6;
         }
         const form = formFunction.call(this);
+        const safeHref = helpers.escapeHtml(`${options.prefix}${form}`);
+        const safeForm = helpers.escapeHtml(form);
         if (options.className) {
-            return `<a href="${options.prefix}${form}" class="${options.className}">${form}</a>`;
+            const safeClass = helpers.escapeHtml(options.className);
+            return `<a href="${safeHref}" class="${safeClass}">${safeForm}</a>`;
         }
-        return `<a href="${options.prefix}${form}">${form}</a>`;
+        return `<a href="${safeHref}">${safeForm}</a>`;
     }
     /**
      * Groups an address
@@ -36527,13 +36882,13 @@ class Address6 {
     group() {
         if (this.elidedGroups === 0) {
             // The simple case
-            return helpers.simpleGroup(this.address).join(':');
+            return helpers.simpleGroup(this.addressMinusSuffix).join(':');
         }
         assert(typeof this.elidedGroups === 'number');
         assert(typeof this.elisionBegin === 'number');
         // The elided case
         const output = [];
-        const [left, right] = this.address.split('::');
+        const [left, right] = this.addressMinusSuffix.split('::');
         if (left.length) {
             output.push(...helpers.simpleGroup(left));
         }
@@ -36563,8 +36918,6 @@ class Address6 {
     /**
      * Generate a regular expression string that can be used to find or validate
      * all variations of this address
-     * @memberof Address6
-     * @instance
      * @param {boolean} substringSearch
      * @returns {string}
      */
@@ -36609,8 +36962,6 @@ class Address6 {
     /**
      * Generate a regular expression that can be used to find or validate all
      * variations of this address.
-     * @memberof Address6
-     * @instance
      * @param {boolean} substringSearch
      * @returns {RegExp}
      */
@@ -36619,11 +36970,20 @@ class Address6 {
     }
 }
 exports.Address6 = Address6;
+const TYPE_SUBNETS = Object.keys(constants6.TYPES).map((subnet) => [
+    new Address6(subnet),
+    constants6.TYPES[subnet],
+]);
+const TEREDO_SUBNET = new Address6('2001::/32');
+const SIX_TO_FOUR_SUBNET = new Address6('2002::/16');
+const ULA_SUBNET = new Address6('fc00::/7');
+const DOCUMENTATION_SUBNET = new Address6('2001:db8::/32');
+const IPV4_MAPPED_SUBNET = new Address6('::ffff:0:0/96');
 //# sourceMappingURL=ipv6.js.map
 
 /***/ }),
 
-/***/ 37044:
+/***/ 54073:
 /***/ ((__unused_webpack_module, exports) => {
 
 
@@ -36637,7 +36997,7 @@ exports.RE_SUBNET_STRING = /\/\d{1,2}$/;
 
 /***/ }),
 
-/***/ 5278:
+/***/ 24487:
 /***/ ((__unused_webpack_module, exports) => {
 
 
@@ -36688,6 +37048,11 @@ exports.TYPES = {
     '::1/128': 'Loopback',
     'ff00::/8': 'Multicast',
     'fe80::/10': 'Link-local unicast',
+    'fc00::/7': 'Unique local',
+    '2002::/16': '6to4',
+    '2001:db8::/32': 'Documentation',
+    '64:ff9b::/96': 'NAT64 (well-known)',
+    '64:ff9b:1::/48': 'NAT64 (local-use)',
 };
 /**
  * A regular expression that matches bad characters in an IPv6 address
@@ -36719,20 +37084,29 @@ exports.RE_URL_WITH_PORT = /\[([0-9a-f:]+)\]:([0-9]{1,5})/;
 
 /***/ }),
 
-/***/ 8330:
+/***/ 53351:
 /***/ ((__unused_webpack_module, exports) => {
 
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.escapeHtml = escapeHtml;
 exports.spanAllZeroes = spanAllZeroes;
 exports.spanAll = spanAll;
 exports.spanLeadingZeroes = spanLeadingZeroes;
 exports.simpleGroup = simpleGroup;
+function escapeHtml(s) {
+    return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 /**
  * @returns {String} the string with all zeroes contained in a <span>
  */
 function spanAllZeroes(s) {
-    return s.replace(/(0+)/g, '<span class="zero">$1</span>');
+    return escapeHtml(s).replace(/(0+)/g, '<span class="zero">$1</span>');
 }
 /**
  * @returns {String} the string with each character contained in a <span>
@@ -36740,11 +37114,11 @@ function spanAllZeroes(s) {
 function spanAll(s, offset = 0) {
     const letters = s.split('');
     return letters
-        .map((n, i) => `<span class="digit value-${n} position-${i + offset}">${spanAllZeroes(n)}</span>`)
+        .map((n, i) => `<span class="digit value-${escapeHtml(n)} position-${i + offset}">${spanAllZeroes(n)}</span>`)
         .join('');
 }
 function spanLeadingZeroesSimple(group) {
-    return group.replace(/^(0+)/, '<span class="zero">$1</span>');
+    return escapeHtml(group).replace(/^(0+)/, '<span class="zero">$1</span>');
 }
 /**
  * @returns {String} the string with leading zeroes contained in a <span>
@@ -36770,7 +37144,7 @@ function simpleGroup(addressString, offset = 0) {
 
 /***/ }),
 
-/***/ 73917:
+/***/ 75076:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 
@@ -36803,7 +37177,7 @@ exports.groupPossibilities = groupPossibilities;
 exports.padGroup = padGroup;
 exports.simpleRegularExpression = simpleRegularExpression;
 exports.possibleElisions = possibleElisions;
-const v6 = __importStar(__nccwpck_require__(5278));
+const v6 = __importStar(__nccwpck_require__(24487));
 function groupPossibilities(possibilities) {
     return `(${possibilities.join('|')})`;
 }
@@ -36979,14 +37353,14 @@ function Writable(fn, options) {
 
 /***/ }),
 
-/***/ 88851:
+/***/ 138:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var hashClear = __nccwpck_require__(43058),
-    hashDelete = __nccwpck_require__(15492),
-    hashGet = __nccwpck_require__(96759),
-    hashHas = __nccwpck_require__(71819),
-    hashSet = __nccwpck_require__(50515);
+var hashClear = __nccwpck_require__(97193),
+    hashDelete = __nccwpck_require__(83585),
+    hashGet = __nccwpck_require__(36360),
+    hashHas = __nccwpck_require__(36668),
+    hashSet = __nccwpck_require__(43180);
 
 /**
  * Creates a hash object.
@@ -37018,14 +37392,14 @@ module.exports = Hash;
 
 /***/ }),
 
-/***/ 23225:
+/***/ 38282:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var listCacheClear = __nccwpck_require__(8500),
-    listCacheDelete = __nccwpck_require__(674),
-    listCacheGet = __nccwpck_require__(31901),
-    listCacheHas = __nccwpck_require__(2353),
-    listCacheSet = __nccwpck_require__(30617);
+var listCacheClear = __nccwpck_require__(4841),
+    listCacheDelete = __nccwpck_require__(11617),
+    listCacheGet = __nccwpck_require__(12744),
+    listCacheHas = __nccwpck_require__(26908),
+    listCacheSet = __nccwpck_require__(59084);
 
 /**
  * Creates an list cache object.
@@ -37057,11 +37431,11 @@ module.exports = ListCache;
 
 /***/ }),
 
-/***/ 45909:
+/***/ 57754:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var getNative = __nccwpck_require__(56408),
-    root = __nccwpck_require__(67387);
+var getNative = __nccwpck_require__(55099),
+    root = __nccwpck_require__(48478);
 
 /* Built-in method references that are verified to be native. */
 var Map = getNative(root, 'Map');
@@ -37071,14 +37445,14 @@ module.exports = Map;
 
 /***/ }),
 
-/***/ 12367:
+/***/ 89146:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var mapCacheClear = __nccwpck_require__(42454),
-    mapCacheDelete = __nccwpck_require__(53664),
-    mapCacheGet = __nccwpck_require__(34563),
-    mapCacheHas = __nccwpck_require__(74831),
-    mapCacheSet = __nccwpck_require__(40999);
+var mapCacheClear = __nccwpck_require__(44153),
+    mapCacheDelete = __nccwpck_require__(62641),
+    mapCacheGet = __nccwpck_require__(78968),
+    mapCacheHas = __nccwpck_require__(58444),
+    mapCacheSet = __nccwpck_require__(20764);
 
 /**
  * Creates a map cache object to store key-value pairs.
@@ -37110,11 +37484,11 @@ module.exports = MapCache;
 
 /***/ }),
 
-/***/ 71171:
+/***/ 78144:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var getNative = __nccwpck_require__(56408),
-    root = __nccwpck_require__(67387);
+var getNative = __nccwpck_require__(55099),
+    root = __nccwpck_require__(48478);
 
 /* Built-in method references that are verified to be native. */
 var Set = getNative(root, 'Set');
@@ -37124,12 +37498,12 @@ module.exports = Set;
 
 /***/ }),
 
-/***/ 10801:
+/***/ 5740:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var MapCache = __nccwpck_require__(12367),
-    setCacheAdd = __nccwpck_require__(60446),
-    setCacheHas = __nccwpck_require__(66985);
+var MapCache = __nccwpck_require__(89146),
+    setCacheAdd = __nccwpck_require__(86549),
+    setCacheHas = __nccwpck_require__(21862);
 
 /**
  *
@@ -37158,10 +37532,10 @@ module.exports = SetCache;
 
 /***/ }),
 
-/***/ 12111:
+/***/ 78930:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var root = __nccwpck_require__(67387);
+var root = __nccwpck_require__(48478);
 
 /** Built-in value references. */
 var Symbol = root.Symbol;
@@ -37171,7 +37545,7 @@ module.exports = Symbol;
 
 /***/ }),
 
-/***/ 28447:
+/***/ 42816:
 /***/ ((module) => {
 
 /**
@@ -37199,10 +37573,10 @@ module.exports = apply;
 
 /***/ }),
 
-/***/ 15343:
+/***/ 86572:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var baseIndexOf = __nccwpck_require__(9037);
+var baseIndexOf = __nccwpck_require__(77422);
 
 /**
  * A specialized version of `_.includes` for arrays without support for
@@ -37223,7 +37597,7 @@ module.exports = arrayIncludes;
 
 /***/ }),
 
-/***/ 20327:
+/***/ 38644:
 /***/ ((module) => {
 
 /**
@@ -37252,15 +37626,15 @@ module.exports = arrayIncludesWith;
 
 /***/ }),
 
-/***/ 25513:
+/***/ 94870:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var baseTimes = __nccwpck_require__(76858),
-    isArguments = __nccwpck_require__(3542),
-    isArray = __nccwpck_require__(91659),
-    isBuffer = __nccwpck_require__(43254),
-    isIndex = __nccwpck_require__(8143),
-    isTypedArray = __nccwpck_require__(48221);
+var baseTimes = __nccwpck_require__(85529),
+    isArguments = __nccwpck_require__(13491),
+    isArray = __nccwpck_require__(80854),
+    isBuffer = __nccwpck_require__(24365),
+    isIndex = __nccwpck_require__(75360),
+    isTypedArray = __nccwpck_require__(25274);
 
 /** Used for built-in method references. */
 var objectProto = Object.prototype;
@@ -37308,7 +37682,7 @@ module.exports = arrayLikeKeys;
 
 /***/ }),
 
-/***/ 27670:
+/***/ 72055:
 /***/ ((module) => {
 
 /**
@@ -37336,7 +37710,7 @@ module.exports = arrayMap;
 
 /***/ }),
 
-/***/ 4842:
+/***/ 62905:
 /***/ ((module) => {
 
 /**
@@ -37363,10 +37737,10 @@ module.exports = arrayPush;
 
 /***/ }),
 
-/***/ 99575:
+/***/ 25802:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var eq = __nccwpck_require__(47266);
+var eq = __nccwpck_require__(42477);
 
 /**
  * Gets the index at which the `key` is found in `array` of key-value pairs.
@@ -37391,15 +37765,15 @@ module.exports = assocIndexOf;
 
 /***/ }),
 
-/***/ 88569:
+/***/ 15840:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var SetCache = __nccwpck_require__(10801),
-    arrayIncludes = __nccwpck_require__(15343),
-    arrayIncludesWith = __nccwpck_require__(20327),
-    arrayMap = __nccwpck_require__(27670),
-    baseUnary = __nccwpck_require__(71715),
-    cacheHas = __nccwpck_require__(34921);
+var SetCache = __nccwpck_require__(5740),
+    arrayIncludes = __nccwpck_require__(86572),
+    arrayIncludesWith = __nccwpck_require__(38644),
+    arrayMap = __nccwpck_require__(72055),
+    baseUnary = __nccwpck_require__(19028),
+    cacheHas = __nccwpck_require__(78368);
 
 /** Used as the size to enable large array optimizations. */
 var LARGE_ARRAY_SIZE = 200;
@@ -37465,7 +37839,7 @@ module.exports = baseDifference;
 
 /***/ }),
 
-/***/ 83181:
+/***/ 40674:
 /***/ ((module) => {
 
 /**
@@ -37496,11 +37870,11 @@ module.exports = baseFindIndex;
 
 /***/ }),
 
-/***/ 15686:
+/***/ 32041:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var arrayPush = __nccwpck_require__(4842),
-    isFlattenable = __nccwpck_require__(19641);
+var arrayPush = __nccwpck_require__(62905),
+    isFlattenable = __nccwpck_require__(9546);
 
 /**
  * The base implementation of `_.flatten` with support for restricting flattening.
@@ -37541,12 +37915,12 @@ module.exports = baseFlatten;
 
 /***/ }),
 
-/***/ 95218:
+/***/ 66995:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var Symbol = __nccwpck_require__(12111),
-    getRawTag = __nccwpck_require__(52337),
-    objectToString = __nccwpck_require__(76020);
+var Symbol = __nccwpck_require__(78930),
+    getRawTag = __nccwpck_require__(94662),
+    objectToString = __nccwpck_require__(34477);
 
 /** `Object#toString` result references. */
 var nullTag = '[object Null]',
@@ -37576,12 +37950,12 @@ module.exports = baseGetTag;
 
 /***/ }),
 
-/***/ 9037:
+/***/ 77422:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var baseFindIndex = __nccwpck_require__(83181),
-    baseIsNaN = __nccwpck_require__(1857),
-    strictIndexOf = __nccwpck_require__(6445);
+var baseFindIndex = __nccwpck_require__(40674),
+    baseIsNaN = __nccwpck_require__(99214),
+    strictIndexOf = __nccwpck_require__(63626);
 
 /**
  * The base implementation of `_.indexOf` without `fromIndex` bounds checks.
@@ -37603,11 +37977,11 @@ module.exports = baseIndexOf;
 
 /***/ }),
 
-/***/ 65024:
+/***/ 47099:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var baseGetTag = __nccwpck_require__(95218),
-    isObjectLike = __nccwpck_require__(94932);
+var baseGetTag = __nccwpck_require__(66995),
+    isObjectLike = __nccwpck_require__(32547);
 
 /** `Object#toString` result references. */
 var argsTag = '[object Arguments]';
@@ -37628,7 +38002,7 @@ module.exports = baseIsArguments;
 
 /***/ }),
 
-/***/ 1857:
+/***/ 99214:
 /***/ ((module) => {
 
 /**
@@ -37647,13 +38021,13 @@ module.exports = baseIsNaN;
 
 /***/ }),
 
-/***/ 25953:
+/***/ 87800:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var isFunction = __nccwpck_require__(50684),
-    isMasked = __nccwpck_require__(77470),
-    isObject = __nccwpck_require__(34059),
-    toSource = __nccwpck_require__(77743);
+var isFunction = __nccwpck_require__(51703),
+    isMasked = __nccwpck_require__(60695),
+    isObject = __nccwpck_require__(81804),
+    toSource = __nccwpck_require__(35746);
 
 /**
  * Used to match `RegExp`
@@ -37701,12 +38075,12 @@ module.exports = baseIsNative;
 
 /***/ }),
 
-/***/ 53603:
+/***/ 9810:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var baseGetTag = __nccwpck_require__(95218),
-    isLength = __nccwpck_require__(51828),
-    isObjectLike = __nccwpck_require__(94932);
+var baseGetTag = __nccwpck_require__(66995),
+    isLength = __nccwpck_require__(56427),
+    isObjectLike = __nccwpck_require__(32547);
 
 /** `Object#toString` result references. */
 var argsTag = '[object Arguments]',
@@ -37768,12 +38142,12 @@ module.exports = baseIsTypedArray;
 
 /***/ }),
 
-/***/ 24005:
+/***/ 82704:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var isObject = __nccwpck_require__(34059),
-    isPrototype = __nccwpck_require__(57197),
-    nativeKeysIn = __nccwpck_require__(95475);
+var isObject = __nccwpck_require__(81804),
+    isPrototype = __nccwpck_require__(63570),
+    nativeKeysIn = __nccwpck_require__(83986);
 
 /** Used for built-in method references. */
 var objectProto = Object.prototype;
@@ -37808,12 +38182,12 @@ module.exports = baseKeysIn;
 
 /***/ }),
 
-/***/ 97224:
+/***/ 29417:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var identity = __nccwpck_require__(32414),
-    overRest = __nccwpck_require__(11675),
-    setToString = __nccwpck_require__(68143);
+var identity = __nccwpck_require__(75877),
+    overRest = __nccwpck_require__(87138),
+    setToString = __nccwpck_require__(21436);
 
 /**
  * The base implementation of `_.rest` which doesn't validate or coerce arguments.
@@ -37832,12 +38206,12 @@ module.exports = baseRest;
 
 /***/ }),
 
-/***/ 10448:
+/***/ 72555:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var constant = __nccwpck_require__(59364),
-    defineProperty = __nccwpck_require__(26297),
-    identity = __nccwpck_require__(32414);
+var constant = __nccwpck_require__(30107),
+    defineProperty = __nccwpck_require__(9684),
+    identity = __nccwpck_require__(75877);
 
 /**
  * The base implementation of `setToString` without support for hot loop shorting.
@@ -37861,7 +38235,7 @@ module.exports = baseSetToString;
 
 /***/ }),
 
-/***/ 76858:
+/***/ 85529:
 /***/ ((module) => {
 
 /**
@@ -37888,7 +38262,7 @@ module.exports = baseTimes;
 
 /***/ }),
 
-/***/ 71715:
+/***/ 19028:
 /***/ ((module) => {
 
 /**
@@ -37909,15 +38283,15 @@ module.exports = baseUnary;
 
 /***/ }),
 
-/***/ 45835:
+/***/ 21102:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var SetCache = __nccwpck_require__(10801),
-    arrayIncludes = __nccwpck_require__(15343),
-    arrayIncludesWith = __nccwpck_require__(20327),
-    cacheHas = __nccwpck_require__(34921),
-    createSet = __nccwpck_require__(52119),
-    setToArray = __nccwpck_require__(56217);
+var SetCache = __nccwpck_require__(5740),
+    arrayIncludes = __nccwpck_require__(86572),
+    arrayIncludesWith = __nccwpck_require__(38644),
+    cacheHas = __nccwpck_require__(78368),
+    createSet = __nccwpck_require__(35632),
+    setToArray = __nccwpck_require__(58116);
 
 /** Used as the size to enable large array optimizations. */
 var LARGE_ARRAY_SIZE = 200;
@@ -37988,7 +38362,7 @@ module.exports = baseUniq;
 
 /***/ }),
 
-/***/ 34921:
+/***/ 78368:
 /***/ ((module) => {
 
 /**
@@ -38008,10 +38382,10 @@ module.exports = cacheHas;
 
 /***/ }),
 
-/***/ 14855:
+/***/ 17566:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var root = __nccwpck_require__(67387);
+var root = __nccwpck_require__(48478);
 
 /** Used to detect overreaching core-js shims. */
 var coreJsData = root['__core-js_shared__'];
@@ -38021,12 +38395,12 @@ module.exports = coreJsData;
 
 /***/ }),
 
-/***/ 52119:
+/***/ 35632:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var Set = __nccwpck_require__(71171),
-    noop = __nccwpck_require__(58412),
-    setToArray = __nccwpck_require__(56217);
+var Set = __nccwpck_require__(78144),
+    noop = __nccwpck_require__(32031),
+    setToArray = __nccwpck_require__(58116);
 
 /** Used as references for various `Number` constants. */
 var INFINITY = 1 / 0;
@@ -38047,10 +38421,10 @@ module.exports = createSet;
 
 /***/ }),
 
-/***/ 26297:
+/***/ 9684:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var getNative = __nccwpck_require__(56408);
+var getNative = __nccwpck_require__(55099);
 
 var defineProperty = (function() {
   try {
@@ -38065,7 +38439,7 @@ module.exports = defineProperty;
 
 /***/ }),
 
-/***/ 93622:
+/***/ 93943:
 /***/ ((module) => {
 
 /** Detect free variable `global` from Node.js. */
@@ -38076,10 +38450,10 @@ module.exports = freeGlobal;
 
 /***/ }),
 
-/***/ 15737:
+/***/ 60700:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var isKeyable = __nccwpck_require__(44684);
+var isKeyable = __nccwpck_require__(24315);
 
 /**
  * Gets the data for `map`.
@@ -38101,11 +38475,11 @@ module.exports = getMapData;
 
 /***/ }),
 
-/***/ 56408:
+/***/ 55099:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var baseIsNative = __nccwpck_require__(25953),
-    getValue = __nccwpck_require__(22266);
+var baseIsNative = __nccwpck_require__(87800),
+    getValue = __nccwpck_require__(4955);
 
 /**
  * Gets the native function at `key` of `object`.
@@ -38125,10 +38499,10 @@ module.exports = getNative;
 
 /***/ }),
 
-/***/ 49209:
+/***/ 86592:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var overArg = __nccwpck_require__(15089);
+var overArg = __nccwpck_require__(21078);
 
 /** Built-in value references. */
 var getPrototype = overArg(Object.getPrototypeOf, Object);
@@ -38138,10 +38512,10 @@ module.exports = getPrototype;
 
 /***/ }),
 
-/***/ 52337:
+/***/ 94662:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var Symbol = __nccwpck_require__(12111);
+var Symbol = __nccwpck_require__(78930);
 
 /** Used for built-in method references. */
 var objectProto = Object.prototype;
@@ -38191,7 +38565,7 @@ module.exports = getRawTag;
 
 /***/ }),
 
-/***/ 22266:
+/***/ 4955:
 /***/ ((module) => {
 
 /**
@@ -38211,10 +38585,10 @@ module.exports = getValue;
 
 /***/ }),
 
-/***/ 43058:
+/***/ 97193:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var nativeCreate = __nccwpck_require__(24148);
+var nativeCreate = __nccwpck_require__(71809);
 
 /**
  * Removes all key-value entries from the hash.
@@ -38233,7 +38607,7 @@ module.exports = hashClear;
 
 /***/ }),
 
-/***/ 15492:
+/***/ 83585:
 /***/ ((module) => {
 
 /**
@@ -38257,10 +38631,10 @@ module.exports = hashDelete;
 
 /***/ }),
 
-/***/ 96759:
+/***/ 36360:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var nativeCreate = __nccwpck_require__(24148);
+var nativeCreate = __nccwpck_require__(71809);
 
 /** Used to stand-in for `undefined` hash values. */
 var HASH_UNDEFINED = '__lodash_hash_undefined__';
@@ -38294,10 +38668,10 @@ module.exports = hashGet;
 
 /***/ }),
 
-/***/ 71819:
+/***/ 36668:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var nativeCreate = __nccwpck_require__(24148);
+var nativeCreate = __nccwpck_require__(71809);
 
 /** Used for built-in method references. */
 var objectProto = Object.prototype;
@@ -38324,10 +38698,10 @@ module.exports = hashHas;
 
 /***/ }),
 
-/***/ 50515:
+/***/ 43180:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var nativeCreate = __nccwpck_require__(24148);
+var nativeCreate = __nccwpck_require__(71809);
 
 /** Used to stand-in for `undefined` hash values. */
 var HASH_UNDEFINED = '__lodash_hash_undefined__';
@@ -38354,12 +38728,12 @@ module.exports = hashSet;
 
 /***/ }),
 
-/***/ 19641:
+/***/ 9546:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var Symbol = __nccwpck_require__(12111),
-    isArguments = __nccwpck_require__(3542),
-    isArray = __nccwpck_require__(91659);
+var Symbol = __nccwpck_require__(78930),
+    isArguments = __nccwpck_require__(13491),
+    isArray = __nccwpck_require__(80854);
 
 /** Built-in value references. */
 var spreadableSymbol = Symbol ? Symbol.isConcatSpreadable : undefined;
@@ -38381,7 +38755,7 @@ module.exports = isFlattenable;
 
 /***/ }),
 
-/***/ 8143:
+/***/ 75360:
 /***/ ((module) => {
 
 /** Used as references for various `Number` constants. */
@@ -38413,13 +38787,13 @@ module.exports = isIndex;
 
 /***/ }),
 
-/***/ 24854:
+/***/ 90279:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var eq = __nccwpck_require__(47266),
-    isArrayLike = __nccwpck_require__(72884),
-    isIndex = __nccwpck_require__(8143),
-    isObject = __nccwpck_require__(34059);
+var eq = __nccwpck_require__(42477),
+    isArrayLike = __nccwpck_require__(24113),
+    isIndex = __nccwpck_require__(75360),
+    isObject = __nccwpck_require__(81804);
 
 /**
  * Checks if the given arguments are from an iteratee call.
@@ -38450,7 +38824,7 @@ module.exports = isIterateeCall;
 
 /***/ }),
 
-/***/ 44684:
+/***/ 24315:
 /***/ ((module) => {
 
 /**
@@ -38472,10 +38846,10 @@ module.exports = isKeyable;
 
 /***/ }),
 
-/***/ 77470:
+/***/ 60695:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var coreJsData = __nccwpck_require__(14855);
+var coreJsData = __nccwpck_require__(17566);
 
 /** Used to detect methods masquerading as native. */
 var maskSrcKey = (function() {
@@ -38499,7 +38873,7 @@ module.exports = isMasked;
 
 /***/ }),
 
-/***/ 57197:
+/***/ 63570:
 /***/ ((module) => {
 
 /** Used for built-in method references. */
@@ -38524,7 +38898,7 @@ module.exports = isPrototype;
 
 /***/ }),
 
-/***/ 8500:
+/***/ 4841:
 /***/ ((module) => {
 
 /**
@@ -38544,10 +38918,10 @@ module.exports = listCacheClear;
 
 /***/ }),
 
-/***/ 674:
+/***/ 11617:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var assocIndexOf = __nccwpck_require__(99575);
+var assocIndexOf = __nccwpck_require__(25802);
 
 /** Used for built-in method references. */
 var arrayProto = Array.prototype;
@@ -38586,10 +38960,10 @@ module.exports = listCacheDelete;
 
 /***/ }),
 
-/***/ 31901:
+/***/ 12744:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var assocIndexOf = __nccwpck_require__(99575);
+var assocIndexOf = __nccwpck_require__(25802);
 
 /**
  * Gets the list cache value for `key`.
@@ -38612,10 +38986,10 @@ module.exports = listCacheGet;
 
 /***/ }),
 
-/***/ 2353:
+/***/ 26908:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var assocIndexOf = __nccwpck_require__(99575);
+var assocIndexOf = __nccwpck_require__(25802);
 
 /**
  * Checks if a list cache value for `key` exists.
@@ -38635,10 +39009,10 @@ module.exports = listCacheHas;
 
 /***/ }),
 
-/***/ 30617:
+/***/ 59084:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var assocIndexOf = __nccwpck_require__(99575);
+var assocIndexOf = __nccwpck_require__(25802);
 
 /**
  * Sets the list cache `key` to `value`.
@@ -38668,12 +39042,12 @@ module.exports = listCacheSet;
 
 /***/ }),
 
-/***/ 42454:
+/***/ 44153:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var Hash = __nccwpck_require__(88851),
-    ListCache = __nccwpck_require__(23225),
-    Map = __nccwpck_require__(45909);
+var Hash = __nccwpck_require__(138),
+    ListCache = __nccwpck_require__(38282),
+    Map = __nccwpck_require__(57754);
 
 /**
  * Removes all key-value entries from the map.
@@ -38696,10 +39070,10 @@ module.exports = mapCacheClear;
 
 /***/ }),
 
-/***/ 53664:
+/***/ 62641:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var getMapData = __nccwpck_require__(15737);
+var getMapData = __nccwpck_require__(60700);
 
 /**
  * Removes `key` and its value from the map.
@@ -38721,10 +39095,10 @@ module.exports = mapCacheDelete;
 
 /***/ }),
 
-/***/ 34563:
+/***/ 78968:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var getMapData = __nccwpck_require__(15737);
+var getMapData = __nccwpck_require__(60700);
 
 /**
  * Gets the map value for `key`.
@@ -38744,10 +39118,10 @@ module.exports = mapCacheGet;
 
 /***/ }),
 
-/***/ 74831:
+/***/ 58444:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var getMapData = __nccwpck_require__(15737);
+var getMapData = __nccwpck_require__(60700);
 
 /**
  * Checks if a map value for `key` exists.
@@ -38767,10 +39141,10 @@ module.exports = mapCacheHas;
 
 /***/ }),
 
-/***/ 40999:
+/***/ 20764:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var getMapData = __nccwpck_require__(15737);
+var getMapData = __nccwpck_require__(60700);
 
 /**
  * Sets the map `key` to `value`.
@@ -38796,10 +39170,10 @@ module.exports = mapCacheSet;
 
 /***/ }),
 
-/***/ 24148:
+/***/ 71809:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var getNative = __nccwpck_require__(56408);
+var getNative = __nccwpck_require__(55099);
 
 /* Built-in method references that are verified to be native. */
 var nativeCreate = getNative(Object, 'create');
@@ -38809,7 +39183,7 @@ module.exports = nativeCreate;
 
 /***/ }),
 
-/***/ 95475:
+/***/ 83986:
 /***/ ((module) => {
 
 /**
@@ -38836,11 +39210,11 @@ module.exports = nativeKeysIn;
 
 /***/ }),
 
-/***/ 33747:
+/***/ 63522:
 /***/ ((module, exports, __nccwpck_require__) => {
 
 /* module decorator */ module = __nccwpck_require__.nmd(module);
-var freeGlobal = __nccwpck_require__(93622);
+var freeGlobal = __nccwpck_require__(93943);
 
 /** Detect free variable `exports`. */
 var freeExports =  true && exports && !exports.nodeType && exports;
@@ -38874,7 +39248,7 @@ module.exports = nodeUtil;
 
 /***/ }),
 
-/***/ 76020:
+/***/ 34477:
 /***/ ((module) => {
 
 /** Used for built-in method references. */
@@ -38903,7 +39277,7 @@ module.exports = objectToString;
 
 /***/ }),
 
-/***/ 15089:
+/***/ 21078:
 /***/ ((module) => {
 
 /**
@@ -38925,10 +39299,10 @@ module.exports = overArg;
 
 /***/ }),
 
-/***/ 11675:
+/***/ 87138:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var apply = __nccwpck_require__(28447);
+var apply = __nccwpck_require__(42816);
 
 /* Built-in method references for those with the same name as other `lodash` methods. */
 var nativeMax = Math.max;
@@ -38968,10 +39342,10 @@ module.exports = overRest;
 
 /***/ }),
 
-/***/ 67387:
+/***/ 48478:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var freeGlobal = __nccwpck_require__(93622);
+var freeGlobal = __nccwpck_require__(93943);
 
 /** Detect free variable `self`. */
 var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
@@ -38984,7 +39358,7 @@ module.exports = root;
 
 /***/ }),
 
-/***/ 60446:
+/***/ 86549:
 /***/ ((module) => {
 
 /** Used to stand-in for `undefined` hash values. */
@@ -39010,7 +39384,7 @@ module.exports = setCacheAdd;
 
 /***/ }),
 
-/***/ 66985:
+/***/ 21862:
 /***/ ((module) => {
 
 /**
@@ -39020,7 +39394,7 @@ module.exports = setCacheAdd;
  * @name has
  * @memberOf SetCache
  * @param {*} value The value to search for.
- * @returns {number} Returns `true` if `value` is found, else `false`.
+ * @returns {boolean} Returns `true` if `value` is found, else `false`.
  */
 function setCacheHas(value) {
   return this.__data__.has(value);
@@ -39031,7 +39405,7 @@ module.exports = setCacheHas;
 
 /***/ }),
 
-/***/ 56217:
+/***/ 58116:
 /***/ ((module) => {
 
 /**
@@ -39056,11 +39430,11 @@ module.exports = setToArray;
 
 /***/ }),
 
-/***/ 68143:
+/***/ 21436:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var baseSetToString = __nccwpck_require__(10448),
-    shortOut = __nccwpck_require__(51285);
+var baseSetToString = __nccwpck_require__(72555),
+    shortOut = __nccwpck_require__(30612);
 
 /**
  * Sets the `toString` method of `func` to return `string`.
@@ -39077,7 +39451,7 @@ module.exports = setToString;
 
 /***/ }),
 
-/***/ 51285:
+/***/ 30612:
 /***/ ((module) => {
 
 /** Used to detect hot functions by number of calls within a span of milliseconds. */
@@ -39121,7 +39495,7 @@ module.exports = shortOut;
 
 /***/ }),
 
-/***/ 6445:
+/***/ 63626:
 /***/ ((module) => {
 
 /**
@@ -39151,7 +39525,7 @@ module.exports = strictIndexOf;
 
 /***/ }),
 
-/***/ 77743:
+/***/ 35746:
 /***/ ((module) => {
 
 /** Used for built-in method references. */
@@ -39184,7 +39558,7 @@ module.exports = toSource;
 
 /***/ }),
 
-/***/ 59364:
+/***/ 30107:
 /***/ ((module) => {
 
 /**
@@ -39217,13 +39591,13 @@ module.exports = constant;
 
 /***/ }),
 
-/***/ 74750:
+/***/ 51493:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var baseRest = __nccwpck_require__(97224),
-    eq = __nccwpck_require__(47266),
-    isIterateeCall = __nccwpck_require__(24854),
-    keysIn = __nccwpck_require__(97999);
+var baseRest = __nccwpck_require__(29417),
+    eq = __nccwpck_require__(42477),
+    isIterateeCall = __nccwpck_require__(90279),
+    keysIn = __nccwpck_require__(33192);
 
 /** Used for built-in method references. */
 var objectProto = Object.prototype;
@@ -39288,13 +39662,13 @@ module.exports = defaults;
 
 /***/ }),
 
-/***/ 42227:
+/***/ 59064:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var baseDifference = __nccwpck_require__(88569),
-    baseFlatten = __nccwpck_require__(15686),
-    baseRest = __nccwpck_require__(97224),
-    isArrayLikeObject = __nccwpck_require__(15651);
+var baseDifference = __nccwpck_require__(15840),
+    baseFlatten = __nccwpck_require__(32041),
+    baseRest = __nccwpck_require__(29417),
+    isArrayLikeObject = __nccwpck_require__(63710);
 
 /**
  * Creates an array of `array` values not included in the other given arrays
@@ -39328,7 +39702,7 @@ module.exports = difference;
 
 /***/ }),
 
-/***/ 47266:
+/***/ 42477:
 /***/ ((module) => {
 
 /**
@@ -39372,10 +39746,10 @@ module.exports = eq;
 
 /***/ }),
 
-/***/ 34056:
+/***/ 14897:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var baseFlatten = __nccwpck_require__(15686);
+var baseFlatten = __nccwpck_require__(32041);
 
 /**
  * Flattens `array` a single level deep.
@@ -39401,7 +39775,7 @@ module.exports = flatten;
 
 /***/ }),
 
-/***/ 32414:
+/***/ 75877:
 /***/ ((module) => {
 
 /**
@@ -39429,11 +39803,11 @@ module.exports = identity;
 
 /***/ }),
 
-/***/ 3542:
+/***/ 13491:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var baseIsArguments = __nccwpck_require__(65024),
-    isObjectLike = __nccwpck_require__(94932);
+var baseIsArguments = __nccwpck_require__(47099),
+    isObjectLike = __nccwpck_require__(32547);
 
 /** Used for built-in method references. */
 var objectProto = Object.prototype;
@@ -39472,7 +39846,7 @@ module.exports = isArguments;
 
 /***/ }),
 
-/***/ 91659:
+/***/ 80854:
 /***/ ((module) => {
 
 /**
@@ -39505,11 +39879,11 @@ module.exports = isArray;
 
 /***/ }),
 
-/***/ 72884:
+/***/ 24113:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var isFunction = __nccwpck_require__(50684),
-    isLength = __nccwpck_require__(51828);
+var isFunction = __nccwpck_require__(51703),
+    isLength = __nccwpck_require__(56427);
 
 /**
  * Checks if `value` is array-like. A value is considered array-like if it's
@@ -39545,11 +39919,11 @@ module.exports = isArrayLike;
 
 /***/ }),
 
-/***/ 15651:
+/***/ 63710:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var isArrayLike = __nccwpck_require__(72884),
-    isObjectLike = __nccwpck_require__(94932);
+var isArrayLike = __nccwpck_require__(24113),
+    isObjectLike = __nccwpck_require__(32547);
 
 /**
  * This method is like `_.isArrayLike` except that it also checks if `value`
@@ -39585,12 +39959,12 @@ module.exports = isArrayLikeObject;
 
 /***/ }),
 
-/***/ 43254:
+/***/ 24365:
 /***/ ((module, exports, __nccwpck_require__) => {
 
 /* module decorator */ module = __nccwpck_require__.nmd(module);
-var root = __nccwpck_require__(67387),
-    stubFalse = __nccwpck_require__(51205);
+var root = __nccwpck_require__(48478),
+    stubFalse = __nccwpck_require__(29204);
 
 /** Detect free variable `exports`. */
 var freeExports =  true && exports && !exports.nodeType && exports;
@@ -39631,11 +40005,11 @@ module.exports = isBuffer;
 
 /***/ }),
 
-/***/ 50684:
+/***/ 51703:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var baseGetTag = __nccwpck_require__(95218),
-    isObject = __nccwpck_require__(34059);
+var baseGetTag = __nccwpck_require__(66995),
+    isObject = __nccwpck_require__(81804);
 
 /** `Object#toString` result references. */
 var asyncTag = '[object AsyncFunction]',
@@ -39675,7 +40049,7 @@ module.exports = isFunction;
 
 /***/ }),
 
-/***/ 51828:
+/***/ 56427:
 /***/ ((module) => {
 
 /** Used as references for various `Number` constants. */
@@ -39717,7 +40091,7 @@ module.exports = isLength;
 
 /***/ }),
 
-/***/ 34059:
+/***/ 81804:
 /***/ ((module) => {
 
 /**
@@ -39755,7 +40129,7 @@ module.exports = isObject;
 
 /***/ }),
 
-/***/ 94932:
+/***/ 32547:
 /***/ ((module) => {
 
 /**
@@ -39791,12 +40165,12 @@ module.exports = isObjectLike;
 
 /***/ }),
 
-/***/ 11905:
+/***/ 78440:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var baseGetTag = __nccwpck_require__(95218),
-    getPrototype = __nccwpck_require__(49209),
-    isObjectLike = __nccwpck_require__(94932);
+var baseGetTag = __nccwpck_require__(66995),
+    getPrototype = __nccwpck_require__(86592),
+    isObjectLike = __nccwpck_require__(32547);
 
 /** `Object#toString` result references. */
 var objectTag = '[object Object]';
@@ -39860,12 +40234,12 @@ module.exports = isPlainObject;
 
 /***/ }),
 
-/***/ 48221:
+/***/ 25274:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var baseIsTypedArray = __nccwpck_require__(53603),
-    baseUnary = __nccwpck_require__(71715),
-    nodeUtil = __nccwpck_require__(33747);
+var baseIsTypedArray = __nccwpck_require__(9810),
+    baseUnary = __nccwpck_require__(19028),
+    nodeUtil = __nccwpck_require__(63522);
 
 /* Node.js helper references. */
 var nodeIsTypedArray = nodeUtil && nodeUtil.isTypedArray;
@@ -39894,12 +40268,12 @@ module.exports = isTypedArray;
 
 /***/ }),
 
-/***/ 97999:
+/***/ 33192:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var arrayLikeKeys = __nccwpck_require__(25513),
-    baseKeysIn = __nccwpck_require__(24005),
-    isArrayLike = __nccwpck_require__(72884);
+var arrayLikeKeys = __nccwpck_require__(94870),
+    baseKeysIn = __nccwpck_require__(82704),
+    isArrayLike = __nccwpck_require__(24113);
 
 /**
  * Creates an array of the own and inherited enumerable property names of `object`.
@@ -39933,7 +40307,7 @@ module.exports = keysIn;
 
 /***/ }),
 
-/***/ 58412:
+/***/ 32031:
 /***/ ((module) => {
 
 /**
@@ -39957,7 +40331,7 @@ module.exports = noop;
 
 /***/ }),
 
-/***/ 51205:
+/***/ 29204:
 /***/ ((module) => {
 
 /**
@@ -39982,13 +40356,13 @@ module.exports = stubFalse;
 
 /***/ }),
 
-/***/ 92229:
+/***/ 18820:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-var baseFlatten = __nccwpck_require__(15686),
-    baseRest = __nccwpck_require__(97224),
-    baseUniq = __nccwpck_require__(45835),
-    isArrayLikeObject = __nccwpck_require__(15651);
+var baseFlatten = __nccwpck_require__(32041),
+    baseRest = __nccwpck_require__(29417),
+    baseUniq = __nccwpck_require__(21102),
+    isArrayLikeObject = __nccwpck_require__(63710);
 
 /**
  * Creates an array of unique values, in order, from all given arrays using
@@ -45048,7 +45422,7 @@ function plural(ms, msAbs, n, name) {
 
 var preferredCharsets = __nccwpck_require__(67010)
 var preferredEncodings = __nccwpck_require__(47293)
-var preferredLanguages = __nccwpck_require__(38065)
+var preferredLanguages = __nccwpck_require__(60446)
 var preferredMediaTypes = __nccwpck_require__(98694)
 
 /**
@@ -45511,7 +45885,7 @@ function isQuality(spec) {
 
 /***/ }),
 
-/***/ 38065:
+/***/ 60446:
 /***/ ((module) => {
 
 /**
@@ -51458,7 +51832,7 @@ let debug = (__nccwpck_require__(94768).debuglog)('stream', (fn) => {
 })
 const BufferList = __nccwpck_require__(84585)
 const destroyImpl = __nccwpck_require__(63080)
-const { getHighWaterMark, getDefaultHighWaterMark } = __nccwpck_require__(55099)
+const { getHighWaterMark, getDefaultHighWaterMark } = __nccwpck_require__(77480)
 const {
   aggregateTwoErrors,
   codes: {
@@ -52697,7 +53071,7 @@ Readable.wrap = function (src, options) {
 
 /***/ }),
 
-/***/ 55099:
+/***/ 77480:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
@@ -52815,7 +53189,7 @@ const { ObjectSetPrototypeOf, Symbol } = __nccwpck_require__(85878)
 module.exports = Transform
 const { ERR_METHOD_NOT_IMPLEMENTED } = (__nccwpck_require__(87619).codes)
 const Duplex = __nccwpck_require__(13162)
-const { getHighWaterMark } = __nccwpck_require__(55099)
+const { getHighWaterMark } = __nccwpck_require__(77480)
 ObjectSetPrototypeOf(Transform.prototype, Duplex.prototype)
 ObjectSetPrototypeOf(Transform, Duplex)
 const kCallback = Symbol('kCallback')
@@ -53318,7 +53692,7 @@ const Stream = (__nccwpck_require__(94115).Stream)
 const { Buffer } = __nccwpck_require__(20181)
 const destroyImpl = __nccwpck_require__(63080)
 const { addAbortSignal } = __nccwpck_require__(33635)
-const { getHighWaterMark, getDefaultHighWaterMark } = __nccwpck_require__(55099)
+const { getHighWaterMark, getDefaultHighWaterMark } = __nccwpck_require__(77480)
 const {
   ERR_INVALID_ARG_TYPE,
   ERR_METHOD_NOT_IMPLEMENTED,
@@ -55438,7 +55812,7 @@ const {
   codes: { ERR_ILLEGAL_CONSTRUCTOR }
 } = __nccwpck_require__(87619)
 const compose = __nccwpck_require__(37830)
-const { setDefaultHighWaterMark, getDefaultHighWaterMark } = __nccwpck_require__(55099)
+const { setDefaultHighWaterMark, getDefaultHighWaterMark } = __nccwpck_require__(77480)
 const { pipeline } = __nccwpck_require__(72846)
 const { destroyer } = __nccwpck_require__(63080)
 const eos = __nccwpck_require__(81806)
@@ -60405,7 +60779,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SocksProxyAgent = void 0;
-const socks_1 = __nccwpck_require__(64569);
+const socks_1 = __nccwpck_require__(71014);
 const agent_base_1 = __nccwpck_require__(16384);
 const debug_1 = __importDefault(__nccwpck_require__(62309));
 const dns = __importStar(__nccwpck_require__(72250));
@@ -60574,7 +60948,7 @@ function omit(obj, ...keys) {
 
 /***/ }),
 
-/***/ 43155:
+/***/ 92418:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 
@@ -60592,12 +60966,12 @@ exports.SocksClientError = exports.SocksClient = void 0;
 const events_1 = __nccwpck_require__(24434);
 const net = __nccwpck_require__(69278);
 const smart_buffer_1 = __nccwpck_require__(10447);
-const constants_1 = __nccwpck_require__(56442);
-const helpers_1 = __nccwpck_require__(32630);
-const receivebuffer_1 = __nccwpck_require__(67676);
-const util_1 = __nccwpck_require__(66167);
+const constants_1 = __nccwpck_require__(60339);
+const helpers_1 = __nccwpck_require__(61411);
+const receivebuffer_1 = __nccwpck_require__(36469);
+const util_1 = __nccwpck_require__(69068);
 Object.defineProperty(exports, "SocksClientError", ({ enumerable: true, get: function () { return util_1.SocksClientError; } }));
-const ip_address_1 = __nccwpck_require__(21436);
+const ip_address_1 = __nccwpck_require__(56857);
 class SocksClient extends events_1.EventEmitter {
     constructor(options) {
         super();
@@ -61373,7 +61747,7 @@ exports.SocksClient = SocksClient;
 
 /***/ }),
 
-/***/ 56442:
+/***/ 60339:
 /***/ ((__unused_webpack_module, exports) => {
 
 
@@ -61487,16 +61861,16 @@ var SocksClientState;
 
 /***/ }),
 
-/***/ 32630:
+/***/ 61411:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ipToBuffer = exports.int32ToIpv4 = exports.ipv4ToInt32 = exports.validateSocksClientChainOptions = exports.validateSocksClientOptions = void 0;
-const util_1 = __nccwpck_require__(66167);
-const constants_1 = __nccwpck_require__(56442);
+const util_1 = __nccwpck_require__(69068);
+const constants_1 = __nccwpck_require__(60339);
 const stream = __nccwpck_require__(2203);
-const ip_address_1 = __nccwpck_require__(21436);
+const ip_address_1 = __nccwpck_require__(56857);
 const net = __nccwpck_require__(69278);
 /**
  * Validates the provided SocksClientOptions
@@ -61660,7 +62034,7 @@ exports.ipToBuffer = ipToBuffer;
 
 /***/ }),
 
-/***/ 67676:
+/***/ 36469:
 /***/ ((__unused_webpack_module, exports) => {
 
 
@@ -61709,7 +62083,7 @@ exports.ReceiveBuffer = ReceiveBuffer;
 
 /***/ }),
 
-/***/ 66167:
+/***/ 69068:
 /***/ ((__unused_webpack_module, exports) => {
 
 
@@ -61740,7 +62114,7 @@ exports.shuffleArray = shuffleArray;
 
 /***/ }),
 
-/***/ 64569:
+/***/ 71014:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 
@@ -61759,7 +62133,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-__exportStar(__nccwpck_require__(43155), exports);
+__exportStar(__nccwpck_require__(92418), exports);
 //# sourceMappingURL=index.js.map
 
 /***/ }),
@@ -106459,10 +106833,10 @@ The following characters are not allowed in files that are uploaded due to limit
     }
 }
 //# sourceMappingURL=path-and-artifact-name-validation.js.map
-// EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.0/node_modules/@actions/http-client/lib/index.js + 1 modules
-var lib = __nccwpck_require__(93335);
-// EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.0/node_modules/@actions/http-client/lib/auth.js
-var auth = __nccwpck_require__(59770);
+// EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.1/node_modules/@actions/http-client/lib/index.js + 1 modules
+var lib = __nccwpck_require__(91994);
+// EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.1/node_modules/@actions/http-client/lib/auth.js
+var auth = __nccwpck_require__(2631);
 // EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+artifact@6.2.1/node_modules/@actions/artifact/lib/internal/shared/package-version.cjs
 var package_version = __nccwpck_require__(10072);
 ;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@actions+artifact@6.2.1/node_modules/@actions/artifact/lib/internal/shared/user-agent.js
@@ -150033,8 +150407,8 @@ function uploadArtifact(name, files, rootDirectory, options) {
     });
 }
 //# sourceMappingURL=upload-artifact.js.map
-// EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+github@9.1.0/node_modules/@actions/github/lib/github.js
-var lib_github = __nccwpck_require__(39185);
+// EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+github@9.1.1/node_modules/@actions/github/lib/github.js
+var lib_github = __nccwpck_require__(89986);
 // EXTERNAL MODULE: ../../../node_modules/.pnpm/unzip-stream@0.3.4/node_modules/unzip-stream/unzip.js
 var unzip = __nccwpck_require__(79126);
 ;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@actions+artifact@6.2.1/node_modules/@actions/artifact/lib/internal/download/download-artifact.js
@@ -150300,8 +150674,8 @@ function getRetryOptions(defaultOptions, retries = defaultMaxRetryNumber, exempt
     return [retryOptions, requestOptions];
 }
 //# sourceMappingURL=retry-options.js.map
-// EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+github@9.1.0/node_modules/@actions/github/lib/utils.js + 18 modules
-var utils = __nccwpck_require__(55559);
+// EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+github@9.1.1/node_modules/@actions/github/lib/utils.js + 18 modules
+var utils = __nccwpck_require__(9356);
 ;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@octokit+plugin-request-log@6.0.0_@octokit+core@7.0.6/node_modules/@octokit/plugin-request-log/dist-src/version.js
 const VERSION = "6.0.0";
 
@@ -150820,8 +151194,8 @@ __nccwpck_require__.d(__webpack_exports__, {
 
 // UNUSED EXPORTS: attest, buildSLSAProvenancePredicate, createStorageRecord
 
-// EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+github@9.1.0/node_modules/@actions/github/lib/github.js
-var lib_github = __nccwpck_require__(39185);
+// EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+github@9.1.1/node_modules/@actions/github/lib/github.js
+var lib_github = __nccwpck_require__(89986);
 // EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+attest@3.2.0_@octokit+core@7.0.6/node_modules/@actions/attest/lib/internal/package-version.cjs
 var package_version = __nccwpck_require__(42277);
 ;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@actions+attest@3.2.0_@octokit+core@7.0.6/node_modules/@actions/attest/lib/internal/utils.js
@@ -151156,8 +151530,8 @@ function toAttestation(bundle, attestationID) {
 //# sourceMappingURL=attest.js.map
 // EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+core@3.0.1/node_modules/@actions/core/lib/core.js + 13 modules
 var core = __nccwpck_require__(90358);
-// EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.0/node_modules/@actions/http-client/lib/index.js + 1 modules
-var lib = __nccwpck_require__(93335);
+// EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.1/node_modules/@actions/http-client/lib/index.js + 1 modules
+var lib = __nccwpck_require__(91994);
 // EXTERNAL MODULE: external "node:buffer"
 var external_node_buffer_ = __nccwpck_require__(4573);
 ;// CONCATENATED MODULE: ../../../node_modules/.pnpm/jose@5.10.0/node_modules/jose/dist/node/esm/lib/buffer_utils.js
@@ -152936,10 +153310,10 @@ function file_command_prepareKeyValueMessage(key, value) {
 //# sourceMappingURL=file-command.js.map
 // EXTERNAL MODULE: external "path"
 var external_path_ = __nccwpck_require__(16928);
-// EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.0/node_modules/@actions/http-client/lib/index.js + 1 modules
-var lib = __nccwpck_require__(93335);
-// EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.0/node_modules/@actions/http-client/lib/auth.js
-var auth = __nccwpck_require__(59770);
+// EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.1/node_modules/@actions/http-client/lib/index.js + 1 modules
+var lib = __nccwpck_require__(91994);
+// EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.1/node_modules/@actions/http-client/lib/auth.js
+var auth = __nccwpck_require__(2631);
 ;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@actions+core@3.0.1/node_modules/@actions/core/lib/oidc-utils.js
 var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -154845,7 +155219,7 @@ function getIDToken(aud) {
 
 /***/ }),
 
-/***/ 63807:
+/***/ 89670:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __nccwpck_require__) => {
 
 /* harmony export */ __nccwpck_require__.d(__webpack_exports__, {
@@ -154908,15 +155282,15 @@ class Context {
 
 /***/ }),
 
-/***/ 39185:
+/***/ 89986:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __nccwpck_require__) => {
 
 /* harmony export */ __nccwpck_require__.d(__webpack_exports__, {
 /* harmony export */   Q: () => (/* binding */ getOctokit),
 /* harmony export */   _: () => (/* binding */ context)
 /* harmony export */ });
-/* harmony import */ var _context_js__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(63807);
-/* harmony import */ var _utils_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(55559);
+/* harmony import */ var _context_js__WEBPACK_IMPORTED_MODULE_0__ = __nccwpck_require__(89670);
+/* harmony import */ var _utils_js__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(9356);
 
 
 const context = new _context_js__WEBPACK_IMPORTED_MODULE_0__/* .Context */ .o();
@@ -154934,7 +155308,7 @@ function getOctokit(token, options, ...additionalPlugins) {
 
 /***/ }),
 
-/***/ 55559:
+/***/ 9356:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -154947,13 +155321,13 @@ __nccwpck_require__.d(__webpack_exports__, {
 
 // UNUSED EXPORTS: context, getUserAgentWithOrchestrationId
 
-// EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+github@9.1.0/node_modules/@actions/github/lib/context.js
-var context = __nccwpck_require__(63807);
+// EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+github@9.1.1/node_modules/@actions/github/lib/context.js
+var context = __nccwpck_require__(89670);
 // EXTERNAL MODULE: ../../../node_modules/.pnpm/@actions+http-client@3.0.2/node_modules/@actions/http-client/lib/index.js
 var lib = __nccwpck_require__(50734);
 // EXTERNAL MODULE: ../../../node_modules/.pnpm/undici@6.25.0/node_modules/undici/index.js
 var undici = __nccwpck_require__(1352);
-;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@actions+github@9.1.0/node_modules/@actions/github/lib/internal/utils.js
+;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@actions+github@9.1.1/node_modules/@actions/github/lib/internal/utils.js
 var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -159121,7 +159495,7 @@ function paginateRest(octokit) {
 paginateRest.VERSION = plugin_paginate_rest_dist_bundle_VERSION;
 
 
-;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@actions+github@9.1.0/node_modules/@actions/github/lib/utils.js
+;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@actions+github@9.1.1/node_modules/@actions/github/lib/utils.js
 
 
 // octokit + plugins
@@ -159163,7 +159537,7 @@ function getOctokitOptions(token, options) {
 
 /***/ }),
 
-/***/ 59770:
+/***/ 2631:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __nccwpck_require__) => {
 
 /* harmony export */ __nccwpck_require__.d(__webpack_exports__, {
@@ -159248,7 +159622,7 @@ class PersonalAccessTokenCredentialHandler {
 
 /***/ }),
 
-/***/ 93335:
+/***/ 91994:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -159266,7 +159640,7 @@ var external_http_namespaceObject = /*#__PURE__*/__nccwpck_require__.t(external_
 // EXTERNAL MODULE: external "https"
 var external_https_ = __nccwpck_require__(65692);
 var external_https_namespaceObject = /*#__PURE__*/__nccwpck_require__.t(external_https_, 2);
-;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.0/node_modules/@actions/http-client/lib/proxy.js
+;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.1/node_modules/@actions/http-client/lib/proxy.js
 function getProxyUrl(reqUrl) {
     const usingSsl = reqUrl.protocol === 'https:';
     if (checkBypass(reqUrl)) {
@@ -159361,7 +159735,7 @@ class DecodedURL extends URL {
 var tunnel = __nccwpck_require__(78239);
 // EXTERNAL MODULE: ../../../node_modules/.pnpm/undici@6.25.0/node_modules/undici/index.js
 var undici = __nccwpck_require__(1352);
-;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.0/node_modules/@actions/http-client/lib/index.js
+;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.1/node_modules/@actions/http-client/lib/index.js
 /* eslint-disable @typescript-eslint/no-explicit-any */
 var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -173507,7 +173881,7 @@ function Kt(e, t) {
 	return Math.round(n * (.8 + .4 * Math.random()));
 }
 //#endregion
-//#region ../../node_modules/.pnpm/zod@4.4.1/node_modules/zod/v4/core/core.js
+//#region ../../node_modules/.pnpm/zod@4.4.2/node_modules/zod/v4/core/core.js
 var qt;
 function Z(e, t, n) {
 	function r(n, r) {
@@ -173553,7 +173927,7 @@ function Zt(e) {
 	return e && Object.assign(Xt, e), Xt;
 }
 //#endregion
-//#region ../../node_modules/.pnpm/zod@4.4.1/node_modules/zod/v4/core/util.js
+//#region ../../node_modules/.pnpm/zod@4.4.2/node_modules/zod/v4/core/util.js
 function Qt(e) {
 	let t = Object.values(e).filter((e) => typeof e == "number");
 	return Object.entries(e).filter(([e, n]) => t.indexOf(+e) === -1).map(([e, t]) => t);
@@ -173806,7 +174180,7 @@ function jn(...e) {
 	} : { ...t };
 }
 //#endregion
-//#region ../../node_modules/.pnpm/zod@4.4.1/node_modules/zod/v4/core/errors.js
+//#region ../../node_modules/.pnpm/zod@4.4.2/node_modules/zod/v4/core/errors.js
 var Mn = (e, t) => {
 	e.name = "$ZodError", Object.defineProperty(e, "_zod", {
 		value: e._zod,
@@ -173847,7 +174221,7 @@ function In(e, t = (e) => e.message) {
 	return r(e), n;
 }
 //#endregion
-//#region ../../node_modules/.pnpm/zod@4.4.1/node_modules/zod/v4/core/parse.js
+//#region ../../node_modules/.pnpm/zod@4.4.2/node_modules/zod/v4/core/parse.js
 var Ln = (e) => (t, n, r, i) => {
 	let a = r ? {
 		...r,
@@ -174135,7 +174509,7 @@ var Sr = (e) => {
 }, zr = {
 	major: 4,
 	minor: 4,
-	patch: 1
+	patch: 2
 }, Br = /* @__PURE__ */ Z("$ZodType", (e, t) => {
 	var n;
 	e ??= {}, e._zod.def = t, e._zod.bag = e._zod.bag || {}, e._zod.version = zr;
@@ -174966,7 +175340,7 @@ function Ji(e, t, n, r) {
 	}
 }
 //#endregion
-//#region ../../node_modules/.pnpm/zod@4.4.1/node_modules/zod/v4/core/registries.js
+//#region ../../node_modules/.pnpm/zod@4.4.2/node_modules/zod/v4/core/registries.js
 var Yi, Xi = class {
 	constructor() {
 		this._map = /* @__PURE__ */ new WeakMap(), this._idmap = /* @__PURE__ */ new Map();
@@ -175005,7 +175379,7 @@ function Zi() {
 (Yi = globalThis).__zod_globalRegistry ?? (Yi.__zod_globalRegistry = Zi());
 var Qi = globalThis.__zod_globalRegistry;
 //#endregion
-//#region ../../node_modules/.pnpm/zod@4.4.1/node_modules/zod/v4/core/api.js
+//#region ../../node_modules/.pnpm/zod@4.4.2/node_modules/zod/v4/core/api.js
 /* @__NO_SIDE_EFFECTS__ */
 function $i(e, t) {
 	return new e({
@@ -175427,7 +175801,7 @@ function Ka(e, t) {
 	return n._zod.check = e, n;
 }
 //#endregion
-//#region ../../node_modules/.pnpm/zod@4.4.1/node_modules/zod/v4/core/to-json-schema.js
+//#region ../../node_modules/.pnpm/zod@4.4.2/node_modules/zod/v4/core/to-json-schema.js
 function qa(e) {
 	let t = e?.target ?? "draft-2020-12";
 	return t === "draft-4" && (t = "draft-04"), t === "draft-7" && (t = "draft-07"), {
@@ -175618,7 +175992,7 @@ function Za(e, t) {
 	if (r.type === "promise" || r.type === "optional" || r.type === "nonoptional" || r.type === "nullable" || r.type === "readonly" || r.type === "default" || r.type === "prefault") return Za(r.innerType, n);
 	if (r.type === "intersection") return Za(r.left, n) || Za(r.right, n);
 	if (r.type === "record" || r.type === "map") return Za(r.keyType, n) || Za(r.valueType, n);
-	if (r.type === "pipe") return Za(r.in, n) || Za(r.out, n);
+	if (r.type === "pipe") return e._zod.traits.has("$ZodCodec") ? !0 : Za(r.in, n) || Za(r.out, n);
 	if (r.type === "object") {
 		for (let e in r.shape) if (Za(r.shape[e], n)) return !0;
 		return !1;
@@ -175796,10 +176170,10 @@ var Qa = (e, t = {}) => (n) => {
 	}
 	n.default = o;
 }, vo = (e, t, n, r) => {
-	let i = e._zod.def, a = t.io === "input" ? i.in._zod.def.type === "transform" ? i.out : i.in : i.out;
-	Ja(a, t, r);
-	let o = t.seen.get(e);
-	o.ref = a;
+	let i = e._zod.def, a = i.in._zod.traits.has("$ZodTransform"), o = t.io === "input" ? a ? i.out : i.in : i.out;
+	Ja(o, t, r);
+	let s = t.seen.get(e);
+	s.ref = o;
 }, yo = (e, t, n, r) => {
 	let i = e._zod.def;
 	Ja(i.innerType, t, r);
@@ -175835,7 +176209,7 @@ function Oo(e) {
 	return /* @__PURE__ */ Ta(Do, e);
 }
 //#endregion
-//#region ../../node_modules/.pnpm/zod@4.4.1/node_modules/zod/v4/classic/errors.js
+//#region ../../node_modules/.pnpm/zod@4.4.2/node_modules/zod/v4/classic/errors.js
 var ko = (e, t) => {
 	Nn.init(e, t), e.name = "ZodError", Object.defineProperties(e, {
 		format: { value: (t) => In(e, t) },
@@ -193219,35 +193593,44 @@ while (this[h](this[T]()) && this[x].length);
 	}
 	e.shuffleArray = t;
 })), sm = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
-	Object.defineProperty(e, "__esModule", { value: !0 }), e.isInSubnet = t, e.isCorrect = n, e.numberToPaddedHex = r, e.stringToPaddedHex = i, e.testBit = a;
-	function t(e) {
-		return this.subnetMask < e.subnetMask ? !1 : this.mask(e.subnetMask) === e.mask();
-	}
-	function n(e) {
-		return function() {
-			return this.addressMinusSuffix === this.correctForm() ? this.subnetMask === e && !this.parsedSubnet ? !0 : this.parsedSubnet === String(this.subnetMask) : !1;
-		};
-	}
-	function r(e) {
-		return e.toString(16).padStart(2, "0");
-	}
-	function i(e) {
-		return r(parseInt(e, 10));
-	}
-	function a(e, t) {
-		let { length: n } = e;
-		if (t > n) return !1;
-		let r = n - t;
-		return e.substring(r, r + 1) === "1";
-	}
-})), cm = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
-	Object.defineProperty(e, "__esModule", { value: !0 }), e.RE_SUBNET_STRING = e.RE_ADDRESS = e.GROUPS = e.BITS = void 0, e.BITS = 32, e.GROUPS = 4, e.RE_ADDRESS = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/g, e.RE_SUBNET_STRING = /\/\d{1,2}$/;
-})), lm = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
 	Object.defineProperty(e, "__esModule", { value: !0 }), e.AddressError = void 0, e.AddressError = class extends Error {
 		constructor(e, t) {
 			super(e), this.name = "AddressError", this.parseMessage = t;
 		}
 	};
+})), cm = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
+	Object.defineProperty(e, "__esModule", { value: !0 }), e.isInSubnet = n, e.isCorrect = r, e.prefixLengthFromMask = i, e.numberToPaddedHex = a, e.stringToPaddedHex = o, e.testBit = s;
+	var t = sm();
+	function n(e) {
+		return this.subnetMask < e.subnetMask ? !1 : this.mask(e.subnetMask) === e.mask();
+	}
+	function r(e) {
+		return function() {
+			return this.addressMinusSuffix === this.correctForm() ? this.subnetMask === e && !this.parsedSubnet ? !0 : this.parsedSubnet === String(this.subnetMask) : !1;
+		};
+	}
+	function i(e, n) {
+		let r = e.toString(2).padStart(n, "0");
+		if (r.length > n) throw new t.AddressError("Invalid subnet mask.");
+		let i = r.indexOf("0");
+		if (i === -1) return n;
+		if (r.slice(i).includes("1")) throw new t.AddressError("Invalid subnet mask.");
+		return i;
+	}
+	function a(e) {
+		return e.toString(16).padStart(2, "0");
+	}
+	function o(e) {
+		return a(parseInt(e, 10));
+	}
+	function s(e, t) {
+		let { length: n } = e;
+		if (t > n) return !1;
+		let r = n - t;
+		return e.substring(r, r + 1) === "1";
+	}
+})), lm = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
+	Object.defineProperty(e, "__esModule", { value: !0 }), e.RE_SUBNET_STRING = e.RE_ADDRESS = e.GROUPS = e.BITS = void 0, e.BITS = 32, e.GROUPS = 4, e.RE_ADDRESS = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/g, e.RE_SUBNET_STRING = /\/\d{1,2}$/;
 })), um = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
 	var t = e && e.__createBinding || (Object.create ? (function(e, t, n, r) {
 		r === void 0 && (r = n);
@@ -193274,10 +193657,9 @@ while (this[h](this[T]()) && this[x].length);
 		return n(r, e), r;
 	};
 	Object.defineProperty(e, "__esModule", { value: !0 }), e.Address4 = void 0;
-	var i = r(sm()), a = r(cm()), o = lm();
-	e.Address4 = class e {
+	var i = r(cm()), a = r(lm()), o = sm(), s = i.isCorrect(a.BITS), c = class e {
 		constructor(e) {
-			this.groups = a.GROUPS, this.parsedAddress = [], this.parsedSubnet = "", this.subnet = "/32", this.subnetMask = 32, this.v4 = !0, this.isCorrect = i.isCorrect(a.BITS), this.isInSubnet = i.isInSubnet, this.address = e;
+			this.groups = a.GROUPS, this.parsedAddress = [], this.parsedSubnet = "", this.subnet = "/32", this.subnetMask = 32, this.v4 = !0, this.isCorrect = s, this.isInSubnet = i.isInSubnet, this.address = e;
 			let t = a.RE_SUBNET_STRING.exec(e);
 			if (t) {
 				if (this.parsedSubnet = t[0].replace("/", ""), this.subnetMask = parseInt(this.parsedSubnet, 10), this.subnet = `/${this.subnetMask}`, this.subnetMask < 0 || this.subnetMask > a.BITS) throw new o.AddressError("Invalid subnet mask.");
@@ -193300,16 +193682,32 @@ while (this[h](this[T]()) && this[x].length);
 		correctForm() {
 			return this.parsedAddress.map((e) => parseInt(e, 10)).join(".");
 		}
+		static fromAddressAndMask(t, n) {
+			return new e(`${t}/${i.prefixLengthFromMask(new e(n).bigInt(), a.BITS)}`);
+		}
+		static fromAddressAndWildcardMask(t, n) {
+			let r = new e(n).bigInt() ^ (BigInt(1) << BigInt(a.BITS)) - BigInt(1);
+			return new e(`${t}/${i.prefixLengthFromMask(r, a.BITS)}`);
+		}
+		static fromWildcard(t) {
+			let n = t.split(".");
+			if (n.length !== a.GROUPS) throw new o.AddressError("Wildcard pattern must have 4 octets");
+			let r = -1;
+			for (let e = 0; e < n.length; e++) if (n[e] === "*") r === -1 && (r = e);
+			else if (r !== -1) throw new o.AddressError("Wildcard `*` must only appear in trailing octets (e.g. `192.168.0.*`)");
+			let i = r === -1 ? 0 : n.length - r, s = n.map((e) => e === "*" ? "0" : e), c = a.BITS - i * 8;
+			return new e(`${s.join(".")}/${c}`);
+		}
 		static fromHex(t) {
-			let n = t.replace(/:/g, "").padStart(8, "0"), r = [], i;
-			for (i = 0; i < 8; i += 2) {
-				let e = n.slice(i, i + 2);
-				r.push(parseInt(e, 16));
-			}
+			let n = t.replace(/:/g, "");
+			if (!/^[0-9a-fA-F]{8}$/.test(n)) throw new o.AddressError("IPv4 hex must be exactly 8 hex digits");
+			let r = [];
+			for (let e = 0; e < 8; e += 2) r.push(parseInt(n.slice(e, e + 2), 16));
 			return new e(r.join("."));
 		}
 		static fromInteger(t) {
-			return e.fromHex(t.toString(16));
+			if (!Number.isInteger(t) || t < 0 || t > 4294967295) throw new o.AddressError("IPv4 integer must be in the range 0 to 2**32 - 1");
+			return e.fromHex(t.toString(16).padStart(8, "0"));
 		}
 		static fromArpa(t) {
 			return new e(t.replace(/(\.in-addr\.arpa)?\.$/, "").split(".").reverse().join("."));
@@ -193348,8 +193746,18 @@ while (this[h](this[T]()) && this[x].length);
 			let t = BigInt("1");
 			return e.fromBigInt(this._endAddress() - t);
 		}
+		subnetMaskAddress() {
+			return e.fromBigInt(BigInt(`0b${"1".repeat(this.subnetMask)}${"0".repeat(a.BITS - this.subnetMask)}`));
+		}
+		wildcardMask() {
+			return e.fromBigInt(BigInt(`0b${"0".repeat(this.subnetMask)}${"1".repeat(a.BITS - this.subnetMask)}`));
+		}
+		networkForm() {
+			return `${this.startAddress().correctForm()}/${this.subnetMask}`;
+		}
 		static fromBigInt(t) {
-			return e.fromHex(t.toString(16));
+			if (t < 0n || t > 4294967295n) throw new o.AddressError("IPv4 BigInt must be in the range 0 to 2**32 - 1");
+			return e.fromHex(t.toString(16).padStart(8, "0"));
 		}
 		static fromByteArray(e) {
 			if (e.length !== 4) throw new o.AddressError("IPv4 addresses require exactly 4 bytes");
@@ -193372,16 +193780,40 @@ while (this[h](this[T]()) && this[x].length);
 			return e.omitSuffix ? t : `${t}.in-addr.arpa.`;
 		}
 		isMulticast() {
-			return this.isInSubnet(new e("224.0.0.0/4"));
+			return this.isInSubnet(l);
+		}
+		isPrivate() {
+			return u.some((e) => this.isInSubnet(e));
+		}
+		isLoopback() {
+			return this.isInSubnet(d);
+		}
+		isLinkLocal() {
+			return this.isInSubnet(f);
+		}
+		isUnspecified() {
+			return this.isInSubnet(p);
+		}
+		isBroadcast() {
+			return this.isInSubnet(m);
+		}
+		isCGNAT() {
+			return this.isInSubnet(h);
 		}
 		binaryZeroPad() {
-			return this.bigInt().toString(2).padStart(a.BITS, "0");
+			return this._binaryZeroPad === void 0 && (this._binaryZeroPad = this.bigInt().toString(2).padStart(a.BITS, "0")), this._binaryZeroPad;
 		}
 		groupForV6() {
 			let e = this.parsedAddress;
 			return this.address.replace(a.RE_ADDRESS, `<span class="hover-group group-v4 group-6">${e.slice(0, 2).join(".")}</span>.<span class="hover-group group-v4 group-7">${e.slice(2, 4).join(".")}</span>`);
 		}
 	};
+	e.Address4 = c;
+	var l = new c("224.0.0.0/4"), u = [
+		new c("10.0.0.0/8"),
+		new c("172.16.0.0/12"),
+		new c("192.168.0.0/16")
+	], d = new c("127.0.0.0/8"), f = new c("169.254.0.0/16"), p = new c("0.0.0.0/32"), m = new c("255.255.255.255/32"), h = new c("100.64.0.0/10");
 })), dm = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
 	Object.defineProperty(e, "__esModule", { value: !0 }), e.RE_URL_WITH_PORT = e.RE_URL = e.RE_ZONE_STRING = e.RE_SUBNET_STRING = e.RE_BAD_ADDRESS = e.RE_BAD_CHARACTERS = e.TYPES = e.SCOPES = e.GROUPS = e.BITS = void 0, e.BITS = 128, e.GROUPS = 8, e.SCOPES = {
 		0: "Reserved",
@@ -193414,24 +193846,32 @@ while (this[h](this[T]()) && this[x].length);
 		"::/128": "Unspecified",
 		"::1/128": "Loopback",
 		"ff00::/8": "Multicast",
-		"fe80::/10": "Link-local unicast"
+		"fe80::/10": "Link-local unicast",
+		"fc00::/7": "Unique local",
+		"2002::/16": "6to4",
+		"2001:db8::/32": "Documentation",
+		"64:ff9b::/96": "NAT64 (well-known)",
+		"64:ff9b:1::/48": "NAT64 (local-use)"
 	}, e.RE_BAD_CHARACTERS = /([^0-9a-f:/%])/gi, e.RE_BAD_ADDRESS = /([0-9a-f]{5,}|:{3,}|[^:]:$|^:[^:]|\/$)/gi, e.RE_SUBNET_STRING = /\/\d{1,3}(?=%|$)/, e.RE_ZONE_STRING = /%.*$/, e.RE_URL = /^\[{0,1}([0-9a-f:]+)\]{0,1}/, e.RE_URL_WITH_PORT = /\[([0-9a-f:]+)\]:([0-9]{1,5})/;
 })), fm = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
-	Object.defineProperty(e, "__esModule", { value: !0 }), e.spanAllZeroes = t, e.spanAll = n, e.spanLeadingZeroes = i, e.simpleGroup = a;
+	Object.defineProperty(e, "__esModule", { value: !0 }), e.escapeHtml = t, e.spanAllZeroes = n, e.spanAll = r, e.spanLeadingZeroes = a, e.simpleGroup = o;
 	function t(e) {
-		return e.replace(/(0+)/g, "<span class=\"zero\">$1</span>");
+		return e.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 	}
-	function n(e, n = 0) {
-		return e.split("").map((e, r) => `<span class="digit value-${e} position-${r + n}">${t(e)}</span>`).join("");
+	function n(e) {
+		return t(e).replace(/(0+)/g, "<span class=\"zero\">$1</span>");
 	}
-	function r(e) {
-		return e.replace(/^(0+)/, "<span class=\"zero\">$1</span>");
+	function r(e, r = 0) {
+		return e.split("").map((e, i) => `<span class="digit value-${t(e)} position-${i + r}">${n(e)}</span>`).join("");
 	}
 	function i(e) {
-		return e.split(":").map((e) => r(e)).join(":");
+		return t(e).replace(/^(0+)/, "<span class=\"zero\">$1</span>");
 	}
-	function a(e, t = 0) {
-		return e.split(":").map((e, n) => /group-v4/.test(e) ? e : `<span class="hover-group group-${n + t}">${r(e)}</span>`);
+	function a(e) {
+		return e.split(":").map((e) => i(e)).join(":");
+	}
+	function o(e, t = 0) {
+		return e.split(":").map((e, n) => /group-v4/.test(e) ? e : `<span class="hover-group group-${n + t}">${i(e)}</span>`);
 	}
 })), pm = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
 	var t = e && e.__createBinding || (Object.create ? (function(e, t, n, r) {
@@ -193513,32 +193953,32 @@ while (this[h](this[T]()) && this[x].length);
 		return n(r, e), r;
 	};
 	Object.defineProperty(e, "__esModule", { value: !0 }), e.Address6 = void 0;
-	var i = r(sm()), a = r(cm()), o = r(dm()), s = r(fm()), c = um(), l = pm(), u = lm(), d = sm();
-	function f(e) {
+	var i = r(cm()), a = r(lm()), o = r(dm()), s = r(fm()), c = um(), l = pm(), u = sm(), d = cm(), f = i.isCorrect(o.BITS);
+	function p(e) {
 		if (!e) throw Error("Assertion failed.");
 	}
-	function p(e) {
+	function m(e) {
 		let t = /(\d+)(\d{3})/;
 		for (; t.test(e);) e = e.replace(t, "$1,$2");
 		return e;
 	}
-	function m(e) {
+	function h(e) {
 		return e = e.replace(/^(0{1,})([1-9]+)$/, "<span class=\"parse-error\">$1</span>$2"), e = e.replace(/^(0{1,})(0)$/, "<span class=\"parse-error\">$1</span>$2"), e;
 	}
-	function h(e, t) {
+	function g(e, t) {
 		let n = [], r = [], i;
 		for (i = 0; i < e.length; i++) i < t[0] ? n.push(e[i]) : i > t[1] && r.push(e[i]);
 		return n.concat(["compact"]).concat(r);
 	}
-	function g(e) {
+	function _(e) {
 		return parseInt(e, 16).toString(16).padStart(4, "0");
 	}
-	function _(e) {
+	function v(e) {
 		return e & 255;
 	}
-	e.Address6 = class e {
+	var y = class e {
 		constructor(e, t) {
-			this.addressMinusSuffix = "", this.parsedSubnet = "", this.subnet = "/128", this.subnetMask = 128, this.v4 = !1, this.zone = "", this.isInSubnet = i.isInSubnet, this.isCorrect = i.isCorrect(o.BITS), t === void 0 ? this.groups = o.GROUPS : this.groups = t, this.address = e;
+			this.addressMinusSuffix = "", this.parsedSubnet = "", this.subnet = "/128", this.subnetMask = 128, this.v4 = !1, this.zone = "", this.isInSubnet = i.isInSubnet, this.isCorrect = f, t === void 0 ? this.groups = o.GROUPS : this.groups = t, this.address = e;
 			let n = o.RE_SUBNET_STRING.exec(e);
 			if (n) {
 				if (this.parsedSubnet = n[0].replace("/", ""), this.subnetMask = parseInt(this.parsedSubnet, 10), this.subnet = `/${this.subnetMask}`, Number.isNaN(this.subnetMask) || this.subnetMask < 0 || this.subnetMask > o.BITS) throw new u.AddressError("Invalid subnet mask.");
@@ -193555,8 +193995,9 @@ while (this[h](this[T]()) && this[x].length);
 			}
 		}
 		static fromBigInt(t) {
-			let n = t.toString(16).padStart(32, "0"), r = [], i;
-			for (i = 0; i < o.GROUPS; i++) r.push(n.slice(i * 4, (i + 1) * 4));
+			if (t < 0n || t > (1n << BigInt(o.BITS)) - 1n) throw new u.AddressError("IPv6 BigInt must be in the range 0 to 2**128 - 1");
+			let n = t.toString(16).padStart(32, "0"), r = [];
+			for (let e = 0; e < o.GROUPS; e++) r.push(n.slice(e * 4, (e + 1) * 4));
 			return new e(r.join(":"));
 		}
 		static fromURL(t) {
@@ -193581,6 +194022,34 @@ while (this[h](this[T]()) && this[x].length);
 				port: r
 			};
 		}
+		static fromAddressAndMask(t, n) {
+			return new e(`${t}/${i.prefixLengthFromMask(new e(n).bigInt(), o.BITS)}`);
+		}
+		static fromAddressAndWildcardMask(t, n) {
+			let r = new e(n).bigInt() ^ (BigInt(1) << BigInt(o.BITS)) - BigInt(1);
+			return new e(`${t}/${i.prefixLengthFromMask(r, o.BITS)}`);
+		}
+		static fromWildcard(t) {
+			if (t.includes("%") || t.includes("/")) throw new u.AddressError("Wildcard pattern must not include a zone or CIDR suffix");
+			let n = t.split("::");
+			if (n.length > 2) throw new u.AddressError("Wildcard pattern cannot contain more than one '::'");
+			let r;
+			if (n.length === 2) {
+				let e = n[0] === "" ? [] : n[0].split(":"), t = n[1] === "" ? [] : n[1].split(":"), i = o.GROUPS - e.length - t.length;
+				if (i < 1) throw new u.AddressError("Wildcard pattern with '::' has too many groups");
+				r = [
+					...e,
+					...Array(i).fill("0"),
+					...t
+				];
+			} else r = t.split(":");
+			if (r.length !== o.GROUPS) throw new u.AddressError("Wildcard pattern must have 8 groups");
+			let i = -1;
+			for (let e = 0; e < r.length; e++) if (r[e] === "*") i === -1 && (i = e);
+			else if (i !== -1) throw new u.AddressError("Wildcard `*` must only appear in trailing groups (e.g. `2001:db8:*:*:*:*:*:*`)");
+			let a = i === -1 ? 0 : r.length - i, s = r.map((e) => e === "*" ? "0" : e), c = o.BITS - a * 16;
+			return new e(`${s.join(":")}/${c}`);
+		}
 		static fromAddress4(t) {
 			let n = new c.Address4(t), r = o.BITS - (a.BITS - n.subnetMask);
 			return new e(`::ffff:${n.correctForm()}/${r}`);
@@ -193603,7 +194072,7 @@ while (this[h](this[T]()) && this[x].length);
 		}
 		possibleSubnets(e = 128) {
 			let t = o.BITS - this.subnetMask - Math.abs(e - o.BITS);
-			return t < 0 ? "0" : p((BigInt("2") ** BigInt(t)).toString(10));
+			return t < 0 ? "0" : m((BigInt("2") ** BigInt(t)).toString(10));
 		}
 		_startAddress() {
 			return BigInt(`0b${this.mask() + "0".repeat(o.BITS - this.subnetMask)}`);
@@ -193625,12 +194094,24 @@ while (this[h](this[T]()) && this[x].length);
 			let t = BigInt("1");
 			return e.fromBigInt(this._endAddress() - t);
 		}
+		subnetMaskAddress() {
+			return e.fromBigInt(BigInt(`0b${"1".repeat(this.subnetMask)}${"0".repeat(o.BITS - this.subnetMask)}`));
+		}
+		wildcardMask() {
+			return e.fromBigInt(BigInt(`0b${"0".repeat(this.subnetMask)}${"1".repeat(o.BITS - this.subnetMask)}`));
+		}
+		networkForm() {
+			return `${this.startAddress().correctForm()}/${this.subnetMask}`;
+		}
 		getScope() {
-			let e = o.SCOPES[parseInt(this.getBits(12, 16).toString(10), 10)];
-			return this.getType() === "Global unicast" && e !== "Link local" && (e = "Global"), e || "Unknown";
+			let e = this.getType();
+			return e === "Multicast" || e.startsWith("Multicast ") ? o.SCOPES[parseInt(this.getBits(12, 16).toString(10), 10)] || "Unknown" : e === "Link-local unicast" || e === "Loopback" ? "Link local" : e === "Unspecified" ? "Unknown" : "Global";
 		}
 		getType() {
-			for (let t of Object.keys(o.TYPES)) if (this.isInSubnet(new e(t))) return o.TYPES[t];
+			for (let e = 0; e < b.length; e++) {
+				let t = b[e];
+				if (this.isInSubnet(t[0])) return t[1];
+			}
 			return "Global unicast";
 		}
 		getBits(e, t) {
@@ -193662,20 +194143,24 @@ while (this[h](this[T]()) && this[x].length);
 			let i = r.map((e) => e[1] - e[0] + 1);
 			if (r.length > 0) {
 				let e = i.indexOf(Math.max(...i));
-				t = h(this.parsedAddress, r[e]);
+				t = g(this.parsedAddress, r[e]);
 			} else t = this.parsedAddress;
 			for (e = 0; e < t.length; e++) t[e] !== "compact" && (t[e] = parseInt(t[e], 16).toString(16));
 			let a = t.join(":");
 			return a = a.replace(/^compact$/, "::"), a = a.replace(/(^compact)|(compact$)/, ":"), a = a.replace(/compact/, ""), a;
 		}
 		binaryZeroPad() {
-			return this.bigInt().toString(2).padStart(o.BITS, "0");
+			return this._binaryZeroPad === void 0 && (this._binaryZeroPad = this.bigInt().toString(2).padStart(o.BITS, "0")), this._binaryZeroPad;
 		}
 		parse4in6(e) {
+			if (e.indexOf(".") === -1) return e;
 			let t = e.split(":"), n = t.slice(-1)[0].match(a.RE_ADDRESS);
 			if (n) {
 				this.parsedAddress4 = n[0], this.address4 = new c.Address4(this.parsedAddress4);
-				for (let t = 0; t < this.address4.groups; t++) if (/^0[0-9]+/.test(this.address4.parsedAddress[t])) throw new u.AddressError("IPv4 addresses can't have leading zeroes.", e.replace(a.RE_ADDRESS, this.address4.parsedAddress.map(m).join(".")));
+				for (let e = 0; e < this.address4.groups; e++) if (/^0[0-9]+/.test(this.address4.parsedAddress[e])) {
+					let e = this.address4.parsedAddress.map(h).join("."), n = t.slice(0, -1).map(s.escapeHtml).join(":"), r = t.length > 1 ? ":" : "";
+					throw new u.AddressError("IPv4 addresses can't have leading zeroes.", `${n}${r}${e}`);
+				}
 				this.v4 = !0, t[t.length - 1] = this.address4.toGroup6(), e = t.join(":");
 			}
 			return e;
@@ -193701,24 +194186,24 @@ while (this[h](this[T]()) && this[x].length);
 			return r;
 		}
 		canonicalForm() {
-			return this.parsedAddress.map(g).join(":");
+			return this.parsedAddress.map(_).join(":");
 		}
 		decimal() {
 			return this.parsedAddress.map((e) => parseInt(e, 16).toString(10).padStart(5, "0")).join(":");
 		}
 		bigInt() {
-			return BigInt(`0x${this.parsedAddress.map(g).join("")}`);
+			return BigInt(`0x${this.parsedAddress.map(_).join("")}`);
 		}
 		to4() {
 			let e = this.binaryZeroPad().split("");
-			return c.Address4.fromHex(BigInt(`0b${e.slice(96, 128).join("")}`).toString(16));
+			return c.Address4.fromHex(BigInt(`0b${e.slice(96, 128).join("")}`).toString(16).padStart(8, "0"));
 		}
 		to4in6() {
 			let t = this.to4(), n = new e(this.parsedAddress.slice(0, 6).join(":"), 6).correctForm(), r = "";
 			return /:$/.test(n) || (r = ":"), n + r + t.address;
 		}
 		inspectTeredo() {
-			let e = this.getBitsBase16(0, 32), t = (this.getBits(80, 96) ^ BigInt("0xffff")).toString(), n = c.Address4.fromHex(this.getBitsBase16(32, 64)), r = this.getBits(96, 128), i = c.Address4.fromHex((r ^ BigInt("0xffffffff")).toString(16)), a = this.getBitsBase2(64, 80), o = (0, d.testBit)(a, 15), s = (0, d.testBit)(a, 14), l = (0, d.testBit)(a, 8), u = (0, d.testBit)(a, 9), f = BigInt(`0b${a.slice(2, 6) + a.slice(8, 16)}`).toString(10);
+			let e = this.getBitsBase16(0, 32), t = (this.getBits(80, 96) ^ BigInt("0xffff")).toString(), n = c.Address4.fromHex(this.getBitsBase16(32, 64)), r = this.getBits(96, 128), i = c.Address4.fromHex((r ^ BigInt("0xffffffff")).toString(16).padStart(8, "0")), a = this.getBitsBase2(64, 80), o = (0, d.testBit)(a, 15), s = (0, d.testBit)(a, 14), l = (0, d.testBit)(a, 8), u = (0, d.testBit)(a, 9), f = BigInt(`0b${a.slice(2, 6) + a.slice(8, 16)}`).toString(10);
 			return {
 				prefix: `${e.slice(0, 4)}:${e.slice(4, 8)}`,
 				server4: n.address,
@@ -193750,16 +194235,43 @@ while (this[h](this[T]()) && this[x].length);
 				"/16"
 			].join(":")) : null;
 		}
+		static fromAddress4Nat64(t, n = "64:ff9b::/96") {
+			let r = new c.Address4(t), i = new e(n), a = i.subnetMask;
+			if (a !== 32 && a !== 40 && a !== 48 && a !== 56 && a !== 64 && a !== 96) throw new u.AddressError("NAT64 prefix length must be 32, 40, 48, 56, 64, or 96");
+			let o = i.binaryZeroPad(), s = r.binaryZeroPad(), l;
+			if (a === 96) l = o.slice(0, 96) + s;
+			else {
+				let e = 64 - a;
+				l = o.slice(0, a) + s.slice(0, e) + "00000000" + s.slice(e) + "0".repeat(56 - (32 - e));
+			}
+			let d = BigInt(`0b${l}`).toString(16).padStart(32, "0"), f = [];
+			for (let e = 0; e < 8; e++) f.push(d.slice(e * 4, (e + 1) * 4));
+			return new e(f.join(":"));
+		}
+		toAddress4Nat64(t = "64:ff9b::/96") {
+			let n = new e(t), r = n.subnetMask;
+			if (r !== 32 && r !== 40 && r !== 48 && r !== 56 && r !== 64 && r !== 96) throw new u.AddressError("NAT64 prefix length must be 32, 40, 48, 56, 64, or 96");
+			if (!this.isInSubnet(n)) return null;
+			let i = this.binaryZeroPad(), a;
+			if (r === 96) a = i.slice(96, 128);
+			else {
+				let e = 64 - r;
+				a = i.slice(r, r + e) + i.slice(72, 72 + (32 - e));
+			}
+			let o = [];
+			for (let e = 0; e < 4; e++) o.push(parseInt(a.slice(e * 8, (e + 1) * 8), 2).toString());
+			return new c.Address4(o.join("."));
+		}
 		toByteArray() {
 			let e = this.bigInt().toString(16), t = `${"0".repeat(e.length % 2)}${e}`, n = [];
 			for (let e = 0, r = t.length; e < r; e += 2) n.push(parseInt(t.substring(e, e + 2), 16));
 			return n;
 		}
 		toUnsignedByteArray() {
-			return this.toByteArray().map(_);
+			return this.toByteArray().map(v);
 		}
 		static fromByteArray(e) {
-			return this.fromUnsignedByteArray(e.map(_));
+			return this.fromUnsignedByteArray(e.map(v));
 		}
 		static fromUnsignedByteArray(t) {
 			let n = BigInt("256"), r = BigInt("0"), i = BigInt("1");
@@ -193773,19 +194285,32 @@ while (this[h](this[T]()) && this[x].length);
 			return this.getBitsBase2(0, 64) === "1111111010000000000000000000000000000000000000000000000000000000";
 		}
 		isMulticast() {
-			return this.getType() === "Multicast";
+			let e = this.getType();
+			return e === "Multicast" || e.startsWith("Multicast ");
 		}
 		is4() {
 			return this.v4;
 		}
+		isMapped4() {
+			return this.isInSubnet(T);
+		}
 		isTeredo() {
-			return this.isInSubnet(new e("2001::/32"));
+			return this.isInSubnet(x);
 		}
 		is6to4() {
-			return this.isInSubnet(new e("2002::/16"));
+			return this.isInSubnet(S);
 		}
 		isLoopback() {
 			return this.getType() === "Loopback";
+		}
+		isULA() {
+			return this.isInSubnet(C);
+		}
+		isUnspecified() {
+			return this.getType() === "Unspecified";
+		}
+		isDocumentation() {
+			return this.isInSubnet(w);
 		}
 		href(e) {
 			return e = e === void 0 ? "" : `:${e}`, `http://[${this.correctForm()}]${e}/`;
@@ -193794,17 +194319,17 @@ while (this[h](this[T]()) && this[x].length);
 			e ||= {}, e.className === void 0 && (e.className = ""), e.prefix === void 0 && (e.prefix = "/#address="), e.v4 === void 0 && (e.v4 = !1);
 			let t = this.correctForm;
 			e.v4 && (t = this.to4in6);
-			let n = t.call(this);
-			return e.className ? `<a href="${e.prefix}${n}" class="${e.className}">${n}</a>` : `<a href="${e.prefix}${n}">${n}</a>`;
+			let n = t.call(this), r = s.escapeHtml(`${e.prefix}${n}`), i = s.escapeHtml(n);
+			return e.className ? `<a href="${r}" class="${s.escapeHtml(e.className)}">${i}</a>` : `<a href="${r}">${i}</a>`;
 		}
 		group() {
-			if (this.elidedGroups === 0) return s.simpleGroup(this.address).join(":");
-			f(typeof this.elidedGroups == "number"), f(typeof this.elisionBegin == "number");
-			let e = [], [t, n] = this.address.split("::");
+			if (this.elidedGroups === 0) return s.simpleGroup(this.addressMinusSuffix).join(":");
+			p(typeof this.elidedGroups == "number"), p(typeof this.elisionBegin == "number");
+			let e = [], [t, n] = this.addressMinusSuffix.split("::");
 			t.length ? e.push(...s.simpleGroup(t)) : e.push("");
 			let r = ["hover-group"];
 			for (let e = this.elisionBegin; e < this.elisionBegin + this.elidedGroups; e++) r.push(`group-${e}`);
-			return e.push(`<span class="${r.join(" ")}"></span>`), n.length ? e.push(...s.simpleGroup(n, this.elisionEnd)) : e.push(""), this.is4() && (f(this.address4 instanceof c.Address4), e.pop(), e.push(this.address4.groupForV6())), e.join(":");
+			return e.push(`<span class="${r.join(" ")}"></span>`), n.length ? e.push(...s.simpleGroup(n, this.elisionEnd)) : e.push(""), this.is4() && (p(this.address4 instanceof c.Address4), e.pop(), e.push(this.address4.groupForV6())), e.join(":");
 		}
 		regularExpressionString(t = !1) {
 			let n = [], r = new e(this.correctForm());
@@ -193812,7 +194337,7 @@ while (this[h](this[T]()) && this[x].length);
 			else if (r.elidedGroups === o.GROUPS) n.push((0, l.possibleElisions)(o.GROUPS));
 			else {
 				let e = r.address.split("::");
-				e[0].length && n.push((0, l.simpleRegularExpression)(e[0].split(":"))), f(typeof r.elidedGroups == "number"), n.push((0, l.possibleElisions)(r.elidedGroups, e[0].length !== 0, e[1].length !== 0)), e[1].length && n.push((0, l.simpleRegularExpression)(e[1].split(":"))), n = [n.join(":")];
+				e[0].length && n.push((0, l.simpleRegularExpression)(e[0].split(":"))), p(typeof r.elidedGroups == "number"), n.push((0, l.possibleElisions)(r.elidedGroups, e[0].length !== 0, e[1].length !== 0)), e[1].length && n.push((0, l.simpleRegularExpression)(e[1].split(":"))), n = [n.join(":")];
 			}
 			return t || (n = [
 				"(?=^|",
@@ -193828,6 +194353,8 @@ while (this[h](this[T]()) && this[x].length);
 			return new RegExp(this.regularExpressionString(e), "i");
 		}
 	};
+	e.Address6 = y;
+	var b = Object.keys(o.TYPES).map((e) => [new y(e), o.TYPES[e]]), x = new y("2001::/32"), S = new y("2002::/16"), C = new y("fc00::/7"), w = new y("2001:db8::/32"), T = new y("::ffff:0:0/96");
 })), hm = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
 	var t = e && e.__createBinding || (Object.create ? (function(e, t, n, r) {
 		r === void 0 && (r = n);
@@ -193868,7 +194395,7 @@ while (this[h](this[T]()) && this[x].length);
 			return a.Address6;
 		}
 	});
-	var o = lm();
+	var o = sm();
 	Object.defineProperty(e, "AddressError", {
 		enumerable: !0,
 		get: function() {

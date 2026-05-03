@@ -64371,7 +64371,7 @@ __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __we
 /* harmony import */ var node_fs_promises__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__nccwpck_require__.n(node_fs_promises__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1__ = __nccwpck_require__(6760);
 /* harmony import */ var node_path__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__nccwpck_require__.n(node_path__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_2__ = __nccwpck_require__(5021);
+/* harmony import */ var _actions_core__WEBPACK_IMPORTED_MODULE_2__ = __nccwpck_require__(4761);
 /* harmony import */ var undici__WEBPACK_IMPORTED_MODULE_3__ = __nccwpck_require__(1012);
 /* harmony import */ var _node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_4__ = __nccwpck_require__(2862);
 // SPDX-License-Identifier: Apache-2.0 OR MIT
@@ -64804,7 +64804,7 @@ module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("util");
 
 /***/ }),
 
-/***/ 5021:
+/***/ 4761:
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __nccwpck_require__) => {
 
 
@@ -64993,7 +64993,7 @@ const external_path_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.me
 var external_http_ = __nccwpck_require__(8611);
 // EXTERNAL MODULE: external "https"
 var external_https_ = __nccwpck_require__(5692);
-;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.0/node_modules/@actions/http-client/lib/proxy.js
+;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.1/node_modules/@actions/http-client/lib/proxy.js
 function getProxyUrl(reqUrl) {
     const usingSsl = reqUrl.protocol === 'https:';
     if (checkBypass(reqUrl)) {
@@ -65088,7 +65088,7 @@ class DecodedURL extends URL {
 var node_modules_tunnel = __nccwpck_require__(8239);
 // EXTERNAL MODULE: ../../../node_modules/.pnpm/undici@6.25.0/node_modules/undici/index.js
 var undici = __nccwpck_require__(1352);
-;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.0/node_modules/@actions/http-client/lib/index.js
+;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.1/node_modules/@actions/http-client/lib/index.js
 /* eslint-disable @typescript-eslint/no-explicit-any */
 var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -65785,7 +65785,7 @@ class lib_HttpClient {
 }
 const lowercaseKeys = (obj) => Object.keys(obj).reduce((c, k) => ((c[k.toLowerCase()] = obj[k]), c), {});
 //# sourceMappingURL=index.js.map
-;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.0/node_modules/@actions/http-client/lib/auth.js
+;// CONCATENATED MODULE: ../../../node_modules/.pnpm/@actions+http-client@4.0.1/node_modules/@actions/http-client/lib/auth.js
 var auth_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -81072,7 +81072,7 @@ function Kt(e, t) {
 	return Math.round(n * (.8 + .4 * Math.random()));
 }
 //#endregion
-//#region ../../node_modules/.pnpm/zod@4.4.1/node_modules/zod/v4/core/core.js
+//#region ../../node_modules/.pnpm/zod@4.4.2/node_modules/zod/v4/core/core.js
 var qt;
 function Z(e, t, n) {
 	function r(n, r) {
@@ -81118,7 +81118,7 @@ function Zt(e) {
 	return e && Object.assign(Xt, e), Xt;
 }
 //#endregion
-//#region ../../node_modules/.pnpm/zod@4.4.1/node_modules/zod/v4/core/util.js
+//#region ../../node_modules/.pnpm/zod@4.4.2/node_modules/zod/v4/core/util.js
 function Qt(e) {
 	let t = Object.values(e).filter((e) => typeof e == "number");
 	return Object.entries(e).filter(([e, n]) => t.indexOf(+e) === -1).map(([e, t]) => t);
@@ -81371,7 +81371,7 @@ function jn(...e) {
 	} : { ...t };
 }
 //#endregion
-//#region ../../node_modules/.pnpm/zod@4.4.1/node_modules/zod/v4/core/errors.js
+//#region ../../node_modules/.pnpm/zod@4.4.2/node_modules/zod/v4/core/errors.js
 var Mn = (e, t) => {
 	e.name = "$ZodError", Object.defineProperty(e, "_zod", {
 		value: e._zod,
@@ -81412,7 +81412,7 @@ function In(e, t = (e) => e.message) {
 	return r(e), n;
 }
 //#endregion
-//#region ../../node_modules/.pnpm/zod@4.4.1/node_modules/zod/v4/core/parse.js
+//#region ../../node_modules/.pnpm/zod@4.4.2/node_modules/zod/v4/core/parse.js
 var Ln = (e) => (t, n, r, i) => {
 	let a = r ? {
 		...r,
@@ -81700,7 +81700,7 @@ var Sr = (e) => {
 }, zr = {
 	major: 4,
 	minor: 4,
-	patch: 1
+	patch: 2
 }, Br = /* @__PURE__ */ Z("$ZodType", (e, t) => {
 	var n;
 	e ??= {}, e._zod.def = t, e._zod.bag = e._zod.bag || {}, e._zod.version = zr;
@@ -82531,7 +82531,7 @@ function Ji(e, t, n, r) {
 	}
 }
 //#endregion
-//#region ../../node_modules/.pnpm/zod@4.4.1/node_modules/zod/v4/core/registries.js
+//#region ../../node_modules/.pnpm/zod@4.4.2/node_modules/zod/v4/core/registries.js
 var Yi, Xi = class {
 	constructor() {
 		this._map = /* @__PURE__ */ new WeakMap(), this._idmap = /* @__PURE__ */ new Map();
@@ -82570,7 +82570,7 @@ function Zi() {
 (Yi = globalThis).__zod_globalRegistry ?? (Yi.__zod_globalRegistry = Zi());
 var Qi = globalThis.__zod_globalRegistry;
 //#endregion
-//#region ../../node_modules/.pnpm/zod@4.4.1/node_modules/zod/v4/core/api.js
+//#region ../../node_modules/.pnpm/zod@4.4.2/node_modules/zod/v4/core/api.js
 /* @__NO_SIDE_EFFECTS__ */
 function $i(e, t) {
 	return new e({
@@ -82992,7 +82992,7 @@ function Ka(e, t) {
 	return n._zod.check = e, n;
 }
 //#endregion
-//#region ../../node_modules/.pnpm/zod@4.4.1/node_modules/zod/v4/core/to-json-schema.js
+//#region ../../node_modules/.pnpm/zod@4.4.2/node_modules/zod/v4/core/to-json-schema.js
 function qa(e) {
 	let t = e?.target ?? "draft-2020-12";
 	return t === "draft-4" && (t = "draft-04"), t === "draft-7" && (t = "draft-07"), {
@@ -83183,7 +83183,7 @@ function Za(e, t) {
 	if (r.type === "promise" || r.type === "optional" || r.type === "nonoptional" || r.type === "nullable" || r.type === "readonly" || r.type === "default" || r.type === "prefault") return Za(r.innerType, n);
 	if (r.type === "intersection") return Za(r.left, n) || Za(r.right, n);
 	if (r.type === "record" || r.type === "map") return Za(r.keyType, n) || Za(r.valueType, n);
-	if (r.type === "pipe") return Za(r.in, n) || Za(r.out, n);
+	if (r.type === "pipe") return e._zod.traits.has("$ZodCodec") ? !0 : Za(r.in, n) || Za(r.out, n);
 	if (r.type === "object") {
 		for (let e in r.shape) if (Za(r.shape[e], n)) return !0;
 		return !1;
@@ -83361,10 +83361,10 @@ var Qa = (e, t = {}) => (n) => {
 	}
 	n.default = o;
 }, vo = (e, t, n, r) => {
-	let i = e._zod.def, a = t.io === "input" ? i.in._zod.def.type === "transform" ? i.out : i.in : i.out;
-	Ja(a, t, r);
-	let o = t.seen.get(e);
-	o.ref = a;
+	let i = e._zod.def, a = i.in._zod.traits.has("$ZodTransform"), o = t.io === "input" ? a ? i.out : i.in : i.out;
+	Ja(o, t, r);
+	let s = t.seen.get(e);
+	s.ref = o;
 }, yo = (e, t, n, r) => {
 	let i = e._zod.def;
 	Ja(i.innerType, t, r);
@@ -83400,7 +83400,7 @@ function Oo(e) {
 	return /* @__PURE__ */ Ta(Do, e);
 }
 //#endregion
-//#region ../../node_modules/.pnpm/zod@4.4.1/node_modules/zod/v4/classic/errors.js
+//#region ../../node_modules/.pnpm/zod@4.4.2/node_modules/zod/v4/classic/errors.js
 var ko = (e, t) => {
 	Nn.init(e, t), e.name = "ZodError", Object.defineProperties(e, {
 		format: { value: (t) => In(e, t) },
@@ -100784,35 +100784,44 @@ while (this[h](this[T]()) && this[x].length);
 	}
 	e.shuffleArray = t;
 })), sm = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
-	Object.defineProperty(e, "__esModule", { value: !0 }), e.isInSubnet = t, e.isCorrect = n, e.numberToPaddedHex = r, e.stringToPaddedHex = i, e.testBit = a;
-	function t(e) {
-		return this.subnetMask < e.subnetMask ? !1 : this.mask(e.subnetMask) === e.mask();
-	}
-	function n(e) {
-		return function() {
-			return this.addressMinusSuffix === this.correctForm() ? this.subnetMask === e && !this.parsedSubnet ? !0 : this.parsedSubnet === String(this.subnetMask) : !1;
-		};
-	}
-	function r(e) {
-		return e.toString(16).padStart(2, "0");
-	}
-	function i(e) {
-		return r(parseInt(e, 10));
-	}
-	function a(e, t) {
-		let { length: n } = e;
-		if (t > n) return !1;
-		let r = n - t;
-		return e.substring(r, r + 1) === "1";
-	}
-})), cm = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
-	Object.defineProperty(e, "__esModule", { value: !0 }), e.RE_SUBNET_STRING = e.RE_ADDRESS = e.GROUPS = e.BITS = void 0, e.BITS = 32, e.GROUPS = 4, e.RE_ADDRESS = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/g, e.RE_SUBNET_STRING = /\/\d{1,2}$/;
-})), lm = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
 	Object.defineProperty(e, "__esModule", { value: !0 }), e.AddressError = void 0, e.AddressError = class extends Error {
 		constructor(e, t) {
 			super(e), this.name = "AddressError", this.parseMessage = t;
 		}
 	};
+})), cm = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
+	Object.defineProperty(e, "__esModule", { value: !0 }), e.isInSubnet = n, e.isCorrect = r, e.prefixLengthFromMask = i, e.numberToPaddedHex = a, e.stringToPaddedHex = o, e.testBit = s;
+	var t = sm();
+	function n(e) {
+		return this.subnetMask < e.subnetMask ? !1 : this.mask(e.subnetMask) === e.mask();
+	}
+	function r(e) {
+		return function() {
+			return this.addressMinusSuffix === this.correctForm() ? this.subnetMask === e && !this.parsedSubnet ? !0 : this.parsedSubnet === String(this.subnetMask) : !1;
+		};
+	}
+	function i(e, n) {
+		let r = e.toString(2).padStart(n, "0");
+		if (r.length > n) throw new t.AddressError("Invalid subnet mask.");
+		let i = r.indexOf("0");
+		if (i === -1) return n;
+		if (r.slice(i).includes("1")) throw new t.AddressError("Invalid subnet mask.");
+		return i;
+	}
+	function a(e) {
+		return e.toString(16).padStart(2, "0");
+	}
+	function o(e) {
+		return a(parseInt(e, 10));
+	}
+	function s(e, t) {
+		let { length: n } = e;
+		if (t > n) return !1;
+		let r = n - t;
+		return e.substring(r, r + 1) === "1";
+	}
+})), lm = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
+	Object.defineProperty(e, "__esModule", { value: !0 }), e.RE_SUBNET_STRING = e.RE_ADDRESS = e.GROUPS = e.BITS = void 0, e.BITS = 32, e.GROUPS = 4, e.RE_ADDRESS = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/g, e.RE_SUBNET_STRING = /\/\d{1,2}$/;
 })), um = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
 	var t = e && e.__createBinding || (Object.create ? (function(e, t, n, r) {
 		r === void 0 && (r = n);
@@ -100839,10 +100848,9 @@ while (this[h](this[T]()) && this[x].length);
 		return n(r, e), r;
 	};
 	Object.defineProperty(e, "__esModule", { value: !0 }), e.Address4 = void 0;
-	var i = r(sm()), a = r(cm()), o = lm();
-	e.Address4 = class e {
+	var i = r(cm()), a = r(lm()), o = sm(), s = i.isCorrect(a.BITS), c = class e {
 		constructor(e) {
-			this.groups = a.GROUPS, this.parsedAddress = [], this.parsedSubnet = "", this.subnet = "/32", this.subnetMask = 32, this.v4 = !0, this.isCorrect = i.isCorrect(a.BITS), this.isInSubnet = i.isInSubnet, this.address = e;
+			this.groups = a.GROUPS, this.parsedAddress = [], this.parsedSubnet = "", this.subnet = "/32", this.subnetMask = 32, this.v4 = !0, this.isCorrect = s, this.isInSubnet = i.isInSubnet, this.address = e;
 			let t = a.RE_SUBNET_STRING.exec(e);
 			if (t) {
 				if (this.parsedSubnet = t[0].replace("/", ""), this.subnetMask = parseInt(this.parsedSubnet, 10), this.subnet = `/${this.subnetMask}`, this.subnetMask < 0 || this.subnetMask > a.BITS) throw new o.AddressError("Invalid subnet mask.");
@@ -100865,16 +100873,32 @@ while (this[h](this[T]()) && this[x].length);
 		correctForm() {
 			return this.parsedAddress.map((e) => parseInt(e, 10)).join(".");
 		}
+		static fromAddressAndMask(t, n) {
+			return new e(`${t}/${i.prefixLengthFromMask(new e(n).bigInt(), a.BITS)}`);
+		}
+		static fromAddressAndWildcardMask(t, n) {
+			let r = new e(n).bigInt() ^ (BigInt(1) << BigInt(a.BITS)) - BigInt(1);
+			return new e(`${t}/${i.prefixLengthFromMask(r, a.BITS)}`);
+		}
+		static fromWildcard(t) {
+			let n = t.split(".");
+			if (n.length !== a.GROUPS) throw new o.AddressError("Wildcard pattern must have 4 octets");
+			let r = -1;
+			for (let e = 0; e < n.length; e++) if (n[e] === "*") r === -1 && (r = e);
+			else if (r !== -1) throw new o.AddressError("Wildcard `*` must only appear in trailing octets (e.g. `192.168.0.*`)");
+			let i = r === -1 ? 0 : n.length - r, s = n.map((e) => e === "*" ? "0" : e), c = a.BITS - i * 8;
+			return new e(`${s.join(".")}/${c}`);
+		}
 		static fromHex(t) {
-			let n = t.replace(/:/g, "").padStart(8, "0"), r = [], i;
-			for (i = 0; i < 8; i += 2) {
-				let e = n.slice(i, i + 2);
-				r.push(parseInt(e, 16));
-			}
+			let n = t.replace(/:/g, "");
+			if (!/^[0-9a-fA-F]{8}$/.test(n)) throw new o.AddressError("IPv4 hex must be exactly 8 hex digits");
+			let r = [];
+			for (let e = 0; e < 8; e += 2) r.push(parseInt(n.slice(e, e + 2), 16));
 			return new e(r.join("."));
 		}
 		static fromInteger(t) {
-			return e.fromHex(t.toString(16));
+			if (!Number.isInteger(t) || t < 0 || t > 4294967295) throw new o.AddressError("IPv4 integer must be in the range 0 to 2**32 - 1");
+			return e.fromHex(t.toString(16).padStart(8, "0"));
 		}
 		static fromArpa(t) {
 			return new e(t.replace(/(\.in-addr\.arpa)?\.$/, "").split(".").reverse().join("."));
@@ -100913,8 +100937,18 @@ while (this[h](this[T]()) && this[x].length);
 			let t = BigInt("1");
 			return e.fromBigInt(this._endAddress() - t);
 		}
+		subnetMaskAddress() {
+			return e.fromBigInt(BigInt(`0b${"1".repeat(this.subnetMask)}${"0".repeat(a.BITS - this.subnetMask)}`));
+		}
+		wildcardMask() {
+			return e.fromBigInt(BigInt(`0b${"0".repeat(this.subnetMask)}${"1".repeat(a.BITS - this.subnetMask)}`));
+		}
+		networkForm() {
+			return `${this.startAddress().correctForm()}/${this.subnetMask}`;
+		}
 		static fromBigInt(t) {
-			return e.fromHex(t.toString(16));
+			if (t < 0n || t > 4294967295n) throw new o.AddressError("IPv4 BigInt must be in the range 0 to 2**32 - 1");
+			return e.fromHex(t.toString(16).padStart(8, "0"));
 		}
 		static fromByteArray(e) {
 			if (e.length !== 4) throw new o.AddressError("IPv4 addresses require exactly 4 bytes");
@@ -100937,16 +100971,40 @@ while (this[h](this[T]()) && this[x].length);
 			return e.omitSuffix ? t : `${t}.in-addr.arpa.`;
 		}
 		isMulticast() {
-			return this.isInSubnet(new e("224.0.0.0/4"));
+			return this.isInSubnet(l);
+		}
+		isPrivate() {
+			return u.some((e) => this.isInSubnet(e));
+		}
+		isLoopback() {
+			return this.isInSubnet(d);
+		}
+		isLinkLocal() {
+			return this.isInSubnet(f);
+		}
+		isUnspecified() {
+			return this.isInSubnet(p);
+		}
+		isBroadcast() {
+			return this.isInSubnet(m);
+		}
+		isCGNAT() {
+			return this.isInSubnet(h);
 		}
 		binaryZeroPad() {
-			return this.bigInt().toString(2).padStart(a.BITS, "0");
+			return this._binaryZeroPad === void 0 && (this._binaryZeroPad = this.bigInt().toString(2).padStart(a.BITS, "0")), this._binaryZeroPad;
 		}
 		groupForV6() {
 			let e = this.parsedAddress;
 			return this.address.replace(a.RE_ADDRESS, `<span class="hover-group group-v4 group-6">${e.slice(0, 2).join(".")}</span>.<span class="hover-group group-v4 group-7">${e.slice(2, 4).join(".")}</span>`);
 		}
 	};
+	e.Address4 = c;
+	var l = new c("224.0.0.0/4"), u = [
+		new c("10.0.0.0/8"),
+		new c("172.16.0.0/12"),
+		new c("192.168.0.0/16")
+	], d = new c("127.0.0.0/8"), f = new c("169.254.0.0/16"), p = new c("0.0.0.0/32"), m = new c("255.255.255.255/32"), h = new c("100.64.0.0/10");
 })), dm = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
 	Object.defineProperty(e, "__esModule", { value: !0 }), e.RE_URL_WITH_PORT = e.RE_URL = e.RE_ZONE_STRING = e.RE_SUBNET_STRING = e.RE_BAD_ADDRESS = e.RE_BAD_CHARACTERS = e.TYPES = e.SCOPES = e.GROUPS = e.BITS = void 0, e.BITS = 128, e.GROUPS = 8, e.SCOPES = {
 		0: "Reserved",
@@ -100979,24 +101037,32 @@ while (this[h](this[T]()) && this[x].length);
 		"::/128": "Unspecified",
 		"::1/128": "Loopback",
 		"ff00::/8": "Multicast",
-		"fe80::/10": "Link-local unicast"
+		"fe80::/10": "Link-local unicast",
+		"fc00::/7": "Unique local",
+		"2002::/16": "6to4",
+		"2001:db8::/32": "Documentation",
+		"64:ff9b::/96": "NAT64 (well-known)",
+		"64:ff9b:1::/48": "NAT64 (local-use)"
 	}, e.RE_BAD_CHARACTERS = /([^0-9a-f:/%])/gi, e.RE_BAD_ADDRESS = /([0-9a-f]{5,}|:{3,}|[^:]:$|^:[^:]|\/$)/gi, e.RE_SUBNET_STRING = /\/\d{1,3}(?=%|$)/, e.RE_ZONE_STRING = /%.*$/, e.RE_URL = /^\[{0,1}([0-9a-f:]+)\]{0,1}/, e.RE_URL_WITH_PORT = /\[([0-9a-f:]+)\]:([0-9]{1,5})/;
 })), fm = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
-	Object.defineProperty(e, "__esModule", { value: !0 }), e.spanAllZeroes = t, e.spanAll = n, e.spanLeadingZeroes = i, e.simpleGroup = a;
+	Object.defineProperty(e, "__esModule", { value: !0 }), e.escapeHtml = t, e.spanAllZeroes = n, e.spanAll = r, e.spanLeadingZeroes = a, e.simpleGroup = o;
 	function t(e) {
-		return e.replace(/(0+)/g, "<span class=\"zero\">$1</span>");
+		return e.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 	}
-	function n(e, n = 0) {
-		return e.split("").map((e, r) => `<span class="digit value-${e} position-${r + n}">${t(e)}</span>`).join("");
+	function n(e) {
+		return t(e).replace(/(0+)/g, "<span class=\"zero\">$1</span>");
 	}
-	function r(e) {
-		return e.replace(/^(0+)/, "<span class=\"zero\">$1</span>");
+	function r(e, r = 0) {
+		return e.split("").map((e, i) => `<span class="digit value-${t(e)} position-${i + r}">${n(e)}</span>`).join("");
 	}
 	function i(e) {
-		return e.split(":").map((e) => r(e)).join(":");
+		return t(e).replace(/^(0+)/, "<span class=\"zero\">$1</span>");
 	}
-	function a(e, t = 0) {
-		return e.split(":").map((e, n) => /group-v4/.test(e) ? e : `<span class="hover-group group-${n + t}">${r(e)}</span>`);
+	function a(e) {
+		return e.split(":").map((e) => i(e)).join(":");
+	}
+	function o(e, t = 0) {
+		return e.split(":").map((e, n) => /group-v4/.test(e) ? e : `<span class="hover-group group-${n + t}">${i(e)}</span>`);
 	}
 })), pm = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
 	var t = e && e.__createBinding || (Object.create ? (function(e, t, n, r) {
@@ -101078,32 +101144,32 @@ while (this[h](this[T]()) && this[x].length);
 		return n(r, e), r;
 	};
 	Object.defineProperty(e, "__esModule", { value: !0 }), e.Address6 = void 0;
-	var i = r(sm()), a = r(cm()), o = r(dm()), s = r(fm()), c = um(), l = pm(), u = lm(), d = sm();
-	function f(e) {
+	var i = r(cm()), a = r(lm()), o = r(dm()), s = r(fm()), c = um(), l = pm(), u = sm(), d = cm(), f = i.isCorrect(o.BITS);
+	function p(e) {
 		if (!e) throw Error("Assertion failed.");
 	}
-	function p(e) {
+	function m(e) {
 		let t = /(\d+)(\d{3})/;
 		for (; t.test(e);) e = e.replace(t, "$1,$2");
 		return e;
 	}
-	function m(e) {
+	function h(e) {
 		return e = e.replace(/^(0{1,})([1-9]+)$/, "<span class=\"parse-error\">$1</span>$2"), e = e.replace(/^(0{1,})(0)$/, "<span class=\"parse-error\">$1</span>$2"), e;
 	}
-	function h(e, t) {
+	function g(e, t) {
 		let n = [], r = [], i;
 		for (i = 0; i < e.length; i++) i < t[0] ? n.push(e[i]) : i > t[1] && r.push(e[i]);
 		return n.concat(["compact"]).concat(r);
 	}
-	function g(e) {
+	function _(e) {
 		return parseInt(e, 16).toString(16).padStart(4, "0");
 	}
-	function _(e) {
+	function v(e) {
 		return e & 255;
 	}
-	e.Address6 = class e {
+	var y = class e {
 		constructor(e, t) {
-			this.addressMinusSuffix = "", this.parsedSubnet = "", this.subnet = "/128", this.subnetMask = 128, this.v4 = !1, this.zone = "", this.isInSubnet = i.isInSubnet, this.isCorrect = i.isCorrect(o.BITS), t === void 0 ? this.groups = o.GROUPS : this.groups = t, this.address = e;
+			this.addressMinusSuffix = "", this.parsedSubnet = "", this.subnet = "/128", this.subnetMask = 128, this.v4 = !1, this.zone = "", this.isInSubnet = i.isInSubnet, this.isCorrect = f, t === void 0 ? this.groups = o.GROUPS : this.groups = t, this.address = e;
 			let n = o.RE_SUBNET_STRING.exec(e);
 			if (n) {
 				if (this.parsedSubnet = n[0].replace("/", ""), this.subnetMask = parseInt(this.parsedSubnet, 10), this.subnet = `/${this.subnetMask}`, Number.isNaN(this.subnetMask) || this.subnetMask < 0 || this.subnetMask > o.BITS) throw new u.AddressError("Invalid subnet mask.");
@@ -101120,8 +101186,9 @@ while (this[h](this[T]()) && this[x].length);
 			}
 		}
 		static fromBigInt(t) {
-			let n = t.toString(16).padStart(32, "0"), r = [], i;
-			for (i = 0; i < o.GROUPS; i++) r.push(n.slice(i * 4, (i + 1) * 4));
+			if (t < 0n || t > (1n << BigInt(o.BITS)) - 1n) throw new u.AddressError("IPv6 BigInt must be in the range 0 to 2**128 - 1");
+			let n = t.toString(16).padStart(32, "0"), r = [];
+			for (let e = 0; e < o.GROUPS; e++) r.push(n.slice(e * 4, (e + 1) * 4));
 			return new e(r.join(":"));
 		}
 		static fromURL(t) {
@@ -101146,6 +101213,34 @@ while (this[h](this[T]()) && this[x].length);
 				port: r
 			};
 		}
+		static fromAddressAndMask(t, n) {
+			return new e(`${t}/${i.prefixLengthFromMask(new e(n).bigInt(), o.BITS)}`);
+		}
+		static fromAddressAndWildcardMask(t, n) {
+			let r = new e(n).bigInt() ^ (BigInt(1) << BigInt(o.BITS)) - BigInt(1);
+			return new e(`${t}/${i.prefixLengthFromMask(r, o.BITS)}`);
+		}
+		static fromWildcard(t) {
+			if (t.includes("%") || t.includes("/")) throw new u.AddressError("Wildcard pattern must not include a zone or CIDR suffix");
+			let n = t.split("::");
+			if (n.length > 2) throw new u.AddressError("Wildcard pattern cannot contain more than one '::'");
+			let r;
+			if (n.length === 2) {
+				let e = n[0] === "" ? [] : n[0].split(":"), t = n[1] === "" ? [] : n[1].split(":"), i = o.GROUPS - e.length - t.length;
+				if (i < 1) throw new u.AddressError("Wildcard pattern with '::' has too many groups");
+				r = [
+					...e,
+					...Array(i).fill("0"),
+					...t
+				];
+			} else r = t.split(":");
+			if (r.length !== o.GROUPS) throw new u.AddressError("Wildcard pattern must have 8 groups");
+			let i = -1;
+			for (let e = 0; e < r.length; e++) if (r[e] === "*") i === -1 && (i = e);
+			else if (i !== -1) throw new u.AddressError("Wildcard `*` must only appear in trailing groups (e.g. `2001:db8:*:*:*:*:*:*`)");
+			let a = i === -1 ? 0 : r.length - i, s = r.map((e) => e === "*" ? "0" : e), c = o.BITS - a * 16;
+			return new e(`${s.join(":")}/${c}`);
+		}
 		static fromAddress4(t) {
 			let n = new c.Address4(t), r = o.BITS - (a.BITS - n.subnetMask);
 			return new e(`::ffff:${n.correctForm()}/${r}`);
@@ -101168,7 +101263,7 @@ while (this[h](this[T]()) && this[x].length);
 		}
 		possibleSubnets(e = 128) {
 			let t = o.BITS - this.subnetMask - Math.abs(e - o.BITS);
-			return t < 0 ? "0" : p((BigInt("2") ** BigInt(t)).toString(10));
+			return t < 0 ? "0" : m((BigInt("2") ** BigInt(t)).toString(10));
 		}
 		_startAddress() {
 			return BigInt(`0b${this.mask() + "0".repeat(o.BITS - this.subnetMask)}`);
@@ -101190,12 +101285,24 @@ while (this[h](this[T]()) && this[x].length);
 			let t = BigInt("1");
 			return e.fromBigInt(this._endAddress() - t);
 		}
+		subnetMaskAddress() {
+			return e.fromBigInt(BigInt(`0b${"1".repeat(this.subnetMask)}${"0".repeat(o.BITS - this.subnetMask)}`));
+		}
+		wildcardMask() {
+			return e.fromBigInt(BigInt(`0b${"0".repeat(this.subnetMask)}${"1".repeat(o.BITS - this.subnetMask)}`));
+		}
+		networkForm() {
+			return `${this.startAddress().correctForm()}/${this.subnetMask}`;
+		}
 		getScope() {
-			let e = o.SCOPES[parseInt(this.getBits(12, 16).toString(10), 10)];
-			return this.getType() === "Global unicast" && e !== "Link local" && (e = "Global"), e || "Unknown";
+			let e = this.getType();
+			return e === "Multicast" || e.startsWith("Multicast ") ? o.SCOPES[parseInt(this.getBits(12, 16).toString(10), 10)] || "Unknown" : e === "Link-local unicast" || e === "Loopback" ? "Link local" : e === "Unspecified" ? "Unknown" : "Global";
 		}
 		getType() {
-			for (let t of Object.keys(o.TYPES)) if (this.isInSubnet(new e(t))) return o.TYPES[t];
+			for (let e = 0; e < b.length; e++) {
+				let t = b[e];
+				if (this.isInSubnet(t[0])) return t[1];
+			}
 			return "Global unicast";
 		}
 		getBits(e, t) {
@@ -101227,20 +101334,24 @@ while (this[h](this[T]()) && this[x].length);
 			let i = r.map((e) => e[1] - e[0] + 1);
 			if (r.length > 0) {
 				let e = i.indexOf(Math.max(...i));
-				t = h(this.parsedAddress, r[e]);
+				t = g(this.parsedAddress, r[e]);
 			} else t = this.parsedAddress;
 			for (e = 0; e < t.length; e++) t[e] !== "compact" && (t[e] = parseInt(t[e], 16).toString(16));
 			let a = t.join(":");
 			return a = a.replace(/^compact$/, "::"), a = a.replace(/(^compact)|(compact$)/, ":"), a = a.replace(/compact/, ""), a;
 		}
 		binaryZeroPad() {
-			return this.bigInt().toString(2).padStart(o.BITS, "0");
+			return this._binaryZeroPad === void 0 && (this._binaryZeroPad = this.bigInt().toString(2).padStart(o.BITS, "0")), this._binaryZeroPad;
 		}
 		parse4in6(e) {
+			if (e.indexOf(".") === -1) return e;
 			let t = e.split(":"), n = t.slice(-1)[0].match(a.RE_ADDRESS);
 			if (n) {
 				this.parsedAddress4 = n[0], this.address4 = new c.Address4(this.parsedAddress4);
-				for (let t = 0; t < this.address4.groups; t++) if (/^0[0-9]+/.test(this.address4.parsedAddress[t])) throw new u.AddressError("IPv4 addresses can't have leading zeroes.", e.replace(a.RE_ADDRESS, this.address4.parsedAddress.map(m).join(".")));
+				for (let e = 0; e < this.address4.groups; e++) if (/^0[0-9]+/.test(this.address4.parsedAddress[e])) {
+					let e = this.address4.parsedAddress.map(h).join("."), n = t.slice(0, -1).map(s.escapeHtml).join(":"), r = t.length > 1 ? ":" : "";
+					throw new u.AddressError("IPv4 addresses can't have leading zeroes.", `${n}${r}${e}`);
+				}
 				this.v4 = !0, t[t.length - 1] = this.address4.toGroup6(), e = t.join(":");
 			}
 			return e;
@@ -101266,24 +101377,24 @@ while (this[h](this[T]()) && this[x].length);
 			return r;
 		}
 		canonicalForm() {
-			return this.parsedAddress.map(g).join(":");
+			return this.parsedAddress.map(_).join(":");
 		}
 		decimal() {
 			return this.parsedAddress.map((e) => parseInt(e, 16).toString(10).padStart(5, "0")).join(":");
 		}
 		bigInt() {
-			return BigInt(`0x${this.parsedAddress.map(g).join("")}`);
+			return BigInt(`0x${this.parsedAddress.map(_).join("")}`);
 		}
 		to4() {
 			let e = this.binaryZeroPad().split("");
-			return c.Address4.fromHex(BigInt(`0b${e.slice(96, 128).join("")}`).toString(16));
+			return c.Address4.fromHex(BigInt(`0b${e.slice(96, 128).join("")}`).toString(16).padStart(8, "0"));
 		}
 		to4in6() {
 			let t = this.to4(), n = new e(this.parsedAddress.slice(0, 6).join(":"), 6).correctForm(), r = "";
 			return /:$/.test(n) || (r = ":"), n + r + t.address;
 		}
 		inspectTeredo() {
-			let e = this.getBitsBase16(0, 32), t = (this.getBits(80, 96) ^ BigInt("0xffff")).toString(), n = c.Address4.fromHex(this.getBitsBase16(32, 64)), r = this.getBits(96, 128), i = c.Address4.fromHex((r ^ BigInt("0xffffffff")).toString(16)), a = this.getBitsBase2(64, 80), o = (0, d.testBit)(a, 15), s = (0, d.testBit)(a, 14), l = (0, d.testBit)(a, 8), u = (0, d.testBit)(a, 9), f = BigInt(`0b${a.slice(2, 6) + a.slice(8, 16)}`).toString(10);
+			let e = this.getBitsBase16(0, 32), t = (this.getBits(80, 96) ^ BigInt("0xffff")).toString(), n = c.Address4.fromHex(this.getBitsBase16(32, 64)), r = this.getBits(96, 128), i = c.Address4.fromHex((r ^ BigInt("0xffffffff")).toString(16).padStart(8, "0")), a = this.getBitsBase2(64, 80), o = (0, d.testBit)(a, 15), s = (0, d.testBit)(a, 14), l = (0, d.testBit)(a, 8), u = (0, d.testBit)(a, 9), f = BigInt(`0b${a.slice(2, 6) + a.slice(8, 16)}`).toString(10);
 			return {
 				prefix: `${e.slice(0, 4)}:${e.slice(4, 8)}`,
 				server4: n.address,
@@ -101315,16 +101426,43 @@ while (this[h](this[T]()) && this[x].length);
 				"/16"
 			].join(":")) : null;
 		}
+		static fromAddress4Nat64(t, n = "64:ff9b::/96") {
+			let r = new c.Address4(t), i = new e(n), a = i.subnetMask;
+			if (a !== 32 && a !== 40 && a !== 48 && a !== 56 && a !== 64 && a !== 96) throw new u.AddressError("NAT64 prefix length must be 32, 40, 48, 56, 64, or 96");
+			let o = i.binaryZeroPad(), s = r.binaryZeroPad(), l;
+			if (a === 96) l = o.slice(0, 96) + s;
+			else {
+				let e = 64 - a;
+				l = o.slice(0, a) + s.slice(0, e) + "00000000" + s.slice(e) + "0".repeat(56 - (32 - e));
+			}
+			let d = BigInt(`0b${l}`).toString(16).padStart(32, "0"), f = [];
+			for (let e = 0; e < 8; e++) f.push(d.slice(e * 4, (e + 1) * 4));
+			return new e(f.join(":"));
+		}
+		toAddress4Nat64(t = "64:ff9b::/96") {
+			let n = new e(t), r = n.subnetMask;
+			if (r !== 32 && r !== 40 && r !== 48 && r !== 56 && r !== 64 && r !== 96) throw new u.AddressError("NAT64 prefix length must be 32, 40, 48, 56, 64, or 96");
+			if (!this.isInSubnet(n)) return null;
+			let i = this.binaryZeroPad(), a;
+			if (r === 96) a = i.slice(96, 128);
+			else {
+				let e = 64 - r;
+				a = i.slice(r, r + e) + i.slice(72, 72 + (32 - e));
+			}
+			let o = [];
+			for (let e = 0; e < 4; e++) o.push(parseInt(a.slice(e * 8, (e + 1) * 8), 2).toString());
+			return new c.Address4(o.join("."));
+		}
 		toByteArray() {
 			let e = this.bigInt().toString(16), t = `${"0".repeat(e.length % 2)}${e}`, n = [];
 			for (let e = 0, r = t.length; e < r; e += 2) n.push(parseInt(t.substring(e, e + 2), 16));
 			return n;
 		}
 		toUnsignedByteArray() {
-			return this.toByteArray().map(_);
+			return this.toByteArray().map(v);
 		}
 		static fromByteArray(e) {
-			return this.fromUnsignedByteArray(e.map(_));
+			return this.fromUnsignedByteArray(e.map(v));
 		}
 		static fromUnsignedByteArray(t) {
 			let n = BigInt("256"), r = BigInt("0"), i = BigInt("1");
@@ -101338,19 +101476,32 @@ while (this[h](this[T]()) && this[x].length);
 			return this.getBitsBase2(0, 64) === "1111111010000000000000000000000000000000000000000000000000000000";
 		}
 		isMulticast() {
-			return this.getType() === "Multicast";
+			let e = this.getType();
+			return e === "Multicast" || e.startsWith("Multicast ");
 		}
 		is4() {
 			return this.v4;
 		}
+		isMapped4() {
+			return this.isInSubnet(T);
+		}
 		isTeredo() {
-			return this.isInSubnet(new e("2001::/32"));
+			return this.isInSubnet(x);
 		}
 		is6to4() {
-			return this.isInSubnet(new e("2002::/16"));
+			return this.isInSubnet(S);
 		}
 		isLoopback() {
 			return this.getType() === "Loopback";
+		}
+		isULA() {
+			return this.isInSubnet(C);
+		}
+		isUnspecified() {
+			return this.getType() === "Unspecified";
+		}
+		isDocumentation() {
+			return this.isInSubnet(w);
 		}
 		href(e) {
 			return e = e === void 0 ? "" : `:${e}`, `http://[${this.correctForm()}]${e}/`;
@@ -101359,17 +101510,17 @@ while (this[h](this[T]()) && this[x].length);
 			e ||= {}, e.className === void 0 && (e.className = ""), e.prefix === void 0 && (e.prefix = "/#address="), e.v4 === void 0 && (e.v4 = !1);
 			let t = this.correctForm;
 			e.v4 && (t = this.to4in6);
-			let n = t.call(this);
-			return e.className ? `<a href="${e.prefix}${n}" class="${e.className}">${n}</a>` : `<a href="${e.prefix}${n}">${n}</a>`;
+			let n = t.call(this), r = s.escapeHtml(`${e.prefix}${n}`), i = s.escapeHtml(n);
+			return e.className ? `<a href="${r}" class="${s.escapeHtml(e.className)}">${i}</a>` : `<a href="${r}">${i}</a>`;
 		}
 		group() {
-			if (this.elidedGroups === 0) return s.simpleGroup(this.address).join(":");
-			f(typeof this.elidedGroups == "number"), f(typeof this.elisionBegin == "number");
-			let e = [], [t, n] = this.address.split("::");
+			if (this.elidedGroups === 0) return s.simpleGroup(this.addressMinusSuffix).join(":");
+			p(typeof this.elidedGroups == "number"), p(typeof this.elisionBegin == "number");
+			let e = [], [t, n] = this.addressMinusSuffix.split("::");
 			t.length ? e.push(...s.simpleGroup(t)) : e.push("");
 			let r = ["hover-group"];
 			for (let e = this.elisionBegin; e < this.elisionBegin + this.elidedGroups; e++) r.push(`group-${e}`);
-			return e.push(`<span class="${r.join(" ")}"></span>`), n.length ? e.push(...s.simpleGroup(n, this.elisionEnd)) : e.push(""), this.is4() && (f(this.address4 instanceof c.Address4), e.pop(), e.push(this.address4.groupForV6())), e.join(":");
+			return e.push(`<span class="${r.join(" ")}"></span>`), n.length ? e.push(...s.simpleGroup(n, this.elisionEnd)) : e.push(""), this.is4() && (p(this.address4 instanceof c.Address4), e.pop(), e.push(this.address4.groupForV6())), e.join(":");
 		}
 		regularExpressionString(t = !1) {
 			let n = [], r = new e(this.correctForm());
@@ -101377,7 +101528,7 @@ while (this[h](this[T]()) && this[x].length);
 			else if (r.elidedGroups === o.GROUPS) n.push((0, l.possibleElisions)(o.GROUPS));
 			else {
 				let e = r.address.split("::");
-				e[0].length && n.push((0, l.simpleRegularExpression)(e[0].split(":"))), f(typeof r.elidedGroups == "number"), n.push((0, l.possibleElisions)(r.elidedGroups, e[0].length !== 0, e[1].length !== 0)), e[1].length && n.push((0, l.simpleRegularExpression)(e[1].split(":"))), n = [n.join(":")];
+				e[0].length && n.push((0, l.simpleRegularExpression)(e[0].split(":"))), p(typeof r.elidedGroups == "number"), n.push((0, l.possibleElisions)(r.elidedGroups, e[0].length !== 0, e[1].length !== 0)), e[1].length && n.push((0, l.simpleRegularExpression)(e[1].split(":"))), n = [n.join(":")];
 			}
 			return t || (n = [
 				"(?=^|",
@@ -101393,6 +101544,8 @@ while (this[h](this[T]()) && this[x].length);
 			return new RegExp(this.regularExpressionString(e), "i");
 		}
 	};
+	e.Address6 = y;
+	var b = Object.keys(o.TYPES).map((e) => [new y(e), o.TYPES[e]]), x = new y("2001::/32"), S = new y("2002::/16"), C = new y("fc00::/7"), w = new y("2001:db8::/32"), T = new y("::ffff:0:0/96");
 })), hm = /* @__PURE__ */ (0,chunk_CbpMbXAe.t)(((e) => {
 	var t = e && e.__createBinding || (Object.create ? (function(e, t, n, r) {
 		r === void 0 && (r = n);
@@ -101433,7 +101586,7 @@ while (this[h](this[T]()) && this[x].length);
 			return a.Address6;
 		}
 	});
-	var o = lm();
+	var o = sm();
 	Object.defineProperty(e, "AddressError", {
 		enumerable: !0,
 		get: function() {
