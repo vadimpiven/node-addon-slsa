@@ -3,6 +3,11 @@
 /**
  * Hash one `.node.gz`, mint a public-good sigstore bundle, ship the
  * descriptor + bundle as `slsa-addons-<platform>-<arch>` for `publish.yaml`.
+ *
+ * `platform`/`arch` are parsed from the binary's basename. `slsa pack`
+ * authors filenames as `{name}-v{version}-{platform}-{arch}.node.gz` with
+ * `process.platform`/`process.arch` at build time, so the suffix is the
+ * canonical Node.js value — no runner-context heuristic involved.
  */
 
 import { writeFile } from "node:fs/promises";
@@ -24,34 +29,31 @@ import {
   type AddonDescriptor,
 } from "@node-addon-slsa/internal";
 
+const BINARY_SUFFIX_RE = /-(darwin|linux|win32)-(x64|arm64|arm|ia32)\.node\.gz$/;
+
 export async function main(): Promise<void> {
   const binaryPath = getInput("binary-path", { required: true });
   const urlPrefix = getInput("url-prefix", { required: true });
   const token = getInput("github-token", { required: true });
-  const platformInput = getInput("platform", { required: true });
-  const archInput = getInput("arch", { required: true });
   const maxBinaryBytes = readPositiveIntInput("max-binary-bytes", 268_435_456);
   const retentionDays = readPositiveIntInput("descriptor-retention-days", 14);
 
   const normalizedPrefix = normalizeHttpsPrefix(urlPrefix, { label: "url-prefix" });
 
-  const platformParsed = PlatformSchema.safeParse(platformInput);
-  if (!platformParsed.success) {
+  const baseName = basename(binaryPath);
+  const match = BINARY_SUFFIX_RE.exec(baseName);
+  if (!match) {
     throw new Error(
-      `unsupported platform '${platformInput}'; supported: ${PlatformSchema.options.join(", ")}`,
+      `Cannot derive platform/arch from binary basename '${baseName}'. ` +
+        `Expected suffix '-<platform>-<arch>.node.gz' produced by 'slsa pack'.`,
     );
   }
-  const archParsed = ArchSchema.safeParse(archInput);
-  if (!archParsed.success) {
-    throw new Error(`unsupported arch '${archInput}'; supported: ${ArchSchema.options.join(", ")}`);
-  }
-  const platform = platformParsed.data;
-  const arch = archParsed.data;
+  const platform = PlatformSchema.parse(match[1]);
+  const arch = ArchSchema.parse(match[2]);
 
   info(`Binary: ${binaryPath}`);
   info(`Target: ${platform}/${arch}`);
 
-  const baseName = basename(binaryPath);
   const url = `${normalizedPrefix}${baseName}`;
   const bundlePath = `${binaryPath}.sigstore`;
   const bundleUrl = `${url}.sigstore`;

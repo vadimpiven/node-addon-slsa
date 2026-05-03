@@ -94933,6 +94933,11 @@ __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __we
 /**
  * Hash one `.node.gz`, mint a public-good sigstore bundle, ship the
  * descriptor + bundle as `slsa-addons-<platform>-<arch>` for `publish.yaml`.
+ *
+ * `platform`/`arch` are parsed from the binary's basename. `slsa pack`
+ * authors filenames as `{name}-v{version}-{platform}-{arch}.node.gz` with
+ * `process.platform`/`process.arch` at build time, so the suffix is the
+ * canonical Node.js value — no runner-context heuristic involved.
  */
 
 
@@ -94940,28 +94945,24 @@ __nccwpck_require__.a(module, async (__webpack_handle_async_dependencies__, __we
 
 
 
+const BINARY_SUFFIX_RE = /-(darwin|linux|win32)-(x64|arm64|arm|ia32)\.node\.gz$/;
 async function main() {
     const binaryPath = (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .getInput */ .V4)("binary-path", { required: true });
     const urlPrefix = (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .getInput */ .V4)("url-prefix", { required: true });
     const token = (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .getInput */ .V4)("github-token", { required: true });
-    const platformInput = (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .getInput */ .V4)("platform", { required: true });
-    const archInput = (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .getInput */ .V4)("arch", { required: true });
     const maxBinaryBytes = (0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_5__/* .readPositiveIntInput */ ._6)("max-binary-bytes", 268_435_456);
     const retentionDays = (0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_5__/* .readPositiveIntInput */ ._6)("descriptor-retention-days", 14);
     const normalizedPrefix = (0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_5__/* .normalizeHttpsPrefix */ .PF)(urlPrefix, { label: "url-prefix" });
-    const platformParsed = _node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_5__/* .PlatformSchema */ .fR.safeParse(platformInput);
-    if (!platformParsed.success) {
-        throw new Error(`unsupported platform '${platformInput}'; supported: ${_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_5__/* .PlatformSchema */ .fR.options.join(", ")}`);
+    const baseName = (0,node_path__WEBPACK_IMPORTED_MODULE_1__.basename)(binaryPath);
+    const match = BINARY_SUFFIX_RE.exec(baseName);
+    if (!match) {
+        throw new Error(`Cannot derive platform/arch from binary basename '${baseName}'. ` +
+            `Expected suffix '-<platform>-<arch>.node.gz' produced by 'slsa pack'.`);
     }
-    const archParsed = _node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_5__/* .ArchSchema */ .gS.safeParse(archInput);
-    if (!archParsed.success) {
-        throw new Error(`unsupported arch '${archInput}'; supported: ${_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_5__/* .ArchSchema */ .gS.options.join(", ")}`);
-    }
-    const platform = platformParsed.data;
-    const arch = archParsed.data;
+    const platform = _node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_5__/* .PlatformSchema */ .fR.parse(match[1]);
+    const arch = _node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_5__/* .ArchSchema */ .gS.parse(match[2]);
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .info */ .pq)(`Binary: ${binaryPath}`);
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .info */ .pq)(`Target: ${platform}/${arch}`);
-    const baseName = (0,node_path__WEBPACK_IMPORTED_MODULE_1__.basename)(binaryPath);
     const url = `${normalizedPrefix}${baseName}`;
     const bundlePath = `${binaryPath}.sigstore`;
     const bundleUrl = `${url}.sigstore`;

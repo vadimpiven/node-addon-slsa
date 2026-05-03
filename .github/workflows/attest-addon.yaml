@@ -8,14 +8,6 @@ on:
           Exactly one `*.node.gz` must be present.
         required: true
         type: string
-      platform:
-        description: "Target platform: `darwin`, `linux`, or `win32`."
-        required: true
-        type: string
-      arch:
-        description: "Target arch: `x64`, `arm64`, `arm`, or `ia32`."
-        required: true
-        type: string
       release-base-url:
         description: >-
           Public URL prefix the binary will be served at. Defaults to the
@@ -88,8 +80,6 @@ jobs:
         with:
           binary-path: "${{ steps.binary.outputs.path }}"
           url-prefix: "${{ steps.resolve-url.outputs.release-base-url }}"
-          platform: "${{ inputs.platform }}"
-          arch: "${{ inputs.arch }}"
           max-binary-bytes: "${{ inputs.max-binary-bytes }}"
       # `--clobber` so a single-cell re-run overwrites partial assets
       # instead of 422-ing.

@@ -57,12 +57,10 @@ afterEach(async () => {
 });
 
 /** Wire all required inputs for one binary; tests override individual fields as needed. */
-function wireDefaults(binaryPath: string, opts: { platform?: string; arch?: string } = {}): void {
+function wireDefaults(binaryPath: string): void {
   setInput("binary-path", binaryPath);
   setInput("url-prefix", "https://cdn.example.com/v1/");
   setInput("github-token", "stub-token");
-  setInput("platform", opts.platform ?? "linux");
-  setInput("arch", opts.arch ?? "x64");
 }
 
 describe("attest-addon main()", () => {
@@ -121,29 +119,36 @@ describe("attest-addon main()", () => {
   });
 
   it("rejects http url-prefix", async ({ expect }) => {
-    const binaryPath = join(workdir.path, "x.node.gz");
+    const binaryPath = join(workdir.path, "myaddon-linux-x64.node.gz");
     await writeFile(binaryPath, Buffer.from("x"));
     wireDefaults(binaryPath);
     setInput("url-prefix", "http://cdn.example.com/v1/");
     await expect(main()).rejects.toThrow(/must start with https:\/\//);
   });
 
-  it("rejects unsupported platform input", async ({ expect }) => {
-    const binaryPath = join(workdir.path, "x.node.gz");
+  it("rejects binary basename without platform/arch suffix", async ({ expect }) => {
+    const binaryPath = join(workdir.path, "addon.node.gz");
     await writeFile(binaryPath, Buffer.from("x"));
-    wireDefaults(binaryPath, { platform: "freebsd" });
-    await expect(main()).rejects.toThrow(/unsupported platform/);
+    wireDefaults(binaryPath);
+    await expect(main()).rejects.toThrow(/Cannot derive platform\/arch/);
   });
 
-  it("rejects unsupported arch input", async ({ expect }) => {
-    const binaryPath = join(workdir.path, "x.node.gz");
+  it("rejects binary basename with unsupported platform", async ({ expect }) => {
+    const binaryPath = join(workdir.path, "addon-freebsd-x64.node.gz");
     await writeFile(binaryPath, Buffer.from("x"));
-    wireDefaults(binaryPath, { arch: "riscv64" });
-    await expect(main()).rejects.toThrow(/unsupported arch/);
+    wireDefaults(binaryPath);
+    await expect(main()).rejects.toThrow(/Cannot derive platform\/arch/);
+  });
+
+  it("rejects binary basename with unsupported arch", async ({ expect }) => {
+    const binaryPath = join(workdir.path, "addon-linux-riscv64.node.gz");
+    await writeFile(binaryPath, Buffer.from("x"));
+    wireDefaults(binaryPath);
+    await expect(main()).rejects.toThrow(/Cannot derive platform\/arch/);
   });
 
   it("rejects binary larger than max-binary-bytes", async ({ expect }) => {
-    const binaryPath = join(workdir.path, "big.node.gz");
+    const binaryPath = join(workdir.path, "big-linux-x64.node.gz");
     await writeFile(binaryPath, Buffer.alloc(2048));
     wireDefaults(binaryPath);
     setInput("max-binary-bytes", "1024");
@@ -151,7 +156,7 @@ describe("attest-addon main()", () => {
   });
 
   it("rejects non-numeric max-binary-bytes", async ({ expect }) => {
-    const binaryPath = join(workdir.path, "x.node.gz");
+    const binaryPath = join(workdir.path, "myaddon-linux-x64.node.gz");
     await writeFile(binaryPath, Buffer.from("x"));
     wireDefaults(binaryPath);
     setInput("max-binary-bytes", "not-a-number");

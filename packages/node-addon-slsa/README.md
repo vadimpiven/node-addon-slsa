@@ -124,10 +124,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { os: ubuntu-24.04, platform: linux, arch: x64 }
-          - { os: macos-15, platform: darwin, arch: arm64 }
-          - { os: windows-2025, platform: win32, arch: x64 }
+        os: [ubuntu-24.04, macos-15, windows-2025]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -138,7 +135,7 @@ jobs:
         # Name must match the `binary-artifact` input on the attest job below.
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
-          name: addon-${{ matrix.platform }}-${{ matrix.arch }}
+          name: addon-${{ matrix.os }}
           path: ./dist/*.node.gz
           if-no-files-found: error
 
@@ -147,10 +144,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { platform: linux, arch: x64 }
-          - { platform: darwin, arch: arm64 }
-          - { platform: win32, arch: x64 }
+        os: [ubuntu-24.04, macos-15, windows-2025]
     permissions:
       contents: write # upload sidecar + binary to draft release
       id-token: write # sigstore OIDC
@@ -160,9 +154,9 @@ jobs:
     # toolkit-side trust pin the verifier anchors on.
     uses: vadimpiven/node-addon-slsa/.github/workflows/attest-addon.yaml@<commit-sha>
     with:
-      binary-artifact: addon-${{ matrix.platform }}-${{ matrix.arch }}
-      platform: ${{ matrix.platform }}
-      arch: ${{ matrix.arch }}
+      binary-artifact: addon-${{ matrix.os }}
+      # platform/arch are inferred from the binary filename produced by
+      # `slsa pack`, no per-matrix declaration needed.
       # release-base-url is optional; defaults to
       # https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/
       # Override only for monorepos that scope tags by package, or for
@@ -197,7 +191,7 @@ Pin every third-party action to a commit SHA with a trailing `# vX.Y.Z`
 comment, not a mutable tag — SHAs are immutable and audit-friendly.
 
 Flow: each matrix runner builds its `.node.gz` and uploads it as a
-per-cell workflow artifact `addon-<platform>-<arch>`. The toolkit's
+per-cell workflow artifact `addon-<os>`. The toolkit's
 reusable `attest-addon.yaml` (one job per matrix cell) downloads the
 binary, hashes it, mints a public-good sigstore bundle covering the
 future public URL, uploads the binary and its `.sigstore` sidecar to
