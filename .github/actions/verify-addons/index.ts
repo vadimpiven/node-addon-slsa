@@ -18,6 +18,7 @@ import {
   SLSA_MANIFEST_V1_SCHEMA_URL,
   buildAddonInventory,
   buildToolkitAttestSignerPattern,
+  createBundleVerifier,
   errorMessage,
   isEnoent,
   loadTrustMaterial,
@@ -191,6 +192,7 @@ export async function main(): Promise<void> {
 
   info(`[1/3] Loading Sigstore trust material (TUF root)…`);
   const trustMaterial = await loadTrustMaterial();
+  const verifier = createBundleVerifier(trustMaterial);
   info(`  ✓ loaded`);
 
   const attestSignerPattern = buildToolkitAttestSignerPattern();
@@ -208,7 +210,7 @@ export async function main(): Promise<void> {
         sourceCommit: commit,
         sourceRef: ref,
         attestSignerPattern,
-        trustMaterial,
+        verifier,
         dispatcher: getGlobalDispatcher(),
       });
       info(`  ✓ ${platform}/${arch}  sha256=${sha256}`);

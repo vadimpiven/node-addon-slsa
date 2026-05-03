@@ -64521,6 +64521,7 @@ async function main() {
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_2__/* .info */ .pq)(`  signer:  toolkit reusable workflow attest-addon.yaml`);
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_2__/* .info */ .pq)(`[1/3] Loading Sigstore trust material (TUF root)…`);
     const trustMaterial = await (0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_4__/* .loadTrustMaterial */ .ak)();
+    const verifier = (0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_4__/* .createBundleVerifier */ .Bb)(trustMaterial);
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_2__/* .info */ .pq)(`  ✓ loaded`);
     const attestSignerPattern = (0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_4__/* .buildToolkitAttestSignerPattern */ .Iu)();
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_2__/* .info */ .pq)(`[2/3] Verifying each binary's signature chain (parallel, in-memory)…`);
@@ -64535,7 +64536,7 @@ async function main() {
             sourceCommit: commit,
             sourceRef: ref,
             attestSignerPattern,
-            trustMaterial,
+            verifier,
             dispatcher: (0,undici__WEBPACK_IMPORTED_MODULE_3__/* .getGlobalDispatcher */ .xo)(),
         });
         (0,_actions_core__WEBPACK_IMPORTED_MODULE_2__/* .info */ .pq)(`  ✓ ${platform}/${arch}  sha256=${sha256}`);
@@ -67808,6 +67809,7 @@ __nccwpck_require__.d(__webpack_exports__, {
   Wx: () => (/* binding */ kl),
   f9: () => (/* binding */ jl),
   Iu: () => (/* binding */ ol),
+  Bb: () => (/* binding */ xg),
   gJ: () => (/* binding */ Vt),
   a_: () => (/* binding */ wl),
   ak: () => (/* binding */ bg),
@@ -67816,7 +67818,7 @@ __nccwpck_require__.d(__webpack_exports__, {
   I4: () => (/* binding */ Dg)
 });
 
-// UNUSED EXPORTS: AddonArtifactUrlSchema, AddonEntrySchema, AddonInventorySchema, ArchSchema, DEFAULT_MAX_BINARY_BYTES, DEFAULT_MAX_BINARY_SECONDS, HttpError, HttpsUrlSchema, PlatformSchema, ProvenanceError, PublishedSchemas, Sha256HexSchema, SlsaManifestSchemaV1, assertWithinDir, buildAttestSignerPattern, createBundleVerifier, createHashPassthrough, createHttpClient, evalTemplate, extractExpectedRepo, fetchAndHashAddon, hashFileSha256, isEnotdir, isProvenanceError, log, readPackageJson, readPositiveIntInput, safeUnlink, tempDir, verifyAttestation, verifyPackage, verifyPackageAt, warn, withRetry
+// UNUSED EXPORTS: AddonArtifactUrlSchema, AddonEntrySchema, AddonInventorySchema, ArchSchema, DEFAULT_MAX_BINARY_BYTES, DEFAULT_MAX_BINARY_SECONDS, HttpError, HttpsUrlSchema, PlatformSchema, ProvenanceError, PublishedSchemas, Sha256HexSchema, SlsaManifestSchemaV1, assertWithinDir, buildAttestSignerPattern, createHashPassthrough, createHttpClient, evalTemplate, extractExpectedRepo, fetchAndHashAddon, hashFileSha256, isEnotdir, isProvenanceError, log, readPackageJson, readPositiveIntInput, safeUnlink, tempDir, verifyAttestation, verifyPackage, verifyPackageAt, warn, withRetry
 
 // EXTERNAL MODULE: ../../../packages/internal/dist/chunk-CbpMbXAe.js
 var chunk_CbpMbXAe = __nccwpck_require__(3777);
