@@ -70,35 +70,13 @@ export function classifyBundle404(
 if (import.meta.vitest) {
   const { describe, it } = import.meta.vitest;
 
-  describe("toRegExp", () => {
-    it("returns RegExp inputs unchanged", ({ expect }) => {
-      const re = /foo/;
-      expect(toRegExp(re)).toBe(re);
-    });
-    it("anchors and escapes string inputs", ({ expect }) => {
-      const re = toRegExp("v1.2.3");
-      expect(re.test("v1.2.3")).toBe(true);
-      expect(re.test("v1x2x3")).toBe(false);
-      expect(re.test("v1.2.3-suffix")).toBe(false);
-    });
-  });
-
-  describe("defaultRefPattern", () => {
-    it("matches both v-prefixed and bare tags", ({ expect }) => {
-      const re = defaultRefPattern("1.2.3");
-      expect(re.test("refs/tags/v1.2.3")).toBe(true);
-      expect(re.test("refs/tags/1.2.3")).toBe(true);
-    });
-    it("rejects other versions and non-tag refs", ({ expect }) => {
-      const re = defaultRefPattern("1.2.3");
-      expect(re.test("refs/tags/v1.2.4")).toBe(false);
-      expect(re.test("refs/heads/main")).toBe(false);
-    });
-    it("escapes regex metacharacters in version", ({ expect }) => {
-      const re = defaultRefPattern("1.2.3");
-      expect(re.test("refs/tags/v1x2x3")).toBe(false);
-    });
-  });
+  // toRegExp + defaultRefPattern are exercised end-to-end by
+  // verify-package.test.ts (default `refs/tags/v<version>` matching) and
+  // verify-addons.test.ts (custom string patterns flow through
+  // verifyAttestationFromBundle). Only classifyBundle404 has branches
+  // (404 retry vs. non-404 abort vs. exhausted-delays) that no e2e flow
+  // can trigger without standing up a flaky bundle endpoint, so keep
+  // those branch tests here.
 
   describe("classifyBundle404", () => {
     const delays = [10, 20] as const;

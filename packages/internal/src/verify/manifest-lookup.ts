@@ -57,51 +57,7 @@ export function findAddonEntryBySha(manifest: SlsaManifest, sha256: string): Add
   );
 }
 
-if (import.meta.vitest) {
-  const { describe, it } = import.meta.vitest;
-  const { SLSA_MANIFEST_V1_SCHEMA_URL } = await import("./manifest.ts");
-
-  const baseEntry = (sha: string) => ({
-    url: "https://e.com/a.node.gz",
-    bundleUrl: "https://e.com/a.node.gz.sigstore",
-    sha256: sha,
-  });
-
-  const manifest = SlsaManifestSchemaV1.parse({
-    $schema: SLSA_MANIFEST_V1_SCHEMA_URL,
-    packageName: "p",
-    runInvocationURI: "https://github.com/o/r/actions/runs/1/attempts/1",
-    sourceRepo: "o/r",
-    sourceCommit: "a".repeat(40),
-    sourceRef: "refs/tags/v1",
-    addons: {
-      linux: { x64: baseEntry("a".repeat(64)), arm64: baseEntry("b".repeat(64)) },
-      darwin: { arm64: baseEntry("c".repeat(64)) },
-    },
-  });
-
-  describe("findAddonEntryBySha", () => {
-    it("finds an entry by exact sha256", ({ expect }) => {
-      expect(findAddonEntryBySha(manifest, "b".repeat(64)).sha256).toBe("b".repeat(64));
-    });
-    it("matches case-insensitively", ({ expect }) => {
-      expect(findAddonEntryBySha(manifest, "C".repeat(64)).sha256).toBe("c".repeat(64));
-    });
-    it("throws ProvenanceError when sha is not present", ({ expect }) => {
-      expect(() => findAddonEntryBySha(manifest, "0".repeat(64))).toThrow(/not found in manifest/);
-    });
-    it("handles platforms with no entries", ({ expect }) => {
-      // Sparse partial-record: the schema allows missing platform/arch keys.
-      const sparse = SlsaManifestSchemaV1.parse({
-        $schema: SLSA_MANIFEST_V1_SCHEMA_URL,
-        packageName: "p",
-        runInvocationURI: "https://github.com/o/r/actions/runs/1/attempts/1",
-        sourceRepo: "o/r",
-        sourceCommit: "a".repeat(40),
-        sourceRef: "refs/tags/v1",
-        addons: { linux: {} },
-      });
-      expect(() => findAddonEntryBySha(sparse, "a".repeat(64))).toThrow(/not found in manifest/);
-    });
-  });
-}
+// findAddonEntryBySha is fully exercised by verify-package.test.ts
+// (verifyAddonBySha256 happy path + the "sha not in manifest" rejection
+// + verifyAddonFromFile's hash-then-lookup), so no in-source unit tests
+// are kept here.

@@ -104,34 +104,15 @@ if (import.meta.vitest) {
     },
   };
 
-  describe("buildAddonInventory", () => {
-    it("reassembles triples into nested inventory", ({ expect }) => {
-      const entry = (suffix: string): AddonEntry => ({
-        url: `https://e.com/${suffix}.node.gz`,
-        bundleUrl: `https://e.com/${suffix}.node.gz.sigstore`,
-        sha256: suffix.repeat(64).slice(0, 64),
-      });
-      const inv = buildAddonInventory([
-        { platform: "linux", arch: "x64", entry: entry("a") },
-        { platform: "linux", arch: "arm64", entry: entry("b") },
-        { platform: "darwin", arch: "arm64", entry: entry("c") },
-      ]);
-      expect(inv).toEqual({
-        linux: { x64: entry("a"), arm64: entry("b") },
-        darwin: { arm64: entry("c") },
-      });
-    });
-
-    it("returns empty inventory for empty input", ({ expect }) => {
-      expect(buildAddonInventory([])).toEqual({});
-    });
-  });
+  // buildAddonInventory's reassembly + empty-input branches are exercised
+  // by verify-addons.test.ts (which round-trips real descriptor files
+  // through the action and asserts the resulting manifest shape), and
+  // SlsaManifestSchemaV1's happy-path parse runs on every verify-package
+  // test. Keep only the rejection branches and the new git-tag positive
+  // case (covers `+build.N` / `@scope/pkg@v` tags) — none of which any
+  // e2e flow can currently trigger.
 
   describe("SlsaManifestSchemaV1", () => {
-    it("parses valid manifest", ({ expect }) => {
-      expect(SlsaManifestSchemaV1.parse(VALID)).toEqual(VALID);
-    });
-
     it("rejects wrong $schema URL", ({ expect }) => {
       const bad = { ...VALID, $schema: "https://other.example/schema.json" };
       expect(() => SlsaManifestSchemaV1.parse(bad)).toThrow();
