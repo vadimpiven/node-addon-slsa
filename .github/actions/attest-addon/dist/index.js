@@ -173492,15 +173492,15 @@ function Wt(e) {
 		}
 	} };
 }
-async function Gt(e, t, n) {
-	for (let r = 1;; r++) {
-		n?.signal?.throwIfAborted();
+async function Gt(e, t) {
+	for (let n = 1;; n++) {
+		t.signal?.throwIfAborted();
 		try {
 			return await e();
 		} catch (e) {
-			let i = t(e, r);
-			if (!i.retry) throw e;
-			await f(i.delayMs, void 0, n?.signal ? { signal: n.signal } : void 0);
+			let r = t.classify(e, n);
+			if (!r.retry) throw e;
+			await f(r.delayMs, void 0, t.signal ? { signal: t.signal } : void 0);
 		}
 	}
 }
@@ -177529,33 +177529,45 @@ function cl(e, t) {
 	let r = n.valueObj.subs?.[0];
 	return r ? r.value.toString("utf8") : n.value.toString("ascii");
 }
-function ll(e, t, n, r) {
-	let i = cl(e, t);
-	if (i !== n) throw new N(O`
-        ${r} mismatch.
-        Expected: ${n}
-        Got: ${i ?? "<missing>"}
+function ll(e, t) {
+	let n = cl(e, t.oid);
+	if (n !== t.expected) throw new N(O`
+        ${t.label} mismatch.
+        Expected: ${t.expected}
+        Got: ${n ?? "<missing>"}
       `);
 }
-function ul(e, t, n) {
-	let r = cl(e, "1.3.6.1.4.1.57264.1.8") ?? cl(e, "1.3.6.1.4.1.57264.1.1");
-	if (r !== "https://token.actions.githubusercontent.com") throw new N(O`
+function ul(e, t) {
+	let { repo: n, expect: r } = t, i = cl(e, "1.3.6.1.4.1.57264.1.8") ?? cl(e, "1.3.6.1.4.1.57264.1.1");
+	if (i !== "https://token.actions.githubusercontent.com") throw new N(O`
         Certificate issuer mismatch.
         Expected: ${Zc}
-        Got: ${r ?? "<missing>"}
-      `);
-	let i = cl(e, qc), a = `https://github.com/${t}`;
-	if (i?.toLowerCase() !== a.toLowerCase()) throw new N(O`
-        Source repository mismatch.
-        Expected: ${a}
         Got: ${i ?? "<missing>"}
       `);
-	ll(e, Jc, n.sourceCommit, "Source commit"), ll(e, Yc, n.sourceRef, "Source ref"), ll(e, Xc, n.runInvocationURI, "Run invocation URI");
-	let o = cl(e, Kc);
-	if (!o || !n.attestSignerPattern.test(o)) throw new N(O`
+	let a = cl(e, qc), o = `https://github.com/${n}`;
+	if (a?.toLowerCase() !== o.toLowerCase()) throw new N(O`
+        Source repository mismatch.
+        Expected: ${o}
+        Got: ${a ?? "<missing>"}
+      `);
+	ll(e, {
+		oid: Jc,
+		expected: r.sourceCommit,
+		label: "Source commit"
+	}), ll(e, {
+		oid: Yc,
+		expected: r.sourceRef,
+		label: "Source ref"
+	}), ll(e, {
+		oid: Xc,
+		expected: r.runInvocationURI,
+		label: "Run invocation URI"
+	});
+	let s = cl(e, Kc);
+	if (!s || !r.attestSignerPattern.test(s)) throw new N(O`
         Build Signer URI does not match the attestation signer pattern.
-        Pattern: ${n.attestSignerPattern.source}
-        Got: ${o ?? "<missing>"}
+        Pattern: ${r.attestSignerPattern.source}
+        Got: ${s ?? "<missing>"}
       `);
 }
 //#endregion
@@ -177608,7 +177620,10 @@ async function xl(e, t) {
 }
 function Sl(e) {
 	let { sha256: t, bundle: n, repo: r, expect: i, verifier: a } = e;
-	yl(n, t), a.verify(n), ul(bl(n), r, i);
+	yl(n, t), a.verify(n), ul(bl(n), {
+		repo: r,
+		expect: i
+	});
 }
 async function Cl(e) {
 	let { sha256: t, bundleUrl: n, repo: r, expect: i, http: a, verifier: o } = e;
@@ -177650,13 +177665,13 @@ async function Dl(e = "slsa-") {
 		})
 	};
 }
-function Ol({ baseDir: e, target: t, label: n }) {
-	let r = l(e), i = l(t);
-	if (!i.startsWith(r + u)) throw Error(O`
-        ${n} escapes the package directory — possible path traversal.
-        Base: ${r}
-        Resolved: ${i}
-        Check the "${n}" field in package.json.
+function Ol(e) {
+	let { baseDir: t, target: n, label: r } = e, i = l(t), a = l(n);
+	if (!a.startsWith(i + u)) throw Error(O`
+        ${r} escapes the package directory — possible path traversal.
+        Base: ${i}
+        Resolved: ${a}
+        Check the "${r}" field in package.json.
         If you did not author this package, report this to the maintainer.
       `);
 }
@@ -196750,7 +196765,10 @@ async function Dg(e) {
 		expect: l,
 		http: c,
 		verifier: s
-	}), Tg(o.bundleFetchRetryDelays), e.signal ? { signal: e.signal } : void 0);
+	}), {
+		classify: Tg(o.bundleFetchRetryDelays),
+		...e.signal ? { signal: e.signal } : {}
+	});
 }
 async function Og(e) {
 	let t = ac(e.sha256), n = oc(e.repo), r = sc(e.runInvocationURI), i = cc(e.sourceCommit), a = lc(e.sourceRef), o = wl(e), s = o.verifier ?? Sg(o.trustMaterial ?? await xg()), c = {
@@ -196811,7 +196829,10 @@ async function Ag(e, t) {
 			expect: d,
 			http: l,
 			verifier: c
-		}), Tg(s.bundleFetchRetryDelays), t.signal ? { signal: t.signal } : void 0);
+		}), {
+			classify: Tg(s.bundleFetchRetryDelays),
+			...t.signal ? { signal: t.signal } : {}
+		});
 	};
 	return {
 		packageName: r.packageName,
@@ -196838,24 +196859,24 @@ async function jg(e) {
 //#endregion
 //#region src/util/addon-fetch.ts
 var Mg = 500;
-async function Ng(e, t, n) {
+async function Ng(e, t) {
 	return Gt(async () => {
-		let r = await e.request(t, {
-			timeoutMs: n.maxBinaryMs,
-			stallTimeoutMs: n.maxBinaryMs
-		}), i = Number(r.headers["content-length"] ?? 0);
-		if (i > n.maxBinaryBytes) throw r.body.destroy(), Error(`${n.label}: Content-Length ${i} exceeds cap ${n.maxBinaryBytes}`);
-		let a = h("sha256"), o = 0;
+		let n = await t.http.request(e, {
+			timeoutMs: t.maxBinaryMs,
+			stallTimeoutMs: t.maxBinaryMs
+		}), r = Number(n.headers["content-length"] ?? 0);
+		if (r > t.maxBinaryBytes) throw n.body.destroy(), Error(`${t.label}: Content-Length ${r} exceeds cap ${t.maxBinaryBytes}`);
+		let i = h("sha256"), a = 0;
 		try {
-			for await (let e of r.body) {
-				if (o += e.length, o > n.maxBinaryBytes) throw Error(`${n.label}: body exceeds cap ${n.maxBinaryBytes} bytes`);
-				a.update(e);
+			for await (let e of n.body) {
+				if (a += e.length, a > t.maxBinaryBytes) throw Error(`${t.label}: body exceeds cap ${t.maxBinaryBytes} bytes`);
+				i.update(e);
 			}
 		} finally {
-			r.body.destroy();
+			n.body.destroy();
 		}
-		return a.digest("hex");
-	}, (e, t) => t >= 1 + (n.retryCount ?? 3) ? { retry: !1 } : e instanceof Ht && (e.kind === "network" || e.kind === "status" && (e.status !== void 0 && e.status >= 500 || n.retryOn404 && e.status === 404)) ? Pg(t) : { retry: !1 });
+		return i.digest("hex");
+	}, { classify: (e, n) => n >= 1 + (t.retryCount ?? 3) ? { retry: !1 } : e instanceof Ht && (e.kind === "network" || e.kind === "status" && (e.status !== void 0 && e.status >= 500 || t.retryOn404 && e.status === 404)) ? Pg(n) : { retry: !1 } });
 }
 function Pg(e) {
 	return {

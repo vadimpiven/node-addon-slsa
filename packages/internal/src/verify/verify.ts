@@ -88,8 +88,10 @@ export async function verifyAttestation(options: VerifyAttestationOptions): Prom
         http,
         verifier,
       }),
-    classifyBundle404(config.bundleFetchRetryDelays),
-    options.signal ? { signal: options.signal } : undefined,
+    {
+      classify: classifyBundle404(config.bundleFetchRetryDelays),
+      ...(options.signal ? { signal: options.signal } : {}),
+    },
   );
 }
 
@@ -170,10 +172,13 @@ async function hashFile(filePath: string): Promise<Sha256Hex> {
   return digest();
 }
 
+/** Options for {@link verifyPackageAt} — {@link VerifyPackageOptions} minus `packageName`. */
+export type VerifyPackageAtOptions = Omit<VerifyPackageOptions, "packageName">;
+
 /** Like {@link verifyPackage}, but takes a resolved package directory. */
 export async function verifyPackageAt(
   packageRoot: string,
-  options: Omit<VerifyPackageOptions, "packageName">,
+  options: VerifyPackageAtOptions,
 ): Promise<PackageProvenance> {
   // Share the strict PackageJsonSchema with the CLI install path so both
   // enforce the same guards (addon.path traversal, SemVer, etc.).
@@ -242,8 +247,10 @@ export async function verifyPackageAt(
           http,
           verifier,
         }),
-      classifyBundle404(config.bundleFetchRetryDelays),
-      options.signal ? { signal: options.signal } : undefined,
+      {
+        classify: classifyBundle404(config.bundleFetchRetryDelays),
+        ...(options.signal ? { signal: options.signal } : {}),
+      },
     );
   };
 

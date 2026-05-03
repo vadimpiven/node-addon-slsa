@@ -97,9 +97,12 @@ function createBaseDispatcher(): Dispatcher {
  * dispatcher the caller supplied — the caller's dispatcher is transport,
  * redirect semantics are policy.
  */
-export function createHttpClient(opts?: {
+/** Options for {@link createHttpClient}. */
+export type CreateHttpClientOptions = {
   readonly dispatcher?: Dispatcher | undefined;
-}): HttpClient {
+};
+
+export function createHttpClient(opts?: CreateHttpClientOptions): HttpClient {
   const base = opts?.dispatcher ?? createBaseDispatcher();
   const dispatcher = base.compose(interceptors.redirect({ maxRedirections: 5 }));
   return {
@@ -153,22 +156,24 @@ export type RetryDecision =
   | { readonly retry: true; readonly delayMs: number }
   | { readonly retry: false };
 
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  classify: (err: unknown, attempt: number) => RetryDecision,
-  options?: { readonly signal?: AbortSignal },
-): Promise<T> {
+/** Options for {@link withRetry}. */
+export type WithRetryOptions = {
+  readonly classify: (err: unknown, attempt: number) => RetryDecision;
+  readonly signal?: AbortSignal | undefined;
+};
+
+export async function withRetry<T>(fn: () => Promise<T>, options: WithRetryOptions): Promise<T> {
   for (let attempt = 1; ; attempt++) {
-    options?.signal?.throwIfAborted();
+    options.signal?.throwIfAborted();
     try {
       return await fn();
     } catch (err) {
-      const decision = classify(err, attempt);
+      const decision = options.classify(err, attempt);
       if (!decision.retry) throw err;
       await sleep(
         decision.delayMs,
         undefined,
-        options?.signal ? { signal: options.signal } : undefined,
+        options.signal ? { signal: options.signal } : undefined,
       );
     }
   }

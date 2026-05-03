@@ -52,7 +52,8 @@ describe("fetchAndHashAddon", () => {
     const payload = Buffer.from("addon bytes");
     const expected = createHash("sha256").update(payload).digest("hex");
     const http = fakeHttp({ kind: "result", body: payload });
-    const sha = await fetchAndHashAddon(http, "https://e.com/a", {
+    const sha = await fetchAndHashAddon("https://e.com/a", {
+      http: http,
       maxBinaryBytes: 1 << 20,
       maxBinaryMs: 30_000,
       label: "linux/x64",
@@ -67,7 +68,8 @@ describe("fetchAndHashAddon", () => {
       contentLength: 1 << 30,
     });
     await expect(
-      fetchAndHashAddon(http, "https://e.com/big", {
+      fetchAndHashAddon("https://e.com/big", {
+        http: http,
         maxBinaryBytes: 1024,
         maxBinaryMs: 30_000,
         label: "linux/x64",
@@ -86,7 +88,8 @@ describe("fetchAndHashAddon", () => {
       },
     };
     await expect(
-      fetchAndHashAddon(http, "https://e.com/big", {
+      fetchAndHashAddon("https://e.com/big", {
+        http: http,
         maxBinaryBytes: 1024,
         maxBinaryMs: 30_000,
         label: "linux/x64",
@@ -100,7 +103,8 @@ describe("fetchAndHashAddon", () => {
       { kind: "throw", error: new HttpError({ kind: "network", url: "x", message: "ECONNRESET" }) },
       { kind: "result", body: payload },
     ]);
-    const sha = await fetchAndHashAddon(http, "https://e.com/a", {
+    const sha = await fetchAndHashAddon("https://e.com/a", {
+      http: http,
       maxBinaryBytes: 1 << 20,
       maxBinaryMs: 30_000,
       label: "linux/x64",
@@ -122,7 +126,8 @@ describe("fetchAndHashAddon", () => {
       }),
     });
     const hit = fakeHttp([make404(), { kind: "result", body: payload }]);
-    const sha = await fetchAndHashAddon(hit, "https://e.com/a", {
+    const sha = await fetchAndHashAddon("https://e.com/a", {
+      http: hit,
       maxBinaryBytes: 1 << 20,
       maxBinaryMs: 30_000,
       label: "linux/x64",
@@ -133,7 +138,8 @@ describe("fetchAndHashAddon", () => {
 
     const hitNoOptIn = fakeHttp(make404());
     await expect(
-      fetchAndHashAddon(hitNoOptIn, "https://e.com/a", {
+      fetchAndHashAddon("https://e.com/a", {
+        http: hitNoOptIn,
         maxBinaryBytes: 1 << 20,
         maxBinaryMs: 30_000,
         label: "linux/x64",

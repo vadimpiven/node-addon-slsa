@@ -22,6 +22,11 @@ export function createHashPassthrough(): { stream: Transform; digest: () => Sha2
   return { stream, digest: (): Sha256Hex => sha256Hex(hash.digest("hex")) };
 }
 
+/** Options for {@link hashFileSha256}. */
+export type HashFileSha256Options = {
+  readonly sizeCap?: number | undefined;
+};
+
 /**
  * Hash the file at `path` with SHA-256. When `sizeCap` is given, the file
  * is `stat`-ed first and the call rejects if the size exceeds the cap —
@@ -30,7 +35,7 @@ export function createHashPassthrough(): { stream: Transform; digest: () => Sha2
  */
 export async function hashFileSha256(
   path: string,
-  options: { sizeCap?: number } = {},
+  options: HashFileSha256Options = {},
 ): Promise<{ sha256: Sha256Hex; size: number }> {
   const { size } = await stat(path);
   if (options.sizeCap !== undefined && size > options.sizeCap) {

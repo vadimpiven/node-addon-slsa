@@ -39,15 +39,20 @@ export function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/** Options for {@link buildAttestSignerPattern}. */
+export type BuildAttestSignerPatternOptions = {
+  /** "owner/repo" */
+  readonly repo: string;
+  /** Workflow filename, e.g. "release.yaml". No path segments allowed. */
+  readonly workflow: string;
+};
+
 /**
  * Fulcio Build Signer URI pin (OID 1.3.6.1.4.1.57264.1.9). Tag and branch
  * refs are rejected — only `@<40-hex>` SHA pins, because tags are mutable
  * and could mint attestations passing a looser pin after retagging.
  */
-export function buildAttestSignerPattern(opts: {
-  readonly repo: string; // "owner/repo"
-  readonly workflow: string; // filename, e.g. "release.yaml", no path segments
-}): RegExp {
+export function buildAttestSignerPattern(opts: BuildAttestSignerPatternOptions): RegExp {
   if (opts.workflow.includes("/") || opts.workflow.includes("\\")) {
     throw new TypeError(`attest workflow must be a bare filename: ${opts.workflow}`);
   }

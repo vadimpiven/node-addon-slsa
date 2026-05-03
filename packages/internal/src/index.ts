@@ -47,6 +47,7 @@ export {
 export type {
   PackageProvenance,
   VerifyPackageOptions,
+  VerifyPackageAtOptions,
   VerifyAttestationOptions,
   VerifyAttestationFromBundleOptions,
 } from "./verify/verify.ts";
@@ -84,6 +85,7 @@ export {
   DEFAULT_MAX_BINARY_BYTES,
   DEFAULT_MAX_BINARY_SECONDS,
 } from "./verify/constants.ts";
+export type { BuildAttestSignerPatternOptions } from "./verify/constants.ts";
 
 // Low-level helpers
 export { createHttpClient, withRetry, HttpError } from "./http.ts";
@@ -93,11 +95,15 @@ export type {
   HttpRequestOptions,
   HttpErrorKind,
   RetryDecision,
+  CreateHttpClientOptions,
+  WithRetryOptions,
 } from "./http.ts";
 export { assertWithinDir, isEnoent, isEnotdir, safeUnlink, tempDir } from "./util/fs.ts";
+export type { AssertWithinDirOptions } from "./util/fs.ts";
 export { fetchAndHashAddon } from "./util/addon-fetch.ts";
 export type { FetchAndHashAddonOptions } from "./util/addon-fetch.ts";
 export { createHashPassthrough, hashFileSha256 } from "./util/hash.ts";
+export type { HashFileSha256Options } from "./util/hash.ts";
 export { evalTemplate } from "./util/template.ts";
 export { log, warn } from "./util/log.ts";
 export { errorMessage } from "./util/error.ts";

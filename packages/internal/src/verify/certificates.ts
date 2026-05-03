@@ -54,23 +54,30 @@ export function getExtensionValue(cert: X509ExtensionReader, oid: string): strin
   return ext.value.toString("ascii");
 }
 
-function assertOidEquals(
-  cert: X509ExtensionReader,
-  oid: string,
-  expected: string,
-  label: string,
-): void {
-  const actual = getExtensionValue(cert, oid);
-  if (actual !== expected) {
+type AssertOidEqualsOptions = {
+  readonly oid: string;
+  readonly expected: string;
+  readonly label: string;
+};
+
+function assertOidEquals(cert: X509ExtensionReader, opts: AssertOidEqualsOptions): void {
+  const actual = getExtensionValue(cert, opts.oid);
+  if (actual !== opts.expected) {
     throw new ProvenanceError(
       dedent`
-        ${label} mismatch.
-        Expected: ${expected}
+        ${opts.label} mismatch.
+        Expected: ${opts.expected}
         Got: ${actual ?? "<missing>"}
       `,
     );
   }
 }
+
+/** Options for {@link verifyCertificateOIDs}. */
+export type VerifyCertificateOIDsOptions = {
+  readonly repo: GitHubRepo;
+  readonly expect: CertificateOIDExpectations;
+};
 
 /**
  * Verify Fulcio certificate OIDs (X.509 Object Identifiers) match expected
@@ -84,9 +91,9 @@ function assertOidEquals(
  */
 export function verifyCertificateOIDs(
   cert: X509ExtensionReader,
-  repo: GitHubRepo,
-  expect: CertificateOIDExpectations,
+  options: VerifyCertificateOIDsOptions,
 ): void {
+  const { repo, expect } = options;
   const issuer = getExtensionValue(cert, OID_ISSUER_V2) ?? getExtensionValue(cert, OID_ISSUER_V1);
   if (issuer !== GITHUB_ACTIONS_ISSUER) {
     throw new ProvenanceError(
@@ -111,9 +118,21 @@ export function verifyCertificateOIDs(
     );
   }
 
-  assertOidEquals(cert, OID_SOURCE_REPO_DIGEST, expect.sourceCommit, "Source commit");
-  assertOidEquals(cert, OID_SOURCE_REPO_REF, expect.sourceRef, "Source ref");
-  assertOidEquals(cert, OID_RUN_INVOCATION_URI, expect.runInvocationURI, "Run invocation URI");
+  assertOidEquals(cert, {
+    oid: OID_SOURCE_REPO_DIGEST,
+    expected: expect.sourceCommit,
+    label: "Source commit",
+  });
+  assertOidEquals(cert, {
+    oid: OID_SOURCE_REPO_REF,
+    expected: expect.sourceRef,
+    label: "Source ref",
+  });
+  assertOidEquals(cert, {
+    oid: OID_RUN_INVOCATION_URI,
+    expected: expect.runInvocationURI,
+    label: "Run invocation URI",
+  });
 
   const signerURI = getExtensionValue(cert, OID_BUILD_SIGNER_URI);
   if (!signerURI || !expect.attestSignerPattern.test(signerURI)) {
@@ -169,19 +188,21 @@ if (import.meta.vitest) {
 
   describe("verifyCertificateOIDs", () => {
     it("accepts a matching cert", ({ expect }) => {
-      expect(() => verifyCertificateOIDs(mockCert(good), "owner/repo", expect_ok)).not.toThrow();
+      expect(() =>
+        verifyCertificateOIDs(mockCert(good), { repo: "owner/repo", expect: expect_ok }),
+      ).not.toThrow();
     });
 
     it("rejects wrong sourceCommit", ({ expect }) => {
       const cert = mockCert({ ...good, [OID_SOURCE_REPO_DIGEST]: "b".repeat(40) });
-      expect(() => verifyCertificateOIDs(cert, "owner/repo", expect_ok)).toThrow(
+      expect(() => verifyCertificateOIDs(cert, { repo: "owner/repo", expect: expect_ok })).toThrow(
         /Source commit mismatch/,
       );
     });
 
     it("rejects wrong sourceRef", ({ expect }) => {
       const cert = mockCert({ ...good, [OID_SOURCE_REPO_REF]: "refs/tags/v9.9.9" });
-      expect(() => verifyCertificateOIDs(cert, "owner/repo", expect_ok)).toThrow(
+      expect(() => verifyCertificateOIDs(cert, { repo: "owner/repo", expect: expect_ok })).toThrow(
         /Source ref mismatch/,
       );
     });
@@ -191,7 +212,7 @@ if (import.meta.vitest) {
         ...good,
         [OID_RUN_INVOCATION_URI]: "https://github.com/owner/repo/actions/runs/2/attempts/1",
       });
-      expect(() => verifyCertificateOIDs(cert, "owner/repo", expect_ok)).toThrow(
+      expect(() => verifyCertificateOIDs(cert, { repo: "owner/repo", expect: expect_ok })).toThrow(
         /Run invocation URI mismatch/,
       );
     });
@@ -202,7 +223,7 @@ if (import.meta.vitest) {
         [OID_BUILD_SIGNER_URI]:
           "https://github.com/other/repo/.github/workflows/publish.yaml@" + "a".repeat(40),
       });
-      expect(() => verifyCertificateOIDs(cert, "owner/repo", expect_ok)).toThrow(
+      expect(() => verifyCertificateOIDs(cert, { repo: "owner/repo", expect: expect_ok })).toThrow(
         /Build Signer URI/,
       );
     });
@@ -213,29 +234,35 @@ if (import.meta.vitest) {
         [OID_ISSUER_V2]: null,
         [OID_ISSUER_V1]: GITHUB_ACTIONS_ISSUER,
       });
-      expect(() => verifyCertificateOIDs(cert, "owner/repo", expect_ok)).not.toThrow();
+      expect(() =>
+        verifyCertificateOIDs(cert, { repo: "owner/repo", expect: expect_ok }),
+      ).not.toThrow();
     });
 
     it("rejects when issuer missing", ({ expect }) => {
       const cert = mockCert({ ...good, [OID_ISSUER_V2]: null });
-      expect(() => verifyCertificateOIDs(cert, "owner/repo", expect_ok)).toThrow(/issuer mismatch/);
+      expect(() => verifyCertificateOIDs(cert, { repo: "owner/repo", expect: expect_ok })).toThrow(
+        /issuer mismatch/,
+      );
     });
 
     it("rejects wrong issuer", ({ expect }) => {
       const cert = mockCert({ ...good, [OID_ISSUER_V2]: "https://evil.example.com" });
-      expect(() => verifyCertificateOIDs(cert, "owner/repo", expect_ok)).toThrow(/issuer mismatch/);
+      expect(() => verifyCertificateOIDs(cert, { repo: "owner/repo", expect: expect_ok })).toThrow(
+        /issuer mismatch/,
+      );
     });
 
     it("rejects missing source repo URI", ({ expect }) => {
       const cert = mockCert({ ...good, [OID_SOURCE_REPO_URI]: null });
-      expect(() => verifyCertificateOIDs(cert, "owner/repo", expect_ok)).toThrow(
+      expect(() => verifyCertificateOIDs(cert, { repo: "owner/repo", expect: expect_ok })).toThrow(
         /Source repository mismatch/,
       );
     });
 
     it("rejects missing Build Signer URI", ({ expect }) => {
       const cert = mockCert({ ...good, [OID_BUILD_SIGNER_URI]: null });
-      expect(() => verifyCertificateOIDs(cert, "owner/repo", expect_ok)).toThrow(
+      expect(() => verifyCertificateOIDs(cert, { repo: "owner/repo", expect: expect_ok })).toThrow(
         /Build Signer URI/,
       );
     });
@@ -258,7 +285,7 @@ if (import.meta.vitest) {
         ...good,
         [OID_BUILD_SIGNER_URI]: `${SIGNER_BASE}@refs/tags/v1.2.3`,
       });
-      expect(() => verifyCertificateOIDs(cert, "owner/repo", expect_ok)).toThrow(
+      expect(() => verifyCertificateOIDs(cert, { repo: "owner/repo", expect: expect_ok })).toThrow(
         /Build Signer URI/,
       );
     });

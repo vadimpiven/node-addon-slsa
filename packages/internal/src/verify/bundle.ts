@@ -70,30 +70,36 @@ export async function fetchBundle(http: HttpClient, url: string): Promise<Serial
   return parsed as SerializedBundle;
 }
 
-/** Subject-bind, cryptographic verify, OID pin — for an in-memory bundle. */
-export function verifyBundleSerialized(options: {
+/** Options for {@link verifyBundleSerialized}. */
+export type VerifyBundleSerializedOptions = {
   readonly sha256: Sha256Hex;
   readonly bundle: SerializedBundle;
   readonly repo: GitHubRepo;
   readonly expect: CertificateOIDExpectations;
   readonly verifier: BundleVerifier;
-}): void {
+};
+
+/** Subject-bind, cryptographic verify, OID pin — for an in-memory bundle. */
+export function verifyBundleSerialized(options: VerifyBundleSerializedOptions): void {
   const { sha256, bundle, repo, expect, verifier } = options;
   bindSubjectDigest(bundle, sha256);
   verifier.verify(bundle);
   const cert = certFromBundle(bundle);
-  verifyCertificateOIDs(cert, repo, expect);
+  verifyCertificateOIDs(cert, { repo, expect });
 }
 
-/** Fetch, subject-bind, cryptographic verify, OID pin — for a sidecar URL. */
-export async function verifyAddonBundle(options: {
+/** Options for {@link verifyAddonBundle}. */
+export type VerifyAddonBundleOptions = {
   readonly sha256: Sha256Hex;
   readonly bundleUrl: string;
   readonly repo: GitHubRepo;
   readonly expect: CertificateOIDExpectations;
   readonly http: HttpClient;
   readonly verifier: BundleVerifier;
-}): Promise<void> {
+};
+
+/** Fetch, subject-bind, cryptographic verify, OID pin — for a sidecar URL. */
+export async function verifyAddonBundle(options: VerifyAddonBundleOptions): Promise<void> {
   const { sha256, bundleUrl, repo, expect, http, verifier } = options;
   const bundle = await fetchBundle(http, bundleUrl);
   verifyBundleSerialized({ sha256, bundle, repo, expect, verifier });
