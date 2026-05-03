@@ -78,6 +78,30 @@ describe("fetchWithRetry (retry)", () => {
     expect(calls).toBe(1);
   });
 
+  it("follows a cross-origin 302 → 200 via the redirect interceptor", async ({ expect }) => {
+    // Regression: undici `request()` does NOT follow redirects by default,
+    // and GitHub release URLs always 302 → release-assets.githubusercontent.com.
+    // The dispatcher is composed with `interceptors.redirect` even when the
+    // caller supplies their own dispatcher.
+    const { MockAgent } = await import("undici");
+    const mock = new MockAgent();
+    mock.disableNetConnect();
+    mock
+      .get("https://github.example")
+      .intercept({ path: "/release/asset" })
+      .reply(302, "", { headers: { location: "https://cdn.example/asset" } });
+    mock.get("https://cdn.example").intercept({ path: "/asset" }).reply(200, "final-bytes");
+    try {
+      const res = await fetchWithRetry("https://github.example/release/asset", {
+        dispatcher: mock,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(await res.body.text()).toBe("final-bytes");
+    } finally {
+      await mock.close();
+    }
+  });
+
   it("throws after exhausting retries on persistent network error", async ({ expect }) => {
     await using dispatcher = mockFetchError(new Error("network error"));
     await expect(

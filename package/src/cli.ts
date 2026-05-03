@@ -11,6 +11,7 @@ import { parseArgs } from "node:util";
 
 import { pack, wget } from "./commands.ts";
 import type { FetchOptions } from "./types.ts";
+import { errorMessage } from "./util/error.ts";
 import { log } from "./util/log.ts";
 import { isProvenanceError } from "./util/provenance-error.ts";
 
@@ -46,7 +47,7 @@ export async function runSlsaInner(options?: FetchOptions): Promise<{ exitCode: 
       allowPositionals: true,
     }));
   } catch (err) {
-    console.error(err instanceof Error ? err.message : String(err));
+    console.error(errorMessage(err));
     return { exitCode: 1 };
   }
 
@@ -80,7 +81,7 @@ export async function runSlsaInner(options?: FetchOptions): Promise<{ exitCode: 
       console.error(err.message);
       if (!isProvenanceError(err)) {
         if (err.stack) log(err.stack);
-        console.error(DEBUG_HINT);
+        if (process.env["SLSA_DEBUG"] !== "1") console.error(DEBUG_HINT);
       }
     } else {
       console.error(String(err));

@@ -134,6 +134,23 @@ export type VerifyOptions = FetchOptions & {
    * Only used by {@link verifyAddonProvenance}.
    */
   readonly trustMaterial?: TrustMaterial | undefined;
+  /**
+   * Wall-clock budget in ms for absorbing Rekor ingestion lag when
+   * fetching transparency log entries. Rekor's search index commits
+   * UUIDs immediately, but the per-entry endpoint replicates over
+   * ~tens of seconds. Each entry fetch retries 404s within this
+   * budget before surfacing a fetch error.
+   * @default 32_000
+   */
+  readonly rekorLagBudgetMs?: number | undefined;
+  /**
+   * Per-attempt waits (ms) between 404 retries on the Rekor per-entry
+   * endpoint. The next sleep is skipped if it would push the elapsed
+   * time past {@link rekorLagBudgetMs}. Last value is used after the
+   * schedule is exhausted.
+   * @default [2000, 5000, 10000, 15000]
+   */
+  readonly rekorLagDelaysMs?: readonly number[] | undefined;
 };
 
 if (import.meta.vitest) {

@@ -7,6 +7,8 @@
  * Called by {@link verifyAddonProvenance} in verify.ts.
  */
 
+import { setTimeout as sleep } from "node:timers/promises";
+
 import { X509Certificate } from "@sigstore/core";
 import { verifyCertificateChain, verifyTLogInclusion, type TrustMaterial } from "@sigstore/verify";
 import type { TransparencyLogEntry } from "@sigstore/bundle";
@@ -14,6 +16,7 @@ import dedent from "dedent";
 
 import { fetchWithRetry } from "../http.ts";
 import type { GitHubRepo, RunInvocationURI, Sha256Hex } from "../types.ts";
+import { errorMessage } from "../util/error.ts";
 import { readJsonBounded } from "../util/json.ts";
 import { log } from "../util/log.ts";
 import { ProvenanceError, isProvenanceError } from "../util/provenance-error.ts";
@@ -33,7 +36,38 @@ import {
   type RekorLogEntry,
 } from "./schemas.ts";
 
-// --- Rekor search + fetch ---
+/**
+ * Thrown by {@link fetchRekorEntry} when the per-entry endpoint returns
+ * a non-2xx status. Exposes the HTTP status so the caller can classify
+ * the failure (404 = ingestion-lag past budget; 5xx = Rekor unavailable)
+ * without parsing the error message.
+ */
+const REKOR_FETCH_ERROR_BRAND = Symbol.for("node-addon-slsa.RekorFetchError");
+
+class RekorFetchError extends Error {
+  readonly [REKOR_FETCH_ERROR_BRAND] = true as const;
+  readonly uuid: string;
+  readonly statusCode: number;
+
+  constructor(uuid: string, statusCode: number) {
+    super(dedent`
+      failed to fetch Rekor entry ${uuid}: ${statusCode}.
+      ${REKOR_NETWORK_ADVICE}
+    `);
+    this.name = "RekorFetchError";
+    this.uuid = uuid;
+    this.statusCode = statusCode;
+  }
+}
+
+/** Type guard for {@link RekorFetchError}. */
+function isRekorFetchError(err: unknown): err is RekorFetchError {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as Record<symbol, unknown>)[REKOR_FETCH_ERROR_BRAND] === true
+  );
+}
 
 async function searchRekorEntries(sha256: Sha256Hex, config: ResolvedConfig): Promise<string[]> {
   const response = await fetchWithRetry(REKOR_SEARCH_URL, {
@@ -54,31 +88,71 @@ async function searchRekorEntries(sha256: Sha256Hex, config: ResolvedConfig): Pr
   );
 }
 
-async function fetchRekorEntry(uuid: string, config: ResolvedConfig): Promise<RekorLogEntry> {
-  const url = evalTemplate(REKOR_ENTRY_URL, { uuid });
-  const response = await fetchWithRetry(url, config);
-  if (response.statusCode >= 400) {
-    await response.body.dump();
-    throw new Error(dedent`
-      failed to fetch Rekor entry ${uuid}: ${response.statusCode}.
-      ${REKOR_NETWORK_ADVICE}
-    `);
-  }
-  const data = RekorLogEntrySchema.parse(
-    await readJsonBounded(response.body, config.maxJsonResponseBytes),
-  );
-  const entry = Object.values(data)[0];
-  if (!entry) {
-    throw new Error(dedent`
-      empty Rekor response for entry ${uuid}.
-      This may indicate a Rekor API change.
-      Report this issue to the package maintainer.
-    `);
-  }
-  return entry;
+/**
+ * Wall-clock budget for absorbing Rekor ingestion lag in `fetchRekorEntry`.
+ * 32s covers the typical worst case while bounding install time.
+ */
+export const DEFAULT_REKOR_LAG_BUDGET_MS = 32_000;
+
+/**
+ * Per-attempt waits (ms) used while the Rekor per-entry endpoint is
+ * replicating a freshly-indexed UUID. Bounded by `rekorLagBudgetMs`;
+ * once the next sleep would exceed the deadline, the most recent 404
+ * is surfaced. Last value is reused after the schedule is exhausted.
+ */
+export const DEFAULT_REKOR_LAG_DELAYS_MS: readonly number[] = Object.freeze([
+  2_000, 5_000, 10_000, 15_000,
+]);
+
+/**
+ * Pick the next 404-retry wait. Reuses the last entry once the schedule
+ * is exhausted; returns `null` when sleeping it would push past the
+ * lag-budget deadline (caller surfaces the 404 instead of waiting).
+ */
+function nextLagDelay(attempt: number, delays: readonly number[], deadline: number): number | null {
+  const delay = delays[Math.min(attempt, delays.length - 1)] ?? 0;
+  return Date.now() + delay <= deadline ? delay : null;
 }
 
-// --- Entry parsing ---
+async function fetchRekorEntry(uuid: string, config: ResolvedConfig): Promise<RekorLogEntry> {
+  const url = evalTemplate(REKOR_ENTRY_URL, { uuid });
+  // Rekor's search index commits UUIDs faster than the per-entry endpoint
+  // replicates them: search returns a UUID while a subsequent GET still
+  // 404s briefly. Treat 404 as "not yet replicated" and retry within a
+  // wall-clock budget; lag is part of Rekor's protocol, not a failure.
+  const deadline = Date.now() + config.rekorLagBudgetMs;
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetchWithRetry(url, config);
+
+    if (response.statusCode === 404) {
+      const delay = nextLagDelay(attempt, config.rekorLagDelaysMs, deadline);
+      if (delay !== null) {
+        await response.body.dump();
+        log(`Rekor entry ${uuid} not yet replicated — retrying in ${delay}ms`);
+        await sleep(delay, undefined, { signal: config.signal });
+        continue;
+      }
+    }
+
+    if (response.statusCode >= 400) {
+      await response.body.dump();
+      throw new RekorFetchError(uuid, response.statusCode);
+    }
+
+    const data = RekorLogEntrySchema.parse(
+      await readJsonBounded(response.body, config.maxJsonResponseBytes),
+    );
+    const entry = Object.values(data)[0];
+    if (!entry) {
+      throw new Error(dedent`
+        empty Rekor response for entry ${uuid}.
+        This may indicate a Rekor API change.
+        Report this issue to the package maintainer.
+      `);
+    }
+    return entry;
+  }
+}
 
 /**
  * Parse a Rekor entry into the TransparencyLogEntry protobuf type
@@ -125,8 +199,6 @@ function parseRekorEntry(entry: RekorLogEntry): {
   };
 }
 
-// --- Main verification ---
-
 /**
  * Verify addon provenance against the Rekor transparency log.
  * Searches for entries matching the artifact hash, verifies
@@ -162,7 +234,12 @@ export async function verifyRekorAttestations(options: {
   // the current release. If an attacker floods entries past this window,
   // verification fails closed (rejects install, does not accept malicious artifacts).
   const capped = config.maxRekorEntries > 0 ? uuids.slice(-config.maxRekorEntries) : uuids;
-  let fetchFailures = 0;
+  // Three failure modes for an entry: the per-entry endpoint stayed 404
+  // past the ingestion-lag budget, it returned a non-404 error, or the
+  // entry fetched but failed cryptographic verification (or didn't
+  // match the expected run URI).
+  let lagFailures = 0;
+  let serverFailures = 0;
   let verifyFailures = 0;
 
   for (const uuid of capped) {
@@ -170,9 +247,9 @@ export async function verifyRekorAttestations(options: {
     try {
       entry = await fetchRekorEntry(uuid, config);
     } catch (err) {
-      fetchFailures++;
-      const msg = err instanceof Error ? err.message : String(err);
-      log(`Rekor entry ${uuid} fetch failed: ${msg}`);
+      if (isRekorFetchError(err) && err.statusCode === 404) lagFailures++;
+      else serverFailures++;
+      log(`Rekor entry ${uuid} fetch failed: ${errorMessage(err)}`);
       continue;
     }
 
@@ -192,24 +269,29 @@ export async function verifyRekorAttestations(options: {
     } catch (err) {
       if (isProvenanceError(err)) throw err;
       verifyFailures++;
-      const msg = err instanceof Error ? err.message : String(err);
-      log(`Rekor entry ${uuid} failed verification: ${msg}`);
+      log(`Rekor entry ${uuid} failed verification: ${errorMessage(err)}`);
     }
   }
 
   const n = capped.length;
 
-  // Every attempt failed at the network layer — transient, retriable,
-  // not a provenance issue. Throw a plain Error so callers can distinguish.
-  if (fetchFailures === n) {
+  // 404 here means a UUID stayed unreplicated past `rekorLagBudgetMs` —
+  // we already waited inside fetchRekorEntry. Treat the same as any
+  // other unreachable entry; surface as a plain Error so callers can
+  // distinguish from cryptographic verification failure.
+  if (verifyFailures === 0 && lagFailures + serverFailures > 0) {
+    const parts: string[] = [];
+    if (lagFailures > 0) parts.push(`${lagFailures} still 404 past the ingestion-lag budget`);
+    if (serverFailures > 0) parts.push(`${serverFailures} returned non-404 errors`);
     throw new Error(dedent`
-      Failed to fetch ${n} Rekor transparency log entries for this artifact.
+      Rekor unavailable: of ${n} entries, ${parts.join("; ")}.
       ${REKOR_NETWORK_ADVICE}
     `);
   }
 
+  const totalFailures = verifyFailures + lagFailures + serverFailures;
   const detail =
-    verifyFailures + fetchFailures === n
+    totalFailures === n
       ? dedent`
           All ${n} Rekor entries failed cryptographic verification.
           This may indicate an outdated sigstore trust root or a tampered attestation.
@@ -390,7 +472,7 @@ if (import.meta.vitest) {
           // All entries fail with HTTP 500 before trust material is used.
           trustMaterial: stubTrustMaterial,
         }),
-      ).rejects.toThrow(/Failed to fetch 3 Rekor transparency log entries/);
+      ).rejects.toThrow(/Rekor unavailable: of 3 entries, 3 returned non-404 errors/);
       expect(fetchCount).toBe(3);
     });
   });
@@ -404,6 +486,84 @@ if (import.meta.vitest) {
       await expect(
         fetchRekorEntry("deadbeef", resolveConfig({ retryCount: 0, dispatcher })),
       ).rejects.toThrow(/empty Rekor response/);
+    });
+
+    it("retries past transient 404 (Rekor ingestion lag) within budget", async ({ expect }) => {
+      // Rekor's search index commits UUIDs before the per-entry endpoint
+      // replicates them. fetchRekorEntry must absorb that window inside
+      // its lag budget, then return the eventually-replicated entry.
+      let calls = 0;
+      const validData = JSON.stringify({
+        deadbeef: {
+          body: FIXTURE_ENTRY.body,
+          integratedTime: FIXTURE_ENTRY.integratedTime,
+          logID: FIXTURE_ENTRY.logID,
+          logIndex: FIXTURE_ENTRY.logIndex,
+          verification: FIXTURE_ENTRY.verification,
+        },
+      });
+      await using dispatcher = mockFetch(() => {
+        calls++;
+        if (calls < 3) return { statusCode: 404, data: "" };
+        return { statusCode: 200, data: validData };
+      });
+      const entry = await fetchRekorEntry(
+        "deadbeef",
+        resolveConfig({
+          retryCount: 0,
+          rekorLagBudgetMs: 1_000,
+          rekorLagDelaysMs: [1],
+          dispatcher,
+        }),
+      );
+      expect(entry.logIndex).toBe(FIXTURE_ENTRY.logIndex);
+      expect(calls).toBe(3);
+    });
+
+    it("surfaces final 404 when ingestion lag budget is exhausted", async ({ expect }) => {
+      let calls = 0;
+      await using dispatcher = mockFetch(() => {
+        calls++;
+        return { statusCode: 404, data: "" };
+      });
+      await expect(
+        fetchRekorEntry(
+          "deadbeef",
+          resolveConfig({ retryCount: 0, rekorLagBudgetMs: 1, dispatcher }),
+        ),
+      ).rejects.toThrow(/failed to fetch Rekor entry deadbeef: 404/);
+      expect(calls).toBe(1);
+    });
+  });
+
+  describe("RekorFetchError", () => {
+    it("carries uuid and statusCode", ({ expect }) => {
+      const err = new RekorFetchError("deadbeef", 404);
+      expect(err.uuid).toBe("deadbeef");
+      expect(err.statusCode).toBe(404);
+      expect(err.name).toBe("RekorFetchError");
+      expect(err.message).toContain("failed to fetch Rekor entry deadbeef: 404");
+    });
+  });
+
+  describe("isRekorFetchError", () => {
+    it("distinguishes RekorFetchError from other errors", ({ expect }) => {
+      expect(isRekorFetchError(new RekorFetchError("x", 500))).toBe(true);
+      expect(isRekorFetchError(new Error("test"))).toBe(false);
+    });
+
+    it("rejects plain objects and primitives", ({ expect }) => {
+      expect(isRekorFetchError(null)).toBe(false);
+      expect(isRekorFetchError(undefined)).toBe(false);
+      expect(isRekorFetchError("RekorFetchError")).toBe(false);
+      expect(isRekorFetchError({ name: "RekorFetchError" })).toBe(false);
+    });
+
+    it("matches by brand when instanceof fails (e.g. dual packages)", ({ expect }) => {
+      const fake = Object.assign(new Error("test"), {
+        [Symbol.for("node-addon-slsa.RekorFetchError")]: true,
+      });
+      expect(isRekorFetchError(fake)).toBe(true);
     });
   });
 
