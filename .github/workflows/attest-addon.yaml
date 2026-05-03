@@ -47,14 +47,14 @@ jobs:
       # `uses:` cannot interpolate expressions, so the toolkit is checked
       # out at the same SHA the consumer pinned this reusable workflow to,
       # and the local-path actions below are referenced from that checkout.
-      # `github.job_workflow_sha` is the SHA of *this* reusable workflow
-      # file in *this* repo (the callee); `github.workflow_sha` would be
-      # the caller's workflow-file SHA, which lives in a different repo.
+      # `job.workflow_sha` is the SHA of *this* reusable workflow file in
+      # *this* repo (the callee); `github.workflow_sha` would be the
+      # caller's workflow-file SHA, which lives in a different repo.
       - name: "Checkout toolkit"
         uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           repository: "vadimpiven/node-addon-slsa"
-          ref: "${{ github.job_workflow_sha }}"
+          ref: "${{ job.workflow_sha }}"
           path: "node-addon-slsa-toolkit"
           fetch-depth: 1
           persist-credentials: false
