@@ -108,8 +108,10 @@ export const DEFAULT_REKOR_LAG_DELAYS_MS: readonly number[] = Object.freeze([
  * Pick the next 404-retry wait. Reuses the last entry once the schedule
  * is exhausted; returns `null` when sleeping it would push past the
  * lag-budget deadline (caller surfaces the 404 instead of waiting).
+ * An empty schedule also returns `null` — we never spin on `sleep(0)`.
  */
 function nextLagDelay(attempt: number, delays: readonly number[], deadline: number): number | null {
+  if (delays.length === 0) return null;
   const delay = delays[Math.min(attempt, delays.length - 1)] ?? 0;
   return Date.now() + delay <= deadline ? delay : null;
 }
@@ -243,10 +245,18 @@ export async function verifyRekorAttestations(options: {
   let verifyFailures = 0;
 
   for (const uuid of capped) {
+    // Bail before each entry if the caller cancelled — don't keep
+    // iterating and report "Rekor unavailable" when the user just
+    // hit Ctrl-C.
+    config.signal?.throwIfAborted();
+
     let entry: RekorLogEntry;
     try {
       entry = await fetchRekorEntry(uuid, config);
     } catch (err) {
+      // Re-throw aborts so the caller sees AbortError, not a misleading
+      // "Rekor unavailable" tally built from cancelled fetches.
+      if (config.signal?.aborted) throw err;
       if (isRekorFetchError(err) && err.statusCode === 404) lagFailures++;
       else serverFailures++;
       log(`Rekor entry ${uuid} fetch failed: ${errorMessage(err)}`);
@@ -289,14 +299,23 @@ export async function verifyRekorAttestations(options: {
     `);
   }
 
+  // From here on, `verifyFailures > 0` (the all-fetch-failed branch
+  // above already returned). The remaining ambiguity is whether some
+  // entries also failed at the fetch layer; the message reflects both.
   const totalFailures = verifyFailures + lagFailures + serverFailures;
   const detail =
-    totalFailures === n
+    verifyFailures === n
       ? dedent`
           All ${n} Rekor entries failed cryptographic verification.
           This may indicate an outdated sigstore trust root or a tampered attestation.
         `
-      : dedent`
+      : totalFailures === n
+        ? dedent`
+            All ${n} Rekor entries were either unreachable or failed cryptographic verification
+            (${verifyFailures} verify, ${lagFailures} 404, ${serverFailures} non-404).
+            See the log above for per-entry details.
+          `
+        : dedent`
           ${n} Rekor entries found, none matched workflow run ${runInvocationURI}.
           The addon may have been rebuilt without re-attesting,
           or the npm package and addon were produced by different workflow runs.
@@ -475,6 +494,32 @@ if (import.meta.vitest) {
       ).rejects.toThrow(/Rekor unavailable: of 3 entries, 3 returned non-404 errors/);
       expect(fetchCount).toBe(3);
     });
+
+    it("propagates AbortError instead of reporting 'Rekor unavailable'", async ({ expect }) => {
+      // Without re-throwing on abort, the catch block would tally the
+      // AbortError as a server failure and surface a misleading
+      // "Rekor unavailable" tally to the user.
+      const ac = new AbortController();
+      ac.abort();
+      await using dispatcher = mockFetch((opts) => {
+        if (opts.path.includes("/index/retrieve")) {
+          return {
+            statusCode: 200,
+            data: JSON.stringify(["aa".repeat(40)]),
+          };
+        }
+        return { statusCode: 500, data: "" };
+      });
+      await expect(
+        verifyRekorAttestations({
+          sha256: sha256Hex("a".repeat(64)),
+          runInvocationURI: runInvocationURIFn("https://github.com/o/r/actions/runs/1/attempts/1"),
+          repo: "o/r",
+          config: resolveConfig({ retryCount: 0, signal: ac.signal, dispatcher }),
+          trustMaterial: stubTrustMaterial,
+        }),
+      ).rejects.not.toThrow(/Rekor unavailable/);
+    });
   });
 
   describe("fetchRekorEntry", () => {
@@ -530,6 +575,28 @@ if (import.meta.vitest) {
         fetchRekorEntry(
           "deadbeef",
           resolveConfig({ retryCount: 0, rekorLagBudgetMs: 1, dispatcher }),
+        ),
+      ).rejects.toThrow(/failed to fetch Rekor entry deadbeef: 404/);
+      expect(calls).toBe(1);
+    });
+
+    it("does not spin when rekorLagDelaysMs is empty", async ({ expect }) => {
+      // Empty schedule must surface the first 404 immediately, not loop
+      // on `sleep(0)` until the budget expires.
+      let calls = 0;
+      await using dispatcher = mockFetch(() => {
+        calls++;
+        return { statusCode: 404, data: "" };
+      });
+      await expect(
+        fetchRekorEntry(
+          "deadbeef",
+          resolveConfig({
+            retryCount: 0,
+            rekorLagBudgetMs: 1_000_000,
+            rekorLagDelaysMs: [],
+            dispatcher,
+          }),
         ),
       ).rejects.toThrow(/failed to fetch Rekor entry deadbeef: 404/);
       expect(calls).toBe(1);
