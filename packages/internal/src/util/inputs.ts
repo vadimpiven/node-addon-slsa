@@ -59,17 +59,25 @@ export function normalizeHttpsPrefix(
 }
 
 if (import.meta.vitest) {
-  const { describe, it } = import.meta.vitest;
+  const { describe, it, afterEach } = import.meta.vitest;
 
-  // Happy paths (https + trailing-slash, http rejection, default-label
-  // rejection, positive-int parsing, missing/required env) are exercised
-  // through the attest-addon and verify-addons action e2e tests. Keep only
-  // the branches those e2e flows do not reach: the domain-specific label
-  // for normalizeHttpsPrefix and the non-numeric edge cases for
-  // readPositiveIntInput (zero, negative, fractional, whitespace).
+  // Codecov's per-package patch coverage cannot attribute e2e coverage
+  // produced by `node-addon-slsa`'s action tests back to internal-package
+  // files, so happy paths are duplicated here.
 
   describe("normalizeHttpsPrefix", () => {
-    it("rejects non-https using a domain-specific label", ({ expect }) => {
+    it("appends trailing slash when missing", ({ expect }) => {
+      expect(normalizeHttpsPrefix("https://e.com")).toBe("https://e.com/");
+    });
+    it("preserves existing trailing slash", ({ expect }) => {
+      expect(normalizeHttpsPrefix("https://e.com/")).toBe("https://e.com/");
+    });
+    it("rejects non-https with default label", ({ expect }) => {
+      expect(() => normalizeHttpsPrefix("http://e.com/")).toThrow(
+        /^url must start with https:\/\//,
+      );
+    });
+    it("rejects non-https with domain-specific label", ({ expect }) => {
       expect(() => normalizeHttpsPrefix("http://e.com/", { label: "release-base-url" })).toThrow(
         /^release-base-url must start with https:\/\//,
       );
@@ -78,23 +86,53 @@ if (import.meta.vitest) {
 
   describe("readPositiveIntInput", () => {
     const KEY = "INPUT_FOOBAR";
+    afterEach(() => {
+      delete process.env[KEY];
+    });
+    it("returns the parsed integer for a valid input", ({ expect }) => {
+      process.env[KEY] = "42";
+      expect(readPositiveIntInput("foobar", 1)).toBe(42);
+    });
+    it("returns defaultValue when input is empty", ({ expect }) => {
+      delete process.env[KEY];
+      expect(readPositiveIntInput("foobar", 7)).toBe(7);
+    });
     it("returns defaultValue when input is whitespace", ({ expect }) => {
       process.env[KEY] = "   ";
-      try {
-        expect(readPositiveIntInput("foobar", 7)).toBe(7);
-      } finally {
-        delete process.env[KEY];
+      expect(readPositiveIntInput("foobar", 7)).toBe(7);
+    });
+    it("rejects zero, negative, fractional, and non-numeric values", ({ expect }) => {
+      for (const v of ["0", "-5", "1.5", "abc"]) {
+        process.env[KEY] = v;
+        expect(() => readPositiveIntInput("foobar", 1), `value=${v}`).toThrow(/positive integer/);
       }
     });
-    it("rejects zero, negative, and fractional values", ({ expect }) => {
-      for (const v of ["0", "-5", "1.5"]) {
-        process.env[KEY] = v;
-        try {
-          expect(() => readPositiveIntInput("foobar", 1), `value=${v}`).toThrow(/positive integer/);
-        } finally {
-          delete process.env[KEY];
-        }
+    it("normalises action-input names with spaces and casing", ({ expect }) => {
+      process.env["INPUT_MY_INPUT"] = "5";
+      try {
+        expect(readPositiveIntInput("my input", 1)).toBe(5);
+      } finally {
+        delete process.env["INPUT_MY_INPUT"];
       }
+    });
+  });
+
+  describe("requireEnv", () => {
+    const KEY = "VITEST_REQUIRE_ENV_FIXTURE";
+    afterEach(() => {
+      delete process.env[KEY];
+    });
+    it("returns the value when set", ({ expect }) => {
+      process.env[KEY] = "hello";
+      expect(requireEnv(KEY)).toBe("hello");
+    });
+    it("throws when unset", ({ expect }) => {
+      delete process.env[KEY];
+      expect(() => requireEnv(KEY)).toThrow(/required env var/);
+    });
+    it("throws when empty", ({ expect }) => {
+      process.env[KEY] = "";
+      expect(() => requireEnv(KEY)).toThrow(/required env var/);
     });
   });
 }

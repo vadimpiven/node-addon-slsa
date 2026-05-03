@@ -291,10 +291,88 @@ export async function verifyPackage(options: VerifyPackageOptions): Promise<Pack
 
 if (import.meta.vitest) {
   const { describe, it, vi } = import.meta.vitest;
-  const { writeFile, mkdir } = await import("node:fs/promises");
+  const { readFile, writeFile, mkdir } = await import("node:fs/promises");
   const { join } = await import("node:path");
+  const { Readable } = await import("node:stream");
   const { tempDir } = await import("../util/fs.ts");
   const { SLSA_MANIFEST_V1_SCHEMA_URL } = await import("./manifest.ts");
+  const { buildAttestSignerPattern } = await import("./constants.ts");
+
+  const FIXTURE_PATH = join(
+    new URL(".", import.meta.url).pathname,
+    "..",
+    "..",
+    "tests",
+    "fixtures",
+    "node-reqwest-v0.0.27.bundle.json",
+  );
+  const FIXTURE_SHA = "217358cf5d7c23c687cd39ec9ff50c760374fffcd338aaceb5b2a290e0a304e5";
+  const FIXTURE_REPO = "vadimpiven/node_reqwest";
+  const FIXTURE_COMMIT = "7492facdbdb163499e82c8b0f0cbcca0dd4f3a20";
+  const FIXTURE_REF = "refs/tags/v0.0.27";
+  const FIXTURE_RUN_URI =
+    "https://github.com/vadimpiven/node_reqwest/actions/runs/24739695502/attempts/1";
+  const fixtureSignerPattern = buildAttestSignerPattern({
+    repo: "vadimpiven/node-addon-slsa",
+    workflow: "publish.yaml",
+  });
+
+  void Readable;
+
+  describe("verifyAttestationFromBundle", () => {
+    it("verifies a real bundle's subject + cert OIDs (no fetch)", async () => {
+      const bundle = JSON.parse((await readFile(FIXTURE_PATH)).toString("utf8"));
+      await verifyAttestationFromBundle({
+        sha256: FIXTURE_SHA,
+        bundle,
+        repo: FIXTURE_REPO,
+        runInvocationURI: FIXTURE_RUN_URI,
+        sourceCommit: FIXTURE_COMMIT,
+        sourceRef: FIXTURE_REF,
+        attestSignerPattern: fixtureSignerPattern,
+        verifier: { verify: () => undefined },
+      });
+    });
+
+    it("rejects when the requested sha is not in the bundle's subjects", async ({ expect }) => {
+      const bundle = JSON.parse((await readFile(FIXTURE_PATH)).toString("utf8"));
+      await expect(
+        verifyAttestationFromBundle({
+          sha256: "0".repeat(64),
+          bundle,
+          repo: FIXTURE_REPO,
+          runInvocationURI: FIXTURE_RUN_URI,
+          sourceCommit: FIXTURE_COMMIT,
+          sourceRef: FIXTURE_REF,
+          attestSignerPattern: fixtureSignerPattern,
+          verifier: { verify: () => undefined },
+        }),
+      ).rejects.toThrow(/does not attest the requested artifact/);
+    });
+  });
+
+  describe("verifyAttestation", () => {
+    it("fetches the sidecar bundle via dispatcher and verifies it", async () => {
+      const bundleBytes = await readFile(FIXTURE_PATH);
+      const { mockFetch } = await import("../../tests/helpers/mock-fetch.ts");
+      await using dispatcher = mockFetch(() => ({
+        statusCode: 200,
+        responseOptions: { headers: { "content-type": "application/json" } },
+        data: bundleBytes,
+      }));
+      await verifyAttestation({
+        sha256: FIXTURE_SHA,
+        bundleUrl: "https://example.invalid/bundle.sigstore",
+        repo: FIXTURE_REPO,
+        runInvocationURI: FIXTURE_RUN_URI,
+        sourceCommit: FIXTURE_COMMIT,
+        sourceRef: FIXTURE_REF,
+        attestSignerPattern: fixtureSignerPattern,
+        verifier: { verify: () => undefined },
+        dispatcher,
+      });
+    });
+  });
 
   const ADDON_SHA = "b".repeat(64);
 
@@ -432,6 +510,23 @@ if (import.meta.vitest) {
         verifier: { verify: () => undefined },
       });
       await expect(p.verifyAddonBySha256("c".repeat(64))).rejects.toThrow(/not found in manifest/);
+    });
+
+    it("verifyAddonFromFile hashes the file and looks it up in the manifest", async ({
+      expect,
+    }) => {
+      await using tmp = await makePackage();
+      const p = await verifyPackageAt(tmp.path, {
+        repo: "owner/repo",
+        verifier: { verify: () => undefined },
+      });
+      const filePath = join(tmp.path, "fake.node.gz");
+      await writeFile(filePath, "not the addon");
+      // Hash won't match the manifest's recorded sha so we land in
+      // findAddonEntryBySha's rejection branch — but only after
+      // verifyAddonFromFile streams + hashes the file, which is the line
+      // we want to cover.
+      await expect(p.verifyAddonFromFile(filePath)).rejects.toThrow(/not found in manifest/);
     });
   });
 

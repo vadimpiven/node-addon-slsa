@@ -104,15 +104,44 @@ if (import.meta.vitest) {
     },
   };
 
-  // buildAddonInventory's reassembly + empty-input branches are exercised
-  // by verify-addons.test.ts (which round-trips real descriptor files
-  // through the action and asserts the resulting manifest shape), and
-  // SlsaManifestSchemaV1's happy-path parse runs on every verify-package
-  // test. Keep only the rejection branches and the new git-tag positive
-  // case (covers `+build.N` / `@scope/pkg@v` tags) — none of which any
-  // e2e flow can currently trigger.
+  // Codecov's per-package patch coverage cannot attribute e2e coverage
+  // produced by `node-addon-slsa`'s verify-addons action tests back to
+  // internal-package files, so happy paths are duplicated here.
+
+  describe("buildAddonInventory", () => {
+    it("returns an empty object for no entries", ({ expect }) => {
+      expect(buildAddonInventory([])).toEqual({});
+    });
+
+    it("groups entries by platform and arch", ({ expect }) => {
+      const entry = (sha: string): AddonEntry => ({
+        url: "https://e.com/a.node.gz",
+        bundleUrl: "https://e.com/a.node.gz.sigstore",
+        sha256: sha.repeat(64),
+      });
+      const result = buildAddonInventory([
+        { platform: "linux", arch: "x64", entry: entry("a") },
+        { platform: "linux", arch: "arm64", entry: entry("b") },
+        { platform: "darwin", arch: "x64", entry: entry("c") },
+      ]);
+      expect(Object.keys(result).sort()).toEqual(["darwin", "linux"]);
+      expect(Object.keys(result.linux ?? {}).sort()).toEqual(["arm64", "x64"]);
+      expect(result.linux?.x64?.sha256).toBe("a".repeat(64));
+      expect(result.linux?.arm64?.sha256).toBe("b".repeat(64));
+      expect(result.darwin?.x64?.sha256).toBe("c".repeat(64));
+    });
+
+    it("uses null-prototype outer object to resist prototype pollution", ({ expect }) => {
+      const result = buildAddonInventory([]);
+      expect(Object.getPrototypeOf(result)).toBeNull();
+    });
+  });
 
   describe("SlsaManifestSchemaV1", () => {
+    it("parses a fully valid manifest", ({ expect }) => {
+      expect(SlsaManifestSchemaV1.parse(VALID)).toEqual(VALID);
+    });
+
     it("rejects wrong $schema URL", ({ expect }) => {
       const bad = { ...VALID, $schema: "https://other.example/schema.json" };
       expect(() => SlsaManifestSchemaV1.parse(bad)).toThrow();
