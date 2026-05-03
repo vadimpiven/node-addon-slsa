@@ -1,6 +1,2 @@
 [files]
-extend-exclude = [
-  "*.lock",
-  "pnpm-lock.yaml",
-  "**/dist/",
-]
+extend-exclude = ["*.lock", "pnpm-lock.yaml", "attest-public/dist/"]

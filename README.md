@@ -63,25 +63,26 @@ npm install node-addon-slsa
 Programmatic API:
 
 ```typescript
-import { verifyPackage } from "node-addon-slsa";
+import {
+  verifyPackageProvenance,
+  semVerString,
+  githubRepo,
+} from "node-addon-slsa";
 
-const provenance = await verifyPackage({
+const provenance = await verifyPackageProvenance({
   packageName: "my-native-addon",
-  repo: "owner/repo",
+  version: semVerString("1.0.0"),
+  repo: githubRepo("owner/repo"),
 });
 
-await provenance.verifyAddonFromFile("/path/to/addon.node.gz");
+await provenance.verifyAddon({ sha256: sha256Hex(hexHash) });
 ```
 
-Setup guide, threat model, and full API reference (including
-`requireAddon`, options, error handling):
-**[`packages/node-addon-slsa/README.md`](packages/node-addon-slsa/README.md)**
+Setup guide, threat model, and full API reference:
+**[`package/README.md`](package/README.md)**
 
-The published npm package lives in
-[`packages/node-addon-slsa/`](packages/node-addon-slsa/); workspace-internal
-primitives live in [`packages/internal/`](packages/internal/) as
-`@node-addon-slsa/internal`. See [`packages/README.md`](packages/README.md)
-for the layout.
+The publishable npm package lives in the [`package/`](package/)
+directory. Source code, tests, and full documentation are there.
 
 ## Contributing
 

@@ -1,13 +1,10 @@
 .env
 .env.*
 !.env.example
-
 mise.local.toml
 mise.local.lock
-
 .claude/settings.local.json
 .claude/worktrees
-
 .DS_Store
 lcov.info
 package.tar.gz
@@ -21,10 +18,8 @@ report.junit.xml
 !.cache/pnpm/.gitkeep
 !.cache/trivy/
 !.cache/trivy/.gitkeep
-
 dist/
-!.github/actions/*/dist/
-
+!attest-public/dist/
 docs/
 node_modules/
 coverage/
