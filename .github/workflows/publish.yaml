@@ -106,7 +106,7 @@ jobs:
       # bump in a follow-up commit when the action changes.
       - name: "Verify addons and build SLSA manifest"
         id: "verify"
-        uses: "vadimpiven/node-addon-slsa/.github/actions/verify-addons@94cd3546a72ca60b8550bf6e9903d0fcbaae153c" # v0.12.0
+        uses: "vadimpiven/node-addon-slsa/.github/actions/verify-addons@d2ab8076732befb3c5b966e202fd027b612267b6" # v0.13.0
         with:
           package-name: "${{ steps.pkg.outputs.name }}"
           descriptors-dir: "${{ runner.temp }}/slsa-descriptors"
