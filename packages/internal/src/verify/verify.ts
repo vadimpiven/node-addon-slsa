@@ -1,29 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-/**
- * Public verification API consumed by node-addon-slsa and verify-addons.
- * Owns manifest reading, Fulcio cert OID expectations, and the sidecar
- * bundle fetch-retry loop; delegates per-addon bundle verification to
- * {@link ./bundle.ts}.
- */
+/** Public verification API for `node-addon-slsa` and `verify-addons`. */
 
 import { createReadStream } from "node:fs";
-import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { dirname, join, resolve } from "node:path";
+import { dirname } from "node:path";
 import { pipeline } from "node:stream/promises";
 
-import { bundleFromJSON } from "@sigstore/bundle";
-import { getTrustedRoot } from "@sigstore/tuf";
-import {
-  toSignedEntity,
-  toTrustMaterial,
-  Verifier as SigstoreVerifier,
-  type TrustMaterial,
-} from "@sigstore/verify";
+import type { SerializedBundle } from "@sigstore/bundle";
 import dedent from "dedent";
 
-import { createHttpClient, HttpError, withRetry, type HttpClient } from "../http.ts";
+import { createHttpClient, withRetry, type HttpClient } from "../http.ts";
 import { readPackageJson } from "../package.ts";
 import {
   githubRepo,
@@ -31,69 +18,27 @@ import {
   sha256Hex,
   sourceCommitSha,
   sourceRef,
-  type BundleVerifier,
   type GitHubRepo,
   type Sha256Hex,
   type VerifyOptions,
 } from "../types.ts";
-import { errorMessage } from "../util/error.ts";
-import { assertWithinDir } from "../util/fs.ts";
 import { createHashPassthrough } from "../util/hash.ts";
 import { ProvenanceError } from "../util/provenance-error.ts";
-import { verifyAddonBundle } from "./bundle.ts";
+import { verifyAddonBundle, verifyBundleSerialized } from "./bundle.ts";
 import type { CertificateOIDExpectations } from "./certificates.ts";
 import type { ResolvedConfig } from "./config.ts";
 import { resolveConfig } from "./config.ts";
-import { buildAttestSignerPattern, escapeRegExp } from "./constants.ts";
-import { SLSA_MANIFEST_V1_SCHEMA_URL, SlsaManifestSchemaV1, type SlsaManifest } from "./schemas.ts";
+import { getDefaultAttestSignerPattern } from "./constants.ts";
+import { findAddonEntryBySha, readManifest } from "./manifest-lookup.ts";
+import {
+  classifyBundle404,
+  createBundleVerifier,
+  defaultRefPattern,
+  loadTrustMaterial,
+  toRegExp,
+} from "./trust.ts";
 
-/** Load sigstore trust material (Fulcio CAs, Rekor public keys) from the TUF repository. */
-export async function loadTrustMaterial(): Promise<TrustMaterial> {
-  return toTrustMaterial(await getTrustedRoot());
-}
-
-/**
- * Build a sigstore {@link BundleVerifier} over the given trust material.
- * Exposed for callers that want to reuse a single verifier across many
- * verifications (amortizes trust-material loading and lets them tune
- * sigstore threshold options directly via `@sigstore/verify.Verifier`).
- */
-export function createBundleVerifier(trustMaterial: TrustMaterial): BundleVerifier {
-  const verifier = new SigstoreVerifier(trustMaterial);
-  return {
-    verify(bundle) {
-      verifier.verify(toSignedEntity(bundleFromJSON(bundle)));
-    },
-  };
-}
-
-/** Normalize a `RegExp | string` pattern to a `RegExp`. Strings are anchored and escaped. */
-function toRegExp(pattern: RegExp | string): RegExp {
-  if (pattern instanceof RegExp) return pattern;
-  return new RegExp(`^${escapeRegExp(pattern)}$`);
-}
-
-/** Default `refPattern` for a given installed package version. */
-function defaultRefPattern(version: string): RegExp {
-  return new RegExp(`^refs/tags/v?${escapeRegExp(version)}$`);
-}
-
-/**
- * Retry when the sidecar bundle URL 404s (CDN propagation lag after a
- * fresh release-asset upload). Any other error is fatal.
- */
-function classifyBundle404(
-  delays: readonly number[],
-): (err: unknown, attempt: number) => { retry: true; delayMs: number } | { retry: false } {
-  return (err, attempt) => {
-    const index = attempt - 1;
-    if (index >= delays.length) return { retry: false };
-    if (err instanceof HttpError && err.kind === "status" && err.status === 404) {
-      return { retry: true, delayMs: delays[index] ?? 0 };
-    }
-    return { retry: false };
-  };
-}
+export { createBundleVerifier, loadTrustMaterial } from "./trust.ts";
 
 /** Options for {@link verifyAttestation}. */
 export type VerifyAttestationOptions = VerifyOptions & {
@@ -103,14 +48,7 @@ export type VerifyAttestationOptions = VerifyOptions & {
   readonly runInvocationURI: string;
   readonly sourceCommit: string;
   readonly sourceRef: string;
-  /**
-   * Fulcio Build Signer URI pin (OID 1.3.6.1.4.1.57264.1.9). Attestations
-   * whose `job_workflow_ref` claim doesn't match this pattern are
-   * rejected. Build with `buildAttestSignerPattern` (from
-   * `node-addon-slsa/advanced`) for the common "one workflow in one
-   * repo" case, or pass a regex directly for advanced multi-workflow
-   * setups.
-   */
+  /** Fulcio Build Signer URI pattern. Build with `buildAttestSignerPattern` from `node-addon-slsa/advanced`. */
   readonly attestSignerPattern: RegExp | string;
 };
 
@@ -119,9 +57,10 @@ function httpFromConfig(config: ResolvedConfig): HttpClient {
 }
 
 /**
- * Verify that the bundle at `bundleUrl` attests the given `sha256` and
- * carries a Fulcio cert whose OIDs match the expected workflow run.
- * Retries briefly on 404 for CDN propagation; any other failure is fatal.
+ * Fetch a sidecar bundle and run the full provenance pipeline:
+ * subject-bind to `sha256`, sigstore chain (TUF → Fulcio → Rekor),
+ * and Fulcio cert OID pin (repo, commit, ref, runInvocationURI,
+ * Build Signer URI).
  */
 export async function verifyAttestation(options: VerifyAttestationOptions): Promise<void> {
   const sha = sha256Hex(options.sha256);
@@ -154,6 +93,44 @@ export async function verifyAttestation(options: VerifyAttestationOptions): Prom
   );
 }
 
+export type VerifyAttestationFromBundleOptions = VerifyOptions & {
+  readonly sha256: string;
+  /** Parsed sigstore bundle JSON. */
+  readonly bundle: SerializedBundle;
+  readonly repo: string;
+  readonly runInvocationURI: string;
+  readonly sourceCommit: string;
+  readonly sourceRef: string;
+  readonly attestSignerPattern: RegExp | string;
+};
+
+/** Same as {@link verifyAttestation} but for an in-memory bundle (no fetch, no retry). */
+export async function verifyAttestationFromBundle(
+  options: VerifyAttestationFromBundleOptions,
+): Promise<void> {
+  const sha = sha256Hex(options.sha256);
+  const repo = githubRepo(options.repo);
+  const runURI = runInvocationURI(options.runInvocationURI);
+  const commit = sourceCommitSha(options.sourceCommit);
+  const ref = sourceRef(options.sourceRef);
+  const config = resolveConfig(options);
+  const verifier =
+    config.verifier ?? createBundleVerifier(config.trustMaterial ?? (await loadTrustMaterial()));
+  const expect: CertificateOIDExpectations = {
+    sourceCommit: commit,
+    sourceRef: ref,
+    runInvocationURI: runURI,
+    attestSignerPattern: toRegExp(options.attestSignerPattern),
+  };
+  verifyBundleSerialized({
+    sha256: sha,
+    bundle: options.bundle,
+    repo,
+    expect,
+    verifier,
+  });
+}
+
 /** Options for {@link verifyPackage}. */
 export type VerifyPackageOptions = VerifyOptions & {
   /** Installed package to verify. Resolved via `createRequire`. */
@@ -165,21 +142,9 @@ export type VerifyPackageOptions = VerifyOptions & {
    * String → exact-match (literal); RegExp → pattern match.
    */
   readonly refPattern?: RegExp | string;
-  /**
-   * Directory to resolve `packageName` from. Defaults to `process.cwd()`.
-   * Programmatic callers that don't want to depend on ambient cwd (test
-   * harnesses, host processes that may `chdir`, long-running services)
-   * should pass this explicitly — typically the host's own
-   * `require.resolve('./package.json')` directory, or the project root.
-   */
+  /** Resolution base; defaults to `process.cwd()`. Pass explicitly to avoid ambient-cwd dependence. */
   readonly cwd?: string;
-  /**
-   * Override the Fulcio Build Signer URI pin. When omitted, the pattern
-   * is derived from `manifest.sourceRepo` + `pkg.addon.attestWorkflow`
-   * via `buildAttestSignerPattern` (from `node-addon-slsa/advanced`).
-   * Override to accept attestations from additional workflows, or to
-   * tighten the pattern further.
-   */
+  /** Override the Fulcio Build Signer URI pin. Defaults to the toolkit's `attest-addon.yaml`. */
   readonly attestSignerPattern?: RegExp | string;
 };
 
@@ -205,52 +170,7 @@ async function hashFile(filePath: string): Promise<Sha256Hex> {
   return digest();
 }
 
-async function readManifest(packageRoot: string, manifestRel: string): Promise<SlsaManifest> {
-  const resolvedRoot = resolve(packageRoot);
-  const manifestAbs = resolve(resolvedRoot, manifestRel);
-  assertWithinDir({ baseDir: resolvedRoot, target: manifestAbs, label: "addon.manifest" });
-  let raw: string;
-  try {
-    raw = await readFile(manifestAbs, "utf8");
-  } catch {
-    throw new ProvenanceError(dedent`
-      manifest not found at ${manifestRel}.
-      The package was not published with node-addon-slsa, or the
-      "addon.manifest" field in package.json points to a missing file.
-    `);
-  }
-  try {
-    return SlsaManifestSchemaV1.parse(JSON.parse(raw));
-  } catch (err) {
-    throw new ProvenanceError(dedent`
-      manifest at ${manifestRel} failed schema validation.
-      ${errorMessage(err)}
-    `);
-  }
-}
-
-/** Locate the manifest addon entry whose sha256 matches the hashed binary. */
-function findAddonEntryBySha(
-  manifest: SlsaManifest,
-  sha256: string,
-): { url: string; bundleUrl: string; sha256: string } {
-  for (const byArch of Object.values(manifest.addons)) {
-    for (const entry of Object.values(byArch ?? {})) {
-      if (entry && entry.sha256.toLowerCase() === sha256.toLowerCase()) {
-        return entry;
-      }
-    }
-  }
-  throw new ProvenanceError(
-    `sha256 ${sha256} not found in manifest's addon inventory — the binary does not match any declared addon.`,
-  );
-}
-
-/**
- * Verify an installed package's manifest and return a provenance handle.
- * Prefer {@link verifyPackage}; this form is for test fixtures
- * and hosts that have already resolved the package directory.
- */
+/** Like {@link verifyPackage}, but takes a resolved package directory. */
 export async function verifyPackageAt(
   packageRoot: string,
   options: Omit<VerifyPackageOptions, "packageName">,
@@ -302,10 +222,7 @@ export async function verifyPackageAt(
   const http = httpFromConfig(config);
   const attestSignerPattern = options.attestSignerPattern
     ? toRegExp(options.attestSignerPattern)
-    : buildAttestSignerPattern({
-        repo: manifest.sourceRepo,
-        workflow: pkg.addon.attestWorkflow,
-      });
+    : getDefaultAttestSignerPattern();
   const expect: CertificateOIDExpectations = {
     sourceCommit: manifest.sourceCommit,
     sourceRef: manifest.sourceRef,
@@ -342,20 +259,12 @@ export async function verifyPackageAt(
 }
 
 /**
- * Verify an installed npm package's SLSA manifest and return a handle
- * for per-addon provenance verification. Manifest-level checks run once;
- * the returned handle reuses them across every addon file the caller
- * feeds in, so call `verifyPackage` once and `verifyAddonFromFile` for
- * each `.node` binary the host is about to load.
- *
- * @throws {@link ProvenanceError} on any schema or trust-chain mismatch.
- * @throws `TypeError` on malformed option values (invalid `repo` slug, etc.).
+ * Verify an installed npm package's SLSA manifest. Manifest-level checks
+ * run once; reuse the returned handle to verify each `.node` binary.
  */
 export async function verifyPackage(options: VerifyPackageOptions): Promise<PackageProvenance> {
-  // Resolution base: caller-supplied `cwd` for programmatic use, falling
-  // back to `process.cwd()` for CLI-style callers. The trailing slash is
-  // required so createRequire treats the path as a directory — without
-  // it, createRequire would treat it as a *module* and resolve ../ from it.
+  // Trailing slash forces createRequire to treat the path as a directory,
+  // not a module name (which would resolve `../` from it).
   const cwd = options.cwd ?? process.cwd();
   const require = createRequire(cwd + "/");
   let pkgJsonPath: string;
@@ -376,11 +285,13 @@ export async function verifyPackage(options: VerifyPackageOptions): Promise<Pack
 if (import.meta.vitest) {
   const { describe, it, vi } = import.meta.vitest;
   const { writeFile, mkdir } = await import("node:fs/promises");
+  const { join } = await import("node:path");
   const { tempDir } = await import("../util/fs.ts");
+  const { SLSA_MANIFEST_V1_SCHEMA_URL } = await import("./manifest.ts");
 
   const ADDON_SHA = "b".repeat(64);
 
-  const BASE_MANIFEST: SlsaManifest = {
+  const BASE_MANIFEST = {
     $schema: SLSA_MANIFEST_V1_SCHEMA_URL,
     packageName: "my-pkg",
     runInvocationURI: "https://github.com/owner/repo/actions/runs/1/attempts/1",
@@ -396,12 +307,12 @@ if (import.meta.vitest) {
         },
       },
     },
-  };
+  } as const;
 
   async function makePackage(
     overrides: {
       pkg?: Record<string, unknown>;
-      manifest?: Partial<SlsaManifest>;
+      manifest?: Record<string, unknown>;
     } = {},
   ): Promise<{ path: string } & AsyncDisposable> {
     const tmp = await tempDir();
@@ -411,7 +322,6 @@ if (import.meta.vitest) {
       addon: {
         path: "./dist/my.node",
         manifest: "./slsa-manifest.json",
-        attestWorkflow: "release.yaml",
       },
       ...overrides.pkg,
     };
@@ -473,7 +383,7 @@ if (import.meta.vitest) {
 
     it("rejects wrong $schema in manifest", async ({ expect }) => {
       await using tmp = await makePackage({
-        manifest: { $schema: "https://e.com/other.json" as SlsaManifest["$schema"] },
+        manifest: { $schema: "https://e.com/other.json" },
       });
       await expect(
         verifyPackageAt(tmp.path, { repo: "owner/repo", verifier: { verify: () => undefined } }),

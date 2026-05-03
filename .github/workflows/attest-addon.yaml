@@ -1,0 +1,106 @@
+name: "Attest addon"
+on:
+  workflow_call:
+    inputs:
+      binary-artifact:
+        description: >-
+          Workflow artifact name containing the `.node.gz` binary to attest.
+          Exactly one `*.node.gz` must be present.
+        required: true
+        type: string
+      platform:
+        description: "Target platform: `darwin`, `linux`, or `win32`."
+        required: true
+        type: string
+      arch:
+        description: "Target arch: `x64`, `arm64`, `arm`, or `ia32`."
+        required: true
+        type: string
+      release-base-url:
+        description: >-
+          Public URL prefix the binary will be served at. Defaults to the
+          GitHub Release for the current tag:
+          `https://github.com/<repo>/releases/download/<ref-name>/`.
+          Override for monorepos with per-package tag schemes or for
+          packages distributed via a CDN instead of GitHub Releases.
+        required: false
+        type: string
+        default: ""
+      max-binary-bytes:
+        description: "Per-binary size cap (bytes)."
+        required: false
+        type: number
+        default: 268435456
+permissions: {}
+jobs:
+  # The Fulcio Build Signer URI resolves to this workflow's SHA-pinned
+  # ref — that ref is what the install-time verifier anchors trust on.
+  attest:
+    name: "Attest addon"
+    runs-on: "ubuntu-24.04"
+    timeout-minutes: 10
+    permissions:
+      contents: "write" # gh release upload
+      id-token: "write" # sigstore OIDC
+      attestations: "write" # @actions/attest
+    steps:
+      # `uses:` cannot interpolate expressions, so the toolkit is checked
+      # out at the same SHA the consumer pinned this reusable workflow to,
+      # and the local-path actions below are referenced from that checkout.
+      - name: "Checkout toolkit"
+        uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
+        with:
+          repository: "vadimpiven/node-addon-slsa"
+          ref: "${{ github.workflow_sha }}"
+          path: "node-addon-slsa-toolkit"
+          fetch-depth: 1
+          persist-credentials: false
+      - name: "Resolve effective release-base-url"
+        id: "resolve-url"
+        uses: "./node-addon-slsa-toolkit/.github/actions/resolve-release-base-url"
+        with:
+          release-base-url: "${{ inputs.release-base-url }}"
+      - name: "Download binary artifact"
+        uses: "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" # v8.0.1
+        with:
+          name: "${{ inputs.binary-artifact }}"
+          path: "${{ runner.temp }}/slsa-binary"
+      - name: "Resolve binary path"
+        id: "binary"
+        shell: "bash"
+        env:
+          DIR: "${{ runner.temp }}/slsa-binary"
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=("$DIR"/*.node.gz)
+          if [[ ${#files[@]} -ne 1 ]]; then
+            echo "expected exactly one .node.gz under $DIR; found ${#files[@]}" >&2
+            exit 1
+          fi
+          echo "path=${files[0]}" >>"$GITHUB_OUTPUT"
+      - name: "Attest addon (public-good sigstore)"
+        id: "attest"
+        uses: "./node-addon-slsa-toolkit/.github/actions/attest-addon"
+        with:
+          binary-path: "${{ steps.binary.outputs.path }}"
+          url-prefix: "${{ steps.resolve-url.outputs.release-base-url }}"
+          platform: "${{ inputs.platform }}"
+          arch: "${{ inputs.arch }}"
+          max-binary-bytes: "${{ inputs.max-binary-bytes }}"
+      # `--clobber` so a single-cell re-run overwrites partial assets
+      # instead of 422-ing.
+      - name: "Upload binary and sidecar to release"
+        shell: "bash"
+        env:
+          GH_TOKEN: "${{ github.token }}"
+          GH_REPOSITORY: "${{ github.repository }}"
+          GH_REF_NAME: "${{ github.ref_name }}"
+          BINARY_PATH: "${{ steps.attest.outputs.binary-path }}"
+          BUNDLE_PATH: "${{ steps.attest.outputs.bundle-path }}"
+        run: |
+          set -euo pipefail
+          gh release upload "$GH_REF_NAME" \
+            --repo "$GH_REPOSITORY" \
+            --clobber \
+            "$BINARY_PATH" "$BUNDLE_PATH"

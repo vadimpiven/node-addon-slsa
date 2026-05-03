@@ -1,21 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 /**
- * Sidecar-bundle verification: fetch a sigstore Bundle from its distribution
- * URL, cryptographically verify it via `@sigstore/verify` (TUF-backed trust,
- * Rekor inclusion proof carried inside the bundle), bind the envelope's
- * in-toto Statement subject to the expected artifact sha256, and pin the
- * Fulcio cert's OIDs to the expected workflow identity.
+ * Exports `verifyAddonBundle` (fetch + verify) and `verifyBundleSerialized`
+ * (verify in-memory) — the subject-bind + sigstore-chain + Fulcio-OID-pin
+ * pipeline shared by the CLI install path and the publish-side verifier.
  *
- * Why a sidecar, not Rekor's REST API: Rekor's `dsse` pluggable type stores
- * only envelope/payload hashes (PR #1487 in sigstore/rekor, explicit
- * design). The full DSSE envelope never comes back from
- * `GET /api/v1/log/entries/{uuid}` — it must live somewhere durable that the
- * publisher controls. GitHub's Attestations API is such a store, but it
- * requires auth for private repos; the sidecar at `<addon-url>.sigstore`
- * inherits the same auth model as the binary (always reachable by consumers
- * who can fetch the binary itself), which removes any install-time token
- * requirement.
+ * Sidecar bundle, not Rekor REST: Rekor's `dsse` type stores only payload
+ * hashes (sigstore/rekor#1487), so the full DSSE envelope must live with
+ * the artifact. The `<addon-url>.sigstore` sidecar inherits the binary's
+ * auth model — no install-time token required.
  */
 
 import type { SerializedBundle } from "@sigstore/bundle";
@@ -28,19 +21,17 @@ import { log } from "../util/log.ts";
 import { ProvenanceError } from "../util/provenance-error.ts";
 import { verifyCertificateOIDs, type CertificateOIDExpectations } from "./certificates.ts";
 import { MAX_JSON_RESPONSE_BYTES } from "./constants.ts";
-import { InTotoStatementSchema } from "./schemas.ts";
+import { InTotoStatementSchema } from "./intoto.ts";
 
-/**
- * Decode and validate the DSSE envelope payload from a sigstore bundle,
- * and enforce that the in-toto Statement attests the artifact we hashed.
- * Without this binding, a bundle that correctly signs a different
- * artifact's Statement would still pass cryptographic verification.
- */
+// Without this binding, a bundle correctly signing a *different* artifact's
+// Statement would still pass cryptographic verification.
 function bindSubjectDigest(bundle: SerializedBundle, expectedSha256: Sha256Hex): void {
   const dsse = bundle.dsseEnvelope;
   if (!dsse) {
     throw new ProvenanceError(
-      "Bundle is missing dsseEnvelope; only DSSE-kind bundles are supported.",
+      "Bundle is missing dsseEnvelope; only DSSE-kind bundles are supported. " +
+        "public-good sigstore via @actions/attest produces DSSE bundles; " +
+        "this bundle was minted differently.",
     );
   }
   const payloadJson = JSON.parse(Buffer.from(dsse.payload, "base64").toString("utf8"));
@@ -55,16 +46,14 @@ function bindSubjectDigest(bundle: SerializedBundle, expectedSha256: Sha256Hex):
   }
 }
 
-/**
- * Read the Fulcio cert out of a bundle's verification material. Per the
- * v0.3 bundle format, `certificate.rawBytes` is base64 DER.
- */
+// Bundle v0.3: `certificate.rawBytes` is base64 DER.
 function certFromBundle(bundle: SerializedBundle): X509Certificate {
   const rawBytes = bundle.verificationMaterial.certificate?.rawBytes;
   if (!rawBytes) {
     throw new ProvenanceError(
       "Bundle is missing verificationMaterial.certificate.rawBytes; " +
-        "public-good Sigstore uses Fulcio-issued short-lived certs.",
+        "public-good sigstore via @actions/attest issues a Fulcio short-lived " +
+        "cert and embeds it here — this bundle was minted differently.",
     );
   }
   // X509Certificate.parse accepts DER bytes or PEM string; we hand it DER.
@@ -81,11 +70,22 @@ export async function fetchBundle(http: HttpClient, url: string): Promise<Serial
   return parsed as SerializedBundle;
 }
 
-/**
- * Verify an addon's sidecar sigstore bundle end-to-end: fetch, subject-bind,
- * cryptographic verify, OID pin. All four must pass; any failure throws
- * `ProvenanceError`. Returns on success.
- */
+/** Subject-bind, cryptographic verify, OID pin — for an in-memory bundle. */
+export function verifyBundleSerialized(options: {
+  readonly sha256: Sha256Hex;
+  readonly bundle: SerializedBundle;
+  readonly repo: GitHubRepo;
+  readonly expect: CertificateOIDExpectations;
+  readonly verifier: BundleVerifier;
+}): void {
+  const { sha256, bundle, repo, expect, verifier } = options;
+  bindSubjectDigest(bundle, sha256);
+  verifier.verify(bundle);
+  const cert = certFromBundle(bundle);
+  verifyCertificateOIDs(cert, repo, expect);
+}
+
+/** Fetch, subject-bind, cryptographic verify, OID pin — for a sidecar URL. */
 export async function verifyAddonBundle(options: {
   readonly sha256: Sha256Hex;
   readonly bundleUrl: string;
@@ -95,12 +95,8 @@ export async function verifyAddonBundle(options: {
   readonly verifier: BundleVerifier;
 }): Promise<void> {
   const { sha256, bundleUrl, repo, expect, http, verifier } = options;
-
   const bundle = await fetchBundle(http, bundleUrl);
-  bindSubjectDigest(bundle, sha256);
-  verifier.verify(bundle);
-  const cert = certFromBundle(bundle);
-  verifyCertificateOIDs(cert, repo, expect);
+  verifyBundleSerialized({ sha256, bundle, repo, expect, verifier });
 }
 
 if (import.meta.vitest) {

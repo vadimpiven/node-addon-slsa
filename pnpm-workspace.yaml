@@ -1,6 +1,5 @@
 packages:
   - "packages/*"
-  - ".github/actions/aggregate-descriptors"
   - ".github/actions/attest-addon"
   - ".github/actions/verify-addons"
 

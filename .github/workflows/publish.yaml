@@ -2,41 +2,25 @@ name: "Publish attested native addon"
 on:
   workflow_call:
     inputs:
-      addons-artifact-pattern:
-        description: >-
-          Glob for `actions/download-artifact` (e.g. `slsa-addons-*`); each
-          match holds one descriptor JSON from `attest-addon`.
-        required: true
-        type: string
-      release-base-url:
-        description: >-
-          Trust anchor: every descriptor's `url` must start with this prefix.
-          A tampered descriptor pointing at another host is rejected before
-          any addon bytes are fetched.
-        required: true
-        type: string
-      tarball-artifact:
-        description: "Name of the GH artifact holding the pre-packed .tgz or .tar.gz."
-        required: true
-        type: string
       access:
-        description: "npm publish --access (public|restricted)."
+        description: "npm publish --access (public|restricted). Default: public."
         required: false
         type: string
+        default: "public"
       tag:
         description: "npm dist-tag. Omit → latest."
         required: false
         type: string
-      max-binary-bytes:
-        description: "Per-binary size cap (bytes)."
+      release-base-url:
+        description: >-
+          Trust anchor: every descriptor's `url` must start with this prefix.
+          Defaults to the GitHub Release for the current tag:
+          `https://github.com/<repo>/releases/download/<ref-name>/`.
+          Override for monorepos with per-package tag schemes or for
+          packages distributed via a CDN.
         required: false
-        default: 268435456
-        type: number
-      max-binary-seconds:
-        description: "Per-binary fetch timeout (seconds)."
-        required: false
-        default: 300
-        type: number
+        type: string
+        default: ""
 permissions: {}
 jobs:
   publish:
@@ -47,24 +31,41 @@ jobs:
       contents: "read"
       id-token: "write" # npm trusted publishing
     steps:
+      # Checkout the toolkit at the same SHA the consumer pinned this
+      # reusable workflow to, so local-path composite actions below
+      # resolve from a SHA-anchored, untrusted-input-free tree.
+      - name: "Checkout toolkit"
+        uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
+        with:
+          repository: "vadimpiven/node-addon-slsa"
+          ref: "${{ github.workflow_sha }}"
+          path: "node-addon-slsa-toolkit"
+          fetch-depth: 1
+          persist-credentials: false
+      # Must match the prefix `attest-addon.yaml` used when minting
+      # bundles, otherwise `verify-addons` rejects every descriptor.
+      - name: "Resolve effective release-base-url"
+        id: "resolve-url"
+        uses: "./node-addon-slsa-toolkit/.github/actions/resolve-release-base-url"
+        with:
+          release-base-url: "${{ inputs.release-base-url }}"
       - name: "Download pre-packed tarball"
         uses: "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" # v8.0.1
         with:
-          name: "${{ inputs.tarball-artifact }}"
+          name: "slsa-tarball"
           path: "./tarball"
+      # Node 24 ships npm ≥ 11.5.1 (OIDC trusted-publishing minimum) and
+      # avoids the in-place npm self-upgrade that was flaky on Node 22.
       - name: "Set up Node.js + npm registry for trusted publishing"
-        # Node 24 ships npm ≥ 11.5.1 (OIDC trusted-publishing minimum).
-        # Avoids the in-place npm self-upgrade, which was flaky on Node 22.
         uses: "actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e" # v6.4.0
         with:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
+      # Accepts `.tgz` (npm/pnpm) and `.tar.gz` (build-script convention).
       - name: "Extract pre-packed tarball"
         id: "extract"
         shell: "bash"
-        # Accepts `.tgz` (npm/pnpm) and `.tar.gz` (build-script convention)
-        # so callers don't have to rename before upload.
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -77,85 +78,47 @@ jobs:
           mkdir -p "$workdir"
           tar -xzf "${tarballs[0]}" -C "$workdir"
           echo "package-dir=$workdir/package" >>"$GITHUB_OUTPUT"
-      - name: "Read package.json fields: name, manifest path, attest workflow"
+      - name: "Read package.json fields: name, manifest path"
         id: "pkg"
         shell: "bash"
         env:
           PACKAGE_DIR: "${{ steps.extract.outputs.package-dir }}"
-        # `manifest` = embed location (mirrored by the install-time loader);
-        # `attestWorkflow` = filename pinned into the Fulcio Build Signer URI.
         run: |
           set -euo pipefail
           pkg_json="$PACKAGE_DIR/package.json"
           name=$(jq -r '.name' "$pkg_json")
           manifest_rel=$(jq -r '.addon.manifest // empty' "$pkg_json")
-          attest_workflow=$(jq -r '.addon.attestWorkflow // empty' "$pkg_json")
-          missing=()
-          [[ -z "$manifest_rel" ]] && missing+=(addon.manifest)
-          [[ -z "$attest_workflow" ]] && missing+=(addon.attestWorkflow)
-          if (( ${#missing[@]} > 0 )); then
-            echo "package.json is missing required field(s): ${missing[*]}" >&2
+          if [[ -z "$manifest_rel" ]]; then
+            echo "package.json is missing required field: addon.manifest" >&2
             exit 1
           fi
           {
             echo "name=$name"
             echo "manifest-rel=$manifest_rel"
-            echo "attest-workflow=$attest_workflow"
           } >>"$GITHUB_OUTPUT"
-      - name: "Download per-binary descriptor artifacts"
+      - name: "Download per-binary descriptor + bundle artifacts"
         uses: "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" # v8.0.1
         with:
-          pattern: "${{ inputs.addons-artifact-pattern }}"
+          pattern: "slsa-addons-*"
           path: "${{ runner.temp }}/slsa-descriptors"
           merge-multiple: true
-      - name: "Slurp descriptor JSON files"
-        id: "slurp"
-        shell: "bash"
-        env:
-          DESCRIPTOR_DIR: "${{ runner.temp }}/slsa-descriptors"
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          files=("$DESCRIPTOR_DIR"/*.slsa.json)
-          if [[ ${#files[@]} -eq 0 ]]; then
-            echo "no descriptor files found under $DESCRIPTOR_DIR" >&2
-            exit 1
-          fi
-          {
-            echo "descriptors<<__SLSA_EOF__"
-            jq -s '.' "${files[@]}"
-            echo "__SLSA_EOF__"
-          } >>"$GITHUB_OUTPUT"
-      - name: "Aggregate descriptors into addons JSON map"
-        id: "aggregate"
-        # See verify-addons step below for the cross-repo `uses:` rationale.
-        uses: "vadimpiven/node-addon-slsa/.github/actions/aggregate-descriptors@94cd3546a72ca60b8550bf6e9903d0fcbaae153c" # v0.12.0
-        with:
-          descriptors: "${{ steps.slurp.outputs.descriptors }}"
-          release-base-url: "${{ inputs.release-base-url }}"
-      - name: "Verify addons (sigstore) and build SLSA manifest"
+      # SHA-pinned to this repo: a commit cannot contain its own SHA, so
+      # bump in a follow-up commit when the action changes.
+      - name: "Verify addons and build SLSA manifest"
         id: "verify"
-        # Cross-repo `uses:` — `workflow_ref`/`workflow_sha` resolve to the
-        # caller in a `workflow_call`, so there's no context for the callee's
-        # own ref. SHA-pinned (GHA org policy enforces full-SHA at runtime;
-        # a commit cannot contain its own SHA, so bump in two commits when
-        # the action changes).
         uses: "vadimpiven/node-addon-slsa/.github/actions/verify-addons@94cd3546a72ca60b8550bf6e9903d0fcbaae153c" # v0.12.0
         with:
           package-name: "${{ steps.pkg.outputs.name }}"
-          addons: "${{ steps.aggregate.outputs.addons }}"
-          attest-workflow: "${{ steps.pkg.outputs.attest-workflow }}"
-          max-binary-bytes: "${{ inputs.max-binary-bytes }}"
-          max-binary-seconds: "${{ inputs.max-binary-seconds }}"
+          descriptors-dir: "${{ runner.temp }}/slsa-descriptors"
+          release-base-url: "${{ steps.resolve-url.outputs.release-base-url }}"
+      # Block `addon.manifest: "../escape.json"` traversal and refuse to
+      # overwrite — the pre-packed tarball must not already ship a manifest.
       - name: "Embed SLSA manifest"
         shell: "bash"
         env:
           MANIFEST: "${{ steps.verify.outputs.manifest }}"
           MANIFEST_REL: "${{ steps.pkg.outputs.manifest-rel }}"
           PACKAGE_DIR: "${{ steps.extract.outputs.package-dir }}"
-        # Block `addon.manifest: "../escape.json"` traversal (`realpath -m`
-        # canonicalises a not-yet-existing path); refuse overwrite — the
-        # pre-packed tarball must not already ship a manifest.
         run: |
           set -euo pipefail
           pkg_abs=$(realpath "$PACKAGE_DIR")
@@ -170,13 +133,13 @@ jobs:
           fi
           mkdir -p "$(dirname "$manifest_abs")"
           printf '%s\n' "$MANIFEST" > "$manifest_abs"
+      # Reproducibility for auditors, not security: `npm publish` re-hashes
+      # for `dist.integrity`.
       - name: "Repack tarball deterministically"
         id: "repack"
         shell: "bash"
         env:
           PACKAGE_DIR: "${{ steps.extract.outputs.package-dir }}"
-        # Reproducibility, not security: `npm publish` re-hashes for
-        # `dist.integrity`. Helps auditors reproduce the byte-identical tarball.
         run: |
           set -euo pipefail
           workdir=$(dirname "$PACKAGE_DIR")
@@ -192,7 +155,7 @@ jobs:
             -C "$workdir" \
             package
           echo "tarball=$out" >>"$GITHUB_OUTPUT"
-      - name: "npm publish (trusted publishing via OIDC)"
+      - name: "npm publish"
         shell: "bash"
         env:
           TARBALL: "${{ steps.repack.outputs.tarball }}"

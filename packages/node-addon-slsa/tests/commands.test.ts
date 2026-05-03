@@ -86,7 +86,6 @@ describe("wget", () => {
       addon: {
         path: "./dist/test.node",
         manifest: "./slsa-manifest.json",
-        attestWorkflow: "release.yaml",
       },
       repository: "https://gitlab.com/owner/repo",
     };
@@ -279,7 +278,6 @@ describe("pack", () => {
       addon: {
         path: "../etc/evil.node",
         manifest: "./slsa-manifest.json",
-        attestWorkflow: "release.yaml",
       },
       repository: { url: "git+https://github.com/owner/repo.git" },
     };

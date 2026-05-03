@@ -1,17 +1,25 @@
 name: "Attest addon (public-good sigstore)"
 description: >-
-  Hash one local addon binary, mint a sigstore bundle on the public-good
-  instance, and upload a descriptor as GHA artifact
-  `slsa-addons-<platform>-<arch>` for the toolkit's `publish.yaml` to
-  aggregate. One invocation per matrix cell.
+  Hash one downloaded `.node.gz`, mint a sigstore bundle on the
+  public-good instance, and upload `slsa-addons-<platform>-<arch>` —
+  a per-binary descriptor + bundle pair for the toolkit's `publish.yaml`
+  to consume without re-fetching from the public URL. Invoked by the
+  toolkit's `attest-addon.yaml` reusable workflow, one call per matrix
+  cell.
 inputs:
-  binary:
-    description: "Glob matching exactly one addon binary."
+  binary-path:
+    description: "Filesystem path of the `.node.gz` binary to attest."
     required: true
   url-prefix:
     description: >-
       Public URL prefix the binary will be served at. Must be `https://`;
       a trailing `/` is appended if missing. `url = url-prefix + basename(binary)`.
+    required: true
+  platform:
+    description: "Target platform: `darwin`, `linux`, or `win32`."
+    required: true
+  arch:
+    description: "Target arch: `x64`, `arm64`, `arm`, or `ia32`."
     required: true
   github-token:
     description: "Sigstore OIDC token."
@@ -26,24 +34,10 @@ inputs:
     required: false
     default: "14"
 outputs:
-  platform:
-    description: "process.platform"
-  arch:
-    description: "process.arch"
   binary-path:
-    description: "Resolved binary path."
+    description: "Resolved binary path (echoed for the release-upload step)."
   bundle-path:
-    description: "Path of the written `.sigstore` bundle."
-  descriptor-path:
-    description: "Path of the written `.slsa.json` descriptor."
-  url:
-    description: "Public binary URL."
-  bundle-url:
-    description: "Public sigstore bundle URL."
-  sha256:
-    description: "Hex SHA-256 of the binary."
-  attestation-id:
-    description: "Numeric ID of the minted attestation."
+    description: "Path of the written `.sigstore` bundle (echoed for the release-upload step)."
 runs:
   using: "node24"
   main: "dist/index.js"

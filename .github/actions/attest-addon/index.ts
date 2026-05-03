@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-import { createReadStream } from "node:fs";
-import { glob, stat, writeFile } from "node:fs/promises";
+/**
+ * Hash one `.node.gz`, mint a public-good sigstore bundle, ship the
+ * descriptor + bundle as `slsa-addons-<platform>-<arch>` for `publish.yaml`.
+ */
+
+import { writeFile } from "node:fs/promises";
 import { basename, dirname } from "node:path";
-import { pipeline } from "node:stream/promises";
-import { Writable } from "node:stream";
 
 import { DefaultArtifactClient } from "@actions/artifact";
 import { attestProvenance } from "@actions/attest";
@@ -15,78 +17,43 @@ import {
   AddonDescriptorSchema,
   ArchSchema,
   PlatformSchema,
-  createHashPassthrough,
   errorMessage,
+  hashFileSha256,
+  normalizeHttpsPrefix,
+  readPositiveIntInput,
   type AddonDescriptor,
+  type Sha256Hex,
 } from "@node-addon-slsa/internal";
 
-function readPositiveIntInput(name: string, fallback: number): number {
-  const raw = getInput(name);
-  if (raw === "") return fallback;
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) {
-    throw new Error(`input '${name}' must be a positive integer, got: ${raw}`);
-  }
-  return n;
-}
-
-async function resolveSingleBinary(pattern: string): Promise<string> {
-  const matches = await Array.fromAsync(glob(pattern));
-  if (matches.length === 0) throw new Error(`binary glob '${pattern}' matched no files`);
-  if (matches.length > 1) {
-    throw new Error(
-      `binary glob '${pattern}' matched ${matches.length} files; require exactly one`,
-    );
-  }
-  return matches[0]!;
-}
-
-async function streamHashWithCap(
-  path: string,
-  cap: number,
-): Promise<{ sha256: string; size: number }> {
-  const { size } = await stat(path);
-  if (size > cap) throw new Error(`binary ${path} is ${size} bytes, exceeds cap ${cap}`);
-  const { stream, digest } = createHashPassthrough();
-  await pipeline(
-    createReadStream(path),
-    stream,
-    new Writable({
-      write(_c, _e, cb) {
-        cb();
-      },
-    }),
-  );
-  return { sha256: digest(), size };
-}
-
 export async function main(): Promise<void> {
-  const binaryGlob = getInput("binary", { required: true });
+  const binaryPath = getInput("binary-path", { required: true });
   const urlPrefix = getInput("url-prefix", { required: true });
   const token = getInput("github-token", { required: true });
+  const platformInput = getInput("platform", { required: true });
+  const archInput = getInput("arch", { required: true });
   const maxBinaryBytes = readPositiveIntInput("max-binary-bytes", 268_435_456);
   const retentionDays = readPositiveIntInput("descriptor-retention-days", 14);
 
   if (!urlPrefix.startsWith("https://")) {
     throw new Error(`url-prefix must start with https://, got: ${urlPrefix}`);
   }
-  const normalizedPrefix = urlPrefix.endsWith("/") ? urlPrefix : `${urlPrefix}/`;
+  const normalizedPrefix = normalizeHttpsPrefix(urlPrefix);
 
-  const platformParsed = PlatformSchema.safeParse(process.platform);
+  const platformParsed = PlatformSchema.safeParse(platformInput);
   if (!platformParsed.success) {
     throw new Error(
-      `unsupported process.platform '${process.platform}'; supported: darwin, linux, win32`,
+      `unsupported platform '${platformInput}'; supported: ${PlatformSchema.options.join(", ")}`,
     );
   }
-  const archParsed = ArchSchema.safeParse(process.arch);
+  const archParsed = ArchSchema.safeParse(archInput);
   if (!archParsed.success) {
-    throw new Error(`unsupported process.arch '${process.arch}'; supported: x64, arm64, arm, ia32`);
+    throw new Error(`unsupported arch '${archInput}'; supported: ${ArchSchema.options.join(", ")}`);
   }
   const platform = platformParsed.data;
   const arch = archParsed.data;
 
-  const binaryPath = await resolveSingleBinary(binaryGlob);
-  info(`Resolved binary: ${binaryPath}`);
+  info(`Binary: ${binaryPath}`);
+  info(`Target: ${platform}/${arch}`);
 
   const baseName = basename(binaryPath);
   const url = `${normalizedPrefix}${baseName}`;
@@ -102,7 +69,7 @@ export async function main(): Promise<void> {
     );
   }
 
-  const { sha256, size } = await streamHashWithCap(binaryPath, maxBinaryBytes);
+  const { sha256, size } = await hashFileSha256(binaryPath, { sizeCap: maxBinaryBytes });
   info(`Hashed ${size} bytes: sha256=${sha256}`);
 
   info(`Minting sigstore bundle for ${url} on public-good Sigstore...`);
@@ -113,7 +80,7 @@ export async function main(): Promise<void> {
   });
   info(`Attestation id: ${result.attestationID ?? "(unknown)"}`);
 
-  // Pretty-print the sigstore bundle so auditors can diff sidecars by eye.
+  // Pretty-print so auditors can diff sidecars by eye.
   await writeFile(bundlePath, JSON.stringify(result.bundle, null, 2));
   info(`Wrote bundle: ${bundlePath}`);
 
@@ -122,27 +89,23 @@ export async function main(): Promise<void> {
     arch,
     url,
     bundleUrl,
-    sha256,
+    sha256: sha256 as Sha256Hex,
   });
   await writeFile(descriptorPath, JSON.stringify(descriptor));
   info(`Wrote descriptor: ${descriptorPath}`);
 
   const artifactName = `slsa-addons-${platform}-${arch}`;
   const artifactClient = new DefaultArtifactClient();
-  await artifactClient.uploadArtifact(artifactName, [descriptorPath], dirname(descriptorPath), {
-    retentionDays,
-  });
-  info(`Uploaded descriptor artifact '${artifactName}' (retention ${retentionDays}d).`);
+  await artifactClient.uploadArtifact(
+    artifactName,
+    [descriptorPath, bundlePath],
+    dirname(descriptorPath),
+    { retentionDays },
+  );
+  info(`Uploaded artifact '${artifactName}' (retention ${retentionDays}d).`);
 
-  setOutput("platform", platform);
-  setOutput("arch", arch);
   setOutput("binary-path", binaryPath);
   setOutput("bundle-path", bundlePath);
-  setOutput("descriptor-path", descriptorPath);
-  setOutput("url", url);
-  setOutput("bundle-url", bundleUrl);
-  setOutput("sha256", sha256);
-  if (result.attestationID !== undefined) setOutput("attestation-id", result.attestationID);
 }
 
 if (!process.env["VITEST"]) {
