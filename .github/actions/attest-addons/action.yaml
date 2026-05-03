@@ -1,0 +1,34 @@
+name: "Attest addons (public-good sigstore)"
+description: >-
+  Fetch each declared addon URL (with CDN-propagation-aware retries),
+  SHA-256 the body under a size cap, and mint one build-provenance
+  attestation against the public-good Sigstore instance, logging to the
+  public Rekor transparency log. Must run inside node-addon-slsa's
+  reusable publish.yaml — wrapping ensures the Fulcio cert's Build Signer
+  URI is pinned to this repo's workflow, which `verifyPackage` enforces.
+inputs:
+  addons:
+    description: "JSON map of addon URLs to attest, shape `{ [platform]: { [arch]: url } }`."
+    required: true
+  github-token:
+    description: "Token used to mint the Sigstore OIDC identity. Defaults to the workflow's github.token."
+    default: "${{ github.token }}"
+    required: false
+  max-binary-bytes:
+    description: "Hard size cap per addon URL in bytes. Requests exceeding this fail before attestation. Default 256 MiB."
+    required: false
+    default: "268435456"
+  max-binary-seconds:
+    description: "Per-addon fetch timeout in seconds (applies to both total and stall timers)."
+    required: false
+    default: "300"
+  retry-count:
+    description: "Retries per URL for CDN propagation (retries 404 and 5xx with jittered exponential backoff). Default 10."
+    required: false
+    default: "10"
+outputs:
+  attestation-id:
+    description: "Numeric ID of the created attestation."
+runs:
+  using: "node24"
+  main: "dist/index.js"

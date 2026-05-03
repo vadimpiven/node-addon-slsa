@@ -1,34 +1,28 @@
 name: "Verify addons and build SLSA manifest"
 description: >-
-  Trust-critical, but offline. For each `*.slsa.json` descriptor in
-  `descriptors-dir`:
-    (1) read its sibling `*.sigstore` bundle written by `attest-addon`,
-    (2) bind the bundle's in-toto Statement subject to the descriptor's
-        sha256, run `@sigstore/verify`'s full chain (TUF → Fulcio →
-        Rekor inclusion proof), and pin the Fulcio cert's OIDs to this
-        run's repo / commit / ref / run-invocation-URI plus the
-        toolkit's hardcoded reusable-workflow Build Signer URI,
-    (3) HEAD-check each declared `url` and `bundleUrl` against the
-        public CDN to catch silent release-asset upload failures.
-  On success, emits the SLSA manifest as a JSON string; the caller
-  resolves the target path and writes the file into the tarball.
+  Trust-critical verification step. For each declared addon URL: re-fetch
+  under a size cap, SHA-256 the body, and `verifyAttestation` against
+  Rekor (signer pinned to this workflow via
+  `DEFAULT_ATTEST_SIGNER_PATTERN`). On success, emits the SLSA manifest
+  as a JSON string; the caller resolves the target path and writes the
+  file. Callers (publish.yaml) own tar extract/repack, manifest write,
+  path-traversal guard, and `npm publish` so the non-cryptographic
+  plumbing stays readable in the workflow.
 inputs:
   package-name:
     description: "The `name` field from the pre-packed tarball's package.json (read by the caller via jq)."
     required: true
-  descriptors-dir:
-    description: >-
-      Directory containing the descriptor + bundle artifacts downloaded
-      from `slsa-addons-*` workflow artifacts. Each descriptor is a
-      `*.slsa.json` file with a sibling `*.sigstore` bundle (same basename
-      minus the `.slsa.json` suffix) — both produced by `attest-addon`.
+  addons:
+    description: "JSON map of verified addon URLs, shape `{ [platform]: { [arch]: url } }`."
     required: true
-  release-base-url:
-    description: >-
-      Trust anchor: every descriptor's `url` and `bundleUrl` must start
-      with this prefix. Must be `https://`; a trailing `/` is appended
-      if missing.
-    required: true
+  max-binary-bytes:
+    description: "Hard size cap per addon URL in bytes. Requests exceeding this fail before verification. Default 256 MiB."
+    required: false
+    default: "268435456"
+  max-binary-seconds:
+    description: "Per-addon fetch timeout in seconds (applies to both total and stall timers)."
+    required: false
+    default: "300"
 outputs:
   manifest:
     description: "Serialized SLSA manifest JSON (pretty-printed). Caller writes it to the `addon.manifest` path inside the package dir."

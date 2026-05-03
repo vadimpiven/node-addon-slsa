@@ -26,6 +26,5 @@ dist/
 !.github/actions/*/dist/
 
 docs/
-!.claude/docs/
 node_modules/
 coverage/

@@ -13,13 +13,20 @@ const SECURITY_ADVICE = `Do not use this package version. Report this issue to t
 const BRAND = Symbol.for("node-addon-slsa.ProvenanceError");
 
 /**
- * Discriminator for programmatic dispatch on provenance failures. Kept
- * as a union so future causes can be added without breaking the catch
- * shape — currently just one case.
+ * Discriminator for programmatic dispatch on provenance failures.
+ * - `rekor-not-found` — no Rekor entry exists for the artifact hash yet.
+ *   Publish-side callers retry briefly (sigstore ingests with ~30s lag).
+ *   Install-side callers treat this as a final failure.
+ * - `other` — any other mismatch (cert OID, schema, sourceRef, …).
+ *
+ * Use the {@link ProvenanceError.kind} field, not the error message, when
+ * branching on failure mode — messages are diagnostic text, not API.
  */
-export type ProvenanceErrorKind = "other";
+export type ProvenanceErrorKind = "rekor-not-found" | "other";
 
-export type ProvenanceErrorOptions = ErrorOptions;
+export type ProvenanceErrorOptions = ErrorOptions & {
+  readonly kind?: ProvenanceErrorKind;
+};
 
 /**
  * Thrown when provenance verification detects a security issue.
@@ -28,7 +35,7 @@ export type ProvenanceErrorOptions = ErrorOptions;
  */
 export class ProvenanceError extends Error {
   readonly [BRAND] = true as const;
-  readonly kind: ProvenanceErrorKind = "other";
+  readonly kind: ProvenanceErrorKind;
 
   constructor(message: string, options?: ProvenanceErrorOptions) {
     const msg = dedent`
@@ -37,6 +44,7 @@ export class ProvenanceError extends Error {
     `;
     super(msg, options);
     this.name = "ProvenanceError";
+    this.kind = options?.kind ?? "other";
   }
 }
 

@@ -15,14 +15,17 @@ const SemVerStringSchema = z
   .regex(SEMVER_RE)
   .transform((v) => v as SemVerString);
 
-/** `addon` block: `.node` path and SLSA manifest path, both relative to the tarball root. */
+/**
+ * `addon` block in package.json. `path` is the `.node` location inside
+ * `node_modules/<pkg>/`; `manifest` is the SLSA manifest path inside the
+ * same tarball (default: `slsa-manifest.json`). URLs are read from the
+ * manifest at install time, not from here.
+ */
 const AddonConfigSchema = z.object({
   path: z.string().refine((path) => !path.split(/[/\\]/).includes("..") && path.endsWith(".node"), {
     message: "addon.path must be a relative .node file path",
   }),
-  manifest: z.string().refine((p) => !p.split(/[/\\]/).includes("..") && p.endsWith(".json"), {
-    message: "addon.manifest must be a relative .json file path",
-  }),
+  manifest: z.string().optional(),
 });
 
 const RepositorySchema = z.union([z.string(), z.object({ url: z.string().optional() })]);
@@ -62,20 +65,27 @@ export async function readPackageJson(packageDir: string): Promise<PackageJson> 
   }
 }
 
-// Anchored to the full string so a nested path
-// (`https://github.com/foo/bar/baz.git`) returns null instead of silently
-// capturing the wrong owner/repo.
-const GITHUB_URL_FORM =
-  /^(?:git\+)?(?:https?|git|ssh):\/\/(?:[^@/]*@)?github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/;
-const GITHUB_SCP_FORM = /^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/;
-
-/** Returns null on unknown formats; callers treat that as "no trust anchor". */
+/**
+ * Extract GitHub `owner/repo` from a `repository` field. Returns null
+ * when the format is unrecognized — callers treat that as "no trust
+ * anchor in package.json."
+ */
 export function extractExpectedRepo(repository: Repository | undefined): GitHubRepo | null {
   if (!repository) return null;
   const raw = typeof repository === "string" ? repository : (repository.url ?? "");
-  const match = raw.match(GITHUB_URL_FORM) ?? raw.match(GITHUB_SCP_FORM);
+  // Anchor to the full string and accept only the classic github.com forms:
+  //   https://github.com/<owner>/<repo>(.git)?(/)?
+  //   git://github.com/<owner>/<repo>(.git)?(/)?
+  //   ssh://git@github.com/<owner>/<repo>(.git)?(/)?
+  //   git@github.com:<owner>/<repo>(.git)?
+  // Loose match (e.g. `https://github.com/foo/bar/baz.git`) must return
+  // null rather than silently capturing the wrong owner/repo pair.
+  const match = raw.match(
+    /^(?:git\+)?(?:https?|git|ssh):\/\/(?:[^@/]*@)?github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$|^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/,
+  );
   if (!match) return null;
-  const [, owner, repo] = match;
+  const owner = match[1] ?? match[3];
+  const repo = match[2] ?? match[4];
   if (!owner || !repo) return null;
   try {
     return githubRepo(`${owner}/${repo}`);
@@ -120,10 +130,7 @@ if (import.meta.vitest) {
     const validPkg = {
       name: "test-pkg",
       version: "1.0.0",
-      addon: {
-        path: "./dist/test.node",
-        manifest: "./slsa-manifest.json",
-      },
+      addon: { path: "./dist/test.node" },
       repository: { url: "git+https://github.com/owner/repo.git" },
     };
 
@@ -135,49 +142,17 @@ if (import.meta.vitest) {
       expect(result.addon.path).toBe("./dist/test.node");
     });
 
-    it("accepts a custom manifest path", async ({ expect }) => {
+    it("accepts optional manifest path", async ({ expect }) => {
       await using tmp = await tempDir();
       await writeFile(
         join(tmp.path, "package.json"),
         JSON.stringify({
           ...validPkg,
-          addon: {
-            path: "./dist/test.node",
-            manifest: "./custom/slsa.json",
-          },
+          addon: { path: "./dist/test.node", manifest: "./custom/slsa.json" },
         }),
       );
       const result = await readPackageJson(tmp.path);
       expect(result.addon.manifest).toBe("./custom/slsa.json");
-    });
-
-    it("rejects traversal in addon.manifest", async ({ expect }) => {
-      await using tmp = await tempDir();
-      await writeFile(
-        join(tmp.path, "package.json"),
-        JSON.stringify({
-          ...validPkg,
-          addon: {
-            path: "./dist/test.node",
-            manifest: "../../etc/passwd.json",
-          },
-        }),
-      );
-      await expect(readPackageJson(tmp.path)).rejects.toThrow(
-        /addon\.manifest must be a relative \.json file path/,
-      );
-    });
-
-    it("rejects a missing addon.manifest", async ({ expect }) => {
-      await using tmp = await tempDir();
-      await writeFile(
-        join(tmp.path, "package.json"),
-        JSON.stringify({
-          ...validPkg,
-          addon: { path: "./dist/test.node" },
-        }),
-      );
-      await expect(readPackageJson(tmp.path)).rejects.toThrow(/addon\.manifest/);
     });
 
     it("throws for missing package.json", async ({ expect }) => {
@@ -191,10 +166,7 @@ if (import.meta.vitest) {
         join(tmp.path, "package.json"),
         JSON.stringify({
           ...validPkg,
-          addon: {
-            path: "../etc/evil.node",
-            manifest: "./slsa-manifest.json",
-          },
+          addon: { path: "../etc/evil.node" },
         }),
       );
       await expect(readPackageJson(tmp.path)).rejects.toThrow();

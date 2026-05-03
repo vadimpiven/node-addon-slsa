@@ -23,10 +23,7 @@ export const FAKE_URL =
 export type TestPackageJson = {
   readonly name: string;
   readonly version: string;
-  readonly addon: {
-    readonly path: string;
-    readonly manifest: string;
-  };
+  readonly addon: { readonly path: string; readonly manifest?: string };
   readonly repository: { readonly url: string };
 };
 
@@ -34,10 +31,7 @@ export function testPkg(version: string): TestPackageJson {
   return {
     name: "node-reqwest",
     version,
-    addon: {
-      path: "./dist/node_reqwest.node",
-      manifest: "./slsa-manifest.json",
-    },
+    addon: { path: "./dist/node_reqwest.node" },
     repository: { url: "git+https://github.com/vadimpiven/node_reqwest.git" },
   };
 }
@@ -60,7 +54,7 @@ export function testManifest(version: string, gzBytes: Buffer): unknown {
     sourceRef: `refs/tags/v${version}`,
     addons: {
       [platform]: {
-        [arch]: { url: FAKE_URL, bundleUrl: `${FAKE_URL}.sigstore`, sha256 },
+        [arch]: { url: FAKE_URL, sha256 },
       },
     },
   };

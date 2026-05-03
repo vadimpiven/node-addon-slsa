@@ -193,10 +193,7 @@ run = [{ task = "check:zizmor" }]
 [tasks."check:actionlint"]
 description = "Lint GitHub Actions workflows"
 hide = true
-# actionlint v1.7.12 doesn't yet know `job.workflow_sha` — the documented
-# context for the callee reusable-workflow's own file SHA. Suppress the
-# false-positive until upstream's job-context schema catches up.
-run = 'actionlint -ignore "property \"workflow_sha\" is not defined"'
+run = "actionlint"
 sources = [".github/**/*.{yaml,yml}"]
 
 [tasks."fix:actionlint"]
@@ -276,13 +273,13 @@ hide = true
 # built before we invoke ncc.
 depends = ["setup", "build:package"]
 run = [
-  'pnpm -F "{.github/actions/attest-addon}" run build',
+  'pnpm -F "{.github/actions/attest-addons}" run build',
   'pnpm -F "{.github/actions/verify-addons}" run build',
 ]
 sources = [
-  ".github/actions/attest-addon/index.ts",
-  ".github/actions/attest-addon/package.json",
-  ".github/actions/attest-addon/tsconfig.json",
+  ".github/actions/attest-addons/index.ts",
+  ".github/actions/attest-addons/package.json",
+  ".github/actions/attest-addons/tsconfig.json",
   ".github/actions/verify-addons/index.ts",
   ".github/actions/verify-addons/package.json",
   ".github/actions/verify-addons/tsconfig.json",
@@ -291,10 +288,7 @@ sources = [
   "pnpm-workspace.yaml",
   "pnpm-lock.yaml",
 ]
-outputs = [
-  ".github/actions/attest-addon/dist/",
-  ".github/actions/verify-addons/dist/",
-]
+outputs = [".github/actions/attest-addons/dist/", ".github/actions/verify-addons/dist/"]
 
 [tasks.build]
 description = "Compile package and actions"
@@ -312,7 +306,7 @@ description = "Run actions tests"
 hide = true
 depends = ["fix"]
 run = [
-  'pnpm -F "{.github/actions/attest-addon}" --if-present run test',
+  'pnpm -F "{.github/actions/attest-addons}" --if-present run test',
   'pnpm -F "{.github/actions/verify-addons}" --if-present run test',
 ]
 

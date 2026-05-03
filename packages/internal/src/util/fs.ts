@@ -33,21 +33,21 @@ export async function tempDir(prefix = "slsa-"): Promise<{ path: string } & Asyn
   };
 }
 
-/** Options for {@link assertWithinDir}. */
-export type AssertWithinDirOptions = {
-  readonly baseDir: string;
-  readonly target: string;
-  readonly label: string;
-};
-
 /**
  * Asserts that `target` is strictly within `baseDir` to prevent
  * path-traversal attacks through package.json fields.
  *
  * @throws {Error} if the resolved path escapes the base directory.
  */
-export function assertWithinDir(options: AssertWithinDirOptions): void {
-  const { baseDir, target, label } = options;
+export function assertWithinDir({
+  baseDir,
+  target,
+  label,
+}: {
+  baseDir: string;
+  target: string;
+  label: string;
+}): void {
   const base = resolve(baseDir);
   const resolved = resolve(target);
   if (!resolved.startsWith(base + sep)) {

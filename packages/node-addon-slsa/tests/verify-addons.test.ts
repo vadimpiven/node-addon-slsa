@@ -2,29 +2,18 @@
 
 /**
  * Integration tests for `.github/actions/verify-addons/index.ts`. The
- * action is pure in/out: it consumes a directory of descriptor + bundle
- * artifact files (produced by `attest-addon`) and emits one `manifest`
- * JSON output via `@actions/core.setOutput`. Tests stub
- * `verifyAttestationFromBundle` and the global `fetch` (HEAD smoke
- * check), so no network is touched.
- *
- * The Authorization-header / redirect behaviour around `GITHUB_TOKEN`
- * inherently depends on the request URL's hostname being `github.com`
- * (see `shouldSendGithubAuth` in the action), so unit-testing it would
- * require a third independent fake (fetchSpy + token env + auth host
- * gate) on top of the existing `verifyAttestationFromBundle` /
- * `@actions/core` stubs. That auth path is exercised directly by the
- * production publish workflow against real GitHub Releases — keeping it
- * here would push every test in this file above the project's 2-fake
- * budget.
+ * action is pure in/out (env inputs, one `manifest` JSON output), so
+ * tests only stub `verifyAttestation` and `@actions/core.setOutput`;
+ * the fetch pipeline runs real against undici's MockAgent. Covers the
+ * happy path, the size-cap guards (declared and streaming), the
+ * fail-fast checks on `GITHUB_REF`, and error surfacing.
  */
 
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { gzipSync } from "node:zlib";
 
+import { MockAgent, setGlobalDispatcher, getGlobalDispatcher, type Dispatcher } from "undici";
 import { afterEach, beforeEach, describe, it, vi } from "vitest";
-
-import { tempDir } from "@node-addon-slsa/internal";
 
 import { main } from "../../../.github/actions/verify-addons/index.ts";
 
@@ -32,8 +21,8 @@ import { main } from "../../../.github/actions/verify-addons/index.ts";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const { mockVerifyFromBundle, mockSetOutput } = vi.hoisted(() => ({
-  mockVerifyFromBundle: vi.fn<(opts: unknown) => Promise<void>>(),
+const { mockVerifyAttestation, mockSetOutput } = vi.hoisted(() => ({
+  mockVerifyAttestation: vi.fn<(opts: unknown) => Promise<void>>(),
   mockSetOutput: vi.fn<(name: string, value: unknown) => void>(),
 }));
 
@@ -41,9 +30,7 @@ vi.mock("@node-addon-slsa/internal", async (orig) => {
   const actual = await orig<typeof import("@node-addon-slsa/internal")>();
   return {
     ...actual,
-    verifyAttestationFromBundle: (opts: unknown) => mockVerifyFromBundle(opts),
-    // Stub trust-material loading to avoid a real TUF round-trip during tests.
-    loadTrustMaterial: async () => ({}) as never,
+    verifyAttestation: (opts: unknown) => mockVerifyAttestation(opts),
   };
 });
 
@@ -59,41 +46,10 @@ vi.mock("@actions/core", async (orig) => {
 // Fixture helpers
 // ---------------------------------------------------------------------------
 
+const GOOD_BINARY = Buffer.from("fake-addon-binary-bytes");
+const GOOD_GZ = gzipSync(GOOD_BINARY);
+const GOOD_SHA = createHash("sha256").update(GOOD_GZ).digest("hex");
 const ADDON_URL = "https://cdn.example.com/v1.0.0/my-addon-linux-x64.node.gz";
-const BUNDLE_URL = "https://cdn.example.com/v1.0.0/my-addon-linux-x64.node.gz.sigstore";
-const ADDON_SHA = "a".repeat(64);
-
-/** Minimal valid descriptor + bundle pair as `attest-addon` would write. */
-async function writePair(
-  dir: string,
-  descriptor: {
-    platform: string;
-    arch: string;
-    url?: string;
-    bundleUrl?: string;
-    sha256?: string;
-  },
-): Promise<void> {
-  const url = descriptor.url ?? ADDON_URL;
-  const bundleUrl = descriptor.bundleUrl ?? BUNDLE_URL;
-  const sha256 = descriptor.sha256 ?? ADDON_SHA;
-  const baseName = `addon-${descriptor.platform}-${descriptor.arch}.node.gz`;
-  const bundlePath = join(dir, `${baseName}.sigstore`);
-  const descriptorPath = `${bundlePath}.slsa.json`;
-  await writeFile(
-    descriptorPath,
-    JSON.stringify({
-      platform: descriptor.platform,
-      arch: descriptor.arch,
-      url,
-      bundleUrl,
-      sha256,
-    }),
-  );
-  // Bundle content doesn't matter — it's passed opaquely to the
-  // mocked `verifyAttestationFromBundle`.
-  await writeFile(bundlePath, JSON.stringify({ stub: "bundle" }));
-}
 
 function getManifest(): Record<string, unknown> {
   const call = mockSetOutput.mock.calls.find((c) => c[0] === "manifest");
@@ -106,17 +62,19 @@ function getManifest(): Record<string, unknown> {
 // ---------------------------------------------------------------------------
 
 type Env = {
-  descriptorsDir: string;
+  addons: unknown;
   packageName?: string;
-  releaseBaseUrl?: string;
+  maxBinaryBytes?: string;
+  maxBinarySeconds?: string;
   ref?: string;
   unsetRef?: boolean;
 };
 
 function wireEnv(env: Env): void {
   vi.stubEnv("INPUT_PACKAGE-NAME", env.packageName ?? "my-addon");
-  vi.stubEnv("INPUT_DESCRIPTORS-DIR", env.descriptorsDir);
-  vi.stubEnv("INPUT_RELEASE-BASE-URL", env.releaseBaseUrl ?? "https://cdn.example.com/v1.0.0/");
+  vi.stubEnv("INPUT_ADDONS", JSON.stringify(env.addons));
+  vi.stubEnv("INPUT_MAX-BINARY-BYTES", env.maxBinaryBytes ?? "");
+  vi.stubEnv("INPUT_MAX-BINARY-SECONDS", env.maxBinarySeconds ?? "");
   vi.stubEnv("GITHUB_REPOSITORY", "owner/repo");
   vi.stubEnv("GITHUB_RUN_ID", "123");
   vi.stubEnv("GITHUB_RUN_ATTEMPT", "1");
@@ -132,31 +90,60 @@ function wireEnv(env: Env): void {
 // Lifecycle
 // ---------------------------------------------------------------------------
 
-const fetchSpy = vi.spyOn(globalThis, "fetch");
+let prevDispatcher: Dispatcher;
+let agent: MockAgent;
 
 beforeEach(() => {
-  mockVerifyFromBundle.mockReset().mockResolvedValue(undefined);
+  mockVerifyAttestation.mockReset().mockResolvedValue(undefined);
   mockSetOutput.mockReset();
-  fetchSpy.mockReset();
-  // Default: HEAD reachability check passes for everything.
-  fetchSpy.mockResolvedValue(new Response(null, { status: 200 }));
+  prevDispatcher = getGlobalDispatcher();
+  agent = new MockAgent();
+  agent.disableNetConnect();
+  setGlobalDispatcher(agent);
 });
 
-afterEach(() => {
+afterEach(async () => {
+  setGlobalDispatcher(prevDispatcher);
+  await agent.close();
   vi.unstubAllEnvs();
 });
+
+function interceptAddon(
+  reply: (opts: { method: string; path: string }) => {
+    statusCode: number;
+    data?: Buffer | string;
+    headers?: Record<string, string>;
+  },
+  times = 1,
+): void {
+  agent
+    .get("https://cdn.example.com")
+    .intercept({ path: () => true, method: () => true })
+    .reply((opts) => {
+      const r = reply({ method: opts.method as string, path: opts.path as string });
+      return {
+        statusCode: r.statusCode,
+        data: r.data ?? "",
+        responseOptions: { headers: r.headers ?? {} },
+      };
+    })
+    .times(times);
+}
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 describe("verify-addons main()", () => {
-  it("happy path: reads descriptor + bundle, verifies, emits manifest JSON", async ({ expect }) => {
-    await using tmp = await tempDir();
-    await writePair(tmp.path, { platform: "linux", arch: "x64" });
-    wireEnv({ descriptorsDir: tmp.path });
+  it("happy path: fetches, verifies, emits manifest JSON", async ({ expect }) => {
+    interceptAddon(() => ({
+      statusCode: 200,
+      data: GOOD_GZ,
+      headers: { "content-length": String(GOOD_GZ.length) },
+    }));
+    wireEnv({ addons: { linux: { x64: ADDON_URL } } });
     await main();
-    expect(mockVerifyFromBundle).toHaveBeenCalledOnce();
+    expect(mockVerifyAttestation).toHaveBeenCalledOnce();
 
     const manifest = getManifest();
     expect(manifest["packageName"]).toBe("my-addon");
@@ -166,109 +153,90 @@ describe("verify-addons main()", () => {
     expect(manifest["runInvocationURI"]).toBe(
       "https://github.com/owner/repo/actions/runs/123/attempts/1",
     );
-    const linuxX64 = (
-      manifest["addons"] as {
-        linux: { x64: { url: string; bundleUrl: string; sha256: string } };
-      }
-    ).linux.x64;
+    const linuxX64 = (manifest["addons"] as { linux: { x64: { url: string; sha256: string } } })
+      .linux.x64;
     expect(linuxX64.url).toBe(ADDON_URL);
-    expect(linuxX64.bundleUrl).toBe(BUNDLE_URL);
-    expect(linuxX64.sha256).toBe(ADDON_SHA);
+    expect(linuxX64.sha256).toBe(GOOD_SHA);
   });
 
-  it("rejects when verifyAttestationFromBundle rejects", async ({ expect }) => {
-    await using tmp = await tempDir();
-    await writePair(tmp.path, { platform: "linux", arch: "x64" });
-    mockVerifyFromBundle.mockRejectedValueOnce(new Error("Source commit mismatch"));
-    wireEnv({ descriptorsDir: tmp.path });
-    await expect(main()).rejects.toThrow(/Source commit mismatch/);
+  it("rejects when verifyAttestation rejects", async ({ expect }) => {
+    interceptAddon(() => ({
+      statusCode: 200,
+      data: GOOD_GZ,
+      headers: { "content-length": String(GOOD_GZ.length) },
+    }));
+    mockVerifyAttestation.mockRejectedValueOnce(new Error("wrong bytes: Rekor miss"));
+    wireEnv({ addons: { linux: { x64: ADDON_URL } } });
+    await expect(main()).rejects.toThrow(/wrong bytes/);
     expect(mockSetOutput).not.toHaveBeenCalled();
   });
 
-  it("rejects descriptor URLs not under release-base-url", async ({ expect }) => {
-    await using tmp = await tempDir();
-    await writePair(tmp.path, {
-      platform: "linux",
-      arch: "x64",
-      url: "https://evil.example/leak.node.gz",
-      bundleUrl: "https://evil.example/leak.node.gz.sigstore",
+  it("rejects on Content-Length over the cap without verifying", async ({ expect }) => {
+    interceptAddon(() => ({
+      statusCode: 200,
+      data: GOOD_GZ,
+      headers: { "content-length": "99999999999" },
+    }));
+    wireEnv({ addons: { linux: { x64: ADDON_URL } } });
+    await expect(main()).rejects.toThrow(/Content-Length .* exceeds cap/);
+    expect(mockVerifyAttestation).not.toHaveBeenCalled();
+  });
+
+  it("aborts mid-stream when body exceeds cap without declared Content-Length", async ({
+    expect,
+  }) => {
+    const bigBody = Buffer.alloc(4096, 0x41);
+    interceptAddon(() => ({ statusCode: 200, data: bigBody }));
+    wireEnv({ addons: { linux: { x64: ADDON_URL } }, maxBinaryBytes: "128" });
+    await expect(main()).rejects.toThrow(/body exceeds cap/);
+    expect(mockVerifyAttestation).not.toHaveBeenCalled();
+  });
+
+  it("respects max-binary-bytes override", async ({ expect }) => {
+    interceptAddon(() => ({
+      statusCode: 200,
+      data: GOOD_GZ,
+      headers: { "content-length": String(GOOD_GZ.length) },
+    }));
+    wireEnv({
+      addons: { linux: { x64: ADDON_URL } },
+      maxBinaryBytes: String(GOOD_GZ.length - 1),
     });
-    wireEnv({ descriptorsDir: tmp.path });
-    await expect(main()).rejects.toThrow(/does not start with release-base-url/);
+    await expect(main()).rejects.toThrow(/Content-Length .* exceeds cap/);
   });
 
-  it("rejects duplicate (platform, arch) pairs", async ({ expect }) => {
-    await using tmp = await tempDir();
-    await mkdir(join(tmp.path, "a"), { recursive: true });
-    await mkdir(join(tmp.path, "b"), { recursive: true });
-    // Same platform/arch in two subdirs → duplicate.
-    await writePair(join(tmp.path, "a"), { platform: "linux", arch: "x64" });
-    await writePair(join(tmp.path, "b"), { platform: "linux", arch: "x64" });
-    wireEnv({ descriptorsDir: tmp.path });
-    await expect(main()).rejects.toThrow(/duplicate/);
-  });
+  it("errors with URL + status on non-2xx HTTP", async ({ expect }) => {
+    interceptAddon(() => ({ statusCode: 503, data: "boom" }), 3);
+    wireEnv({ addons: { linux: { x64: ADDON_URL } } });
+    const err = await main().catch((e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/503/);
+    expect((err as Error).message).toContain(ADDON_URL);
+  }, 15_000);
 
-  it("throws when no descriptor files are found", async ({ expect }) => {
-    await using tmp = await tempDir();
-    wireEnv({ descriptorsDir: tmp.path });
-    await expect(main()).rejects.toThrow(/no \*\.slsa\.json/);
-  });
-
-  it("throws when bundle sibling is missing", async ({ expect }) => {
-    await using tmp = await tempDir();
-    // Write descriptor without sibling bundle.
-    await writeFile(
-      join(tmp.path, "addon-linux-x64.node.gz.sigstore.slsa.json"),
-      JSON.stringify({
-        platform: "linux",
-        arch: "x64",
-        url: ADDON_URL,
-        bundleUrl: BUNDLE_URL,
-        sha256: ADDON_SHA,
-      }),
-    );
-    wireEnv({ descriptorsDir: tmp.path });
-    await expect(main()).rejects.toThrow(/no sibling bundle/);
-  });
-
-  it("HEAD reachability failure aborts publish", async ({ expect }) => {
-    await using tmp = await tempDir();
-    await writePair(tmp.path, { platform: "linux", arch: "x64" });
-    fetchSpy.mockResolvedValue(new Response(null, { status: 404 }));
-    wireEnv({ descriptorsDir: tmp.path });
-    await expect(main()).rejects.toThrow(/release asset not reachable/);
+  it("throws on empty addons input", async ({ expect }) => {
+    wireEnv({ addons: { linux: {} } });
+    await expect(main()).rejects.toThrow(/no URLs|at least one/);
   });
 
   it("uses supplied package-name in manifest", async ({ expect }) => {
-    await using tmp = await tempDir();
-    await writePair(tmp.path, { platform: "linux", arch: "x64" });
-    wireEnv({ descriptorsDir: tmp.path, packageName: "@scope/my-pkg" });
+    interceptAddon(() => ({
+      statusCode: 200,
+      data: GOOD_GZ,
+      headers: { "content-length": String(GOOD_GZ.length) },
+    }));
+    wireEnv({ addons: { linux: { x64: ADDON_URL } }, packageName: "@scope/my-pkg" });
     await main();
     expect(getManifest()["packageName"]).toBe("@scope/my-pkg");
   });
 
   it("fails fast on missing GITHUB_REF", async ({ expect }) => {
-    await using tmp = await tempDir();
-    await writePair(tmp.path, { platform: "linux", arch: "x64" });
-    wireEnv({ descriptorsDir: tmp.path, unsetRef: true });
+    wireEnv({ addons: { linux: { x64: ADDON_URL } }, unsetRef: true });
     await expect(main()).rejects.toThrow(/GITHUB_REF/);
   });
 
   it("fails fast on non-tag GITHUB_REF", async ({ expect }) => {
-    await using tmp = await tempDir();
-    await writePair(tmp.path, { platform: "linux", arch: "x64" });
-    wireEnv({ descriptorsDir: tmp.path, ref: "refs/heads/main" });
+    wireEnv({ addons: { linux: { x64: ADDON_URL } }, ref: "refs/heads/main" });
     await expect(main()).rejects.toThrow(/refs\/tags\//);
   });
-
-  it("rejects non-https release-base-url", async ({ expect }) => {
-    await using tmp = await tempDir();
-    await writePair(tmp.path, { platform: "linux", arch: "x64" });
-    wireEnv({ descriptorsDir: tmp.path, releaseBaseUrl: "http://insecure.example/" });
-    await expect(main()).rejects.toThrow(/release-base-url must start with https/);
-  });
-
-  // Authorization-header / redirect behaviour is intentionally not
-  // covered here — see file-level comment for rationale (would require a
-  // third fake on top of verifyAttestationFromBundle and @actions/core).
 });

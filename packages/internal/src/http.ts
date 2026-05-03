@@ -11,7 +11,7 @@
  * `maxRedirections: 5`. Redirects are NOT authorization-aware — callers
  * must not pass credentialed headers to URLs whose redirect targets they
  * don't control. All of this package's production callers hit public
- * endpoints (GitHub release assets → public CDN, TUF mirror, npmjs.org
+ * endpoints (GitHub release assets → public CDN, public Rekor, npmjs.org
  * via `@actions/attest`), so the limitation is contractual only.
  */
 
@@ -37,6 +37,11 @@ export type HttpResult = {
 
 /** Options every {@link HttpClient.request} accepts. */
 export type HttpRequestOptions = {
+  readonly method?: "GET" | "POST";
+  /** Stringified body. Paired with {@link contentType}. */
+  readonly body?: string;
+  /** Sole request header we expose — enough for Rekor's JSON POST. */
+  readonly contentType?: string;
   readonly signal?: AbortSignal;
   /** Overall request budget including redirects. */
   readonly timeoutMs?: number;
@@ -97,16 +102,14 @@ function createBaseDispatcher(): Dispatcher {
  * dispatcher the caller supplied — the caller's dispatcher is transport,
  * redirect semantics are policy.
  */
-/** Options for {@link createHttpClient}. */
-export type CreateHttpClientOptions = {
+export function createHttpClient(opts?: {
   readonly dispatcher?: Dispatcher | undefined;
-};
-
-export function createHttpClient(opts?: CreateHttpClientOptions): HttpClient {
+}): HttpClient {
   const base = opts?.dispatcher ?? createBaseDispatcher();
   const dispatcher = base.compose(interceptors.redirect({ maxRedirections: 5 }));
   return {
     async request(url, options = {}): Promise<HttpResult> {
+      const method = options.method ?? "GET";
       const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
       const stallTimeoutMs = options.stallTimeoutMs ?? DEFAULT_STALL_TIMEOUT_MS;
 
@@ -114,9 +117,23 @@ export function createHttpClient(opts?: CreateHttpClientOptions): HttpClient {
       const timer = globalThis.setTimeout(() => ac.abort(), timeoutMs);
       const signal = options.signal ? AbortSignal.any([ac.signal, options.signal]) : ac.signal;
 
+      // Refuse header-smuggling attempts: we only expose `contentType`,
+      // so any CR/LF in its value would splice extra header lines into
+      // the request (and could add Authorization cross-origin).
+      if (options.contentType !== undefined && /[\r\n]/.test(options.contentType)) {
+        throw new HttpError({
+          kind: "network",
+          url,
+          message: `${method} ${url} → contentType contains CR/LF`,
+        });
+      }
       try {
         const response = await request(url, {
-          method: "GET",
+          method,
+          ...(options.body !== undefined && { body: options.body }),
+          ...(options.contentType !== undefined && {
+            headers: { "content-type": options.contentType },
+          }),
           signal,
           dispatcher,
           headersTimeout: stallTimeoutMs,
@@ -128,7 +145,7 @@ export function createHttpClient(opts?: CreateHttpClientOptions): HttpClient {
             kind: "status",
             url,
             status: response.statusCode,
-            message: `GET ${url} → HTTP ${response.statusCode}`,
+            message: `${method} ${url} → HTTP ${response.statusCode}`,
           });
         }
         return {
@@ -141,7 +158,7 @@ export function createHttpClient(opts?: CreateHttpClientOptions): HttpClient {
         throw new HttpError({
           kind: "network",
           url,
-          message: `GET ${url} → ${errorMessage(err)}`,
+          message: `${method} ${url} → ${errorMessage(err)}`,
           cause: err,
         });
       } finally {
@@ -156,24 +173,22 @@ export type RetryDecision =
   | { readonly retry: true; readonly delayMs: number }
   | { readonly retry: false };
 
-/** Options for {@link withRetry}. */
-export type WithRetryOptions = {
-  readonly classify: (err: unknown, attempt: number) => RetryDecision;
-  readonly signal?: AbortSignal | undefined;
-};
-
-export async function withRetry<T>(fn: () => Promise<T>, options: WithRetryOptions): Promise<T> {
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  classify: (err: unknown, attempt: number) => RetryDecision,
+  options?: { readonly signal?: AbortSignal },
+): Promise<T> {
   for (let attempt = 1; ; attempt++) {
-    options.signal?.throwIfAborted();
+    options?.signal?.throwIfAborted();
     try {
       return await fn();
     } catch (err) {
-      const decision = options.classify(err, attempt);
+      const decision = classify(err, attempt);
       if (!decision.retry) throw err;
       await sleep(
         decision.delayMs,
         undefined,
-        options.signal ? { signal: options.signal } : undefined,
+        options?.signal ? { signal: options.signal } : undefined,
       );
     }
   }

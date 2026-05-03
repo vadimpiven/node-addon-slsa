@@ -83,10 +83,7 @@ describe("wget", () => {
     const pkg = {
       name: "test-pkg",
       version: "1.0.0",
-      addon: {
-        path: "./dist/test.node",
-        manifest: "./slsa-manifest.json",
-      },
+      addon: { path: "./dist/test.node" },
       repository: "https://gitlab.com/owner/repo",
     };
     await writeFile(join(tmp.path, "package.json"), JSON.stringify(pkg));
@@ -201,11 +198,7 @@ describe("wget", () => {
       sourceRepo: "vadimpiven/node_reqwest",
       sourceCommit: "a".repeat(40),
       sourceRef: "refs/tags/v1.0.0",
-      addons: {
-        [process.platform]: {
-          [process.arch]: { url: FAKE_URL, bundleUrl: `${FAKE_URL}.sigstore`, sha256 },
-        },
-      },
+      addons: { [process.platform]: { [process.arch]: { url: FAKE_URL, sha256 } } },
     };
     await writeFile(join(tmp.path, "slsa-manifest.json"), JSON.stringify(manifest));
 
@@ -230,11 +223,7 @@ describe("wget", () => {
       sourceRepo: "vadimpiven/node_reqwest",
       sourceCommit: "a".repeat(40),
       sourceRef: "refs/tags/v1.0.0",
-      addons: {
-        [platform]: {
-          [arch]: { url: FAKE_URL, bundleUrl: `${FAKE_URL}.sigstore`, sha256: bogusSha },
-        },
-      },
+      addons: { [platform]: { [arch]: { url: FAKE_URL, sha256: bogusSha } } },
     };
     await writeFile(join(tmp.path, "slsa-manifest.json"), JSON.stringify(manifest));
 
@@ -275,10 +264,7 @@ describe("pack", () => {
     const pkg = {
       name: "test-pkg",
       version: "1.0.0",
-      addon: {
-        path: "../etc/evil.node",
-        manifest: "./slsa-manifest.json",
-      },
+      addon: { path: "../etc/evil.node" },
       repository: { url: "git+https://github.com/owner/repo.git" },
     };
     await writeFile(join(tmp.path, "package.json"), JSON.stringify(pkg));

@@ -1,12 +1,11 @@
 packages:
   - "packages/*"
-  - ".github/actions/attest-addon"
+  - ".github/actions/attest-addons"
   - ".github/actions/verify-addons"
 
 blockExoticSubdeps: true
 
 catalog:
-  "@actions/artifact": 6.2.1
   "@actions/attest": 3.2.0
   "@actions/core": 3.0.1
   "@codecov/vite-plugin": 2.0.1

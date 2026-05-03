@@ -40,7 +40,7 @@ export const baseConfig: UserConfig = {
       provider: "istanbul",
       reporter: ["lcovonly", "text"],
       reportsDirectory: "./coverage",
-      exclude: ["dist/**", "docs/**", "coverage/**", "tests/**"],
+      exclude: ["dist/**", "docs/**", "coverage/**"],
     },
     reporters: ["default", ["junit", { outputFile: "report.junit.xml" }]],
     detectAsyncLeaks: true,

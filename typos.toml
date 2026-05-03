@@ -1,8 +1,3 @@
-[default.extend-words]
-# in-toto is a CNCF project name (https://in-toto.io); the compact form
-# `intoto` appears in our schema/file names tracking sigstore conventions.
-intoto = "intoto"
-
 [files]
 extend-exclude = [
   "*.lock",

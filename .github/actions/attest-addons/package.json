@@ -1,5 +1,5 @@
 {
-  "name": "attest-addon",
+  "name": "attest-addons",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,12 +12,12 @@
     "ci-test": "pnpm run test"
   },
   "devDependencies": {
-    "@actions/artifact": "catalog:",
     "@actions/attest": "catalog:",
     "@actions/core": "catalog:",
     "@node-addon-slsa/internal": "workspace:*",
     "@types/node": "catalog:",
     "@vercel/ncc": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "undici": "catalog:"
   }
 }

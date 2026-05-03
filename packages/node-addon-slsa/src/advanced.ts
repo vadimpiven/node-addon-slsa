@@ -24,20 +24,6 @@
  * ```
  */
 
-/**
- * Build a Fulcio Build Signer URI pattern (OID 1.3.6.1.4.1.57264.1.9) for
- * an arbitrary `(repo, workflow)` pair, SHA-anchored. Pass to
- * `verifyPackage({ attestSignerPattern })` to override the default.
- */
-export { buildAttestSignerPattern } from "@node-addon-slsa/internal";
-
-/**
- * The toolkit's reusable-workflow Build Signer URI pin —
- * `attest-addon.yaml` in `vadimpiven/node-addon-slsa`, SHA-anchored.
- * Used as the default trust anchor when no `attestSignerPattern` is given.
- */
-export { buildToolkitAttestSignerPattern } from "@node-addon-slsa/internal";
-
-export { createBundleVerifier, loadTrustMaterial } from "@node-addon-slsa/internal";
+export { loadTrustMaterial, createBundleVerifier } from "@node-addon-slsa/internal";
 export type { BundleVerifier, TrustMaterial } from "@node-addon-slsa/internal";
 export type { Dispatcher } from "undici";

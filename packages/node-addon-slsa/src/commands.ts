@@ -30,6 +30,7 @@ import {
   assertWithinDir,
   createHashPassthrough,
   createHttpClient,
+  DEFAULT_MANIFEST_PATH,
   DEFAULT_MAX_BINARY_BYTES,
   DEFAULT_MAX_BINARY_SECONDS,
   evalTemplate,
@@ -58,10 +59,7 @@ export type PackOptions = {
 };
 
 async function readManifestFile(packageDir: string, manifestRel: string): Promise<SlsaManifest> {
-  const resolvedPkgDir = resolve(packageDir);
-  const manifestAbs = resolve(resolvedPkgDir, manifestRel);
-  assertWithinDir({ baseDir: resolvedPkgDir, target: manifestAbs, label: "addon.manifest" });
-  const raw = await readFile(manifestAbs, "utf8");
+  const raw = await readFile(resolve(packageDir, manifestRel), "utf8");
   return SlsaManifestSchemaV1.parse(JSON.parse(raw));
 }
 
@@ -85,11 +83,10 @@ function resolveAddonEntry(manifest: SlsaManifest): { url: string; sha256: strin
  * 3. Run {@link verifyPackageAt} to load and validate the SLSA manifest.
  * 4. Pick the `platform/arch` entry from `manifest.addons`.
  * 5. Stream the gzipped binary under wire- and decompressed-size caps.
- * 6. Compare the wire sha256 against the manifest, then run sigstore
- *    bundle verification against the expected workflow identity.
+ * 6. Compare the wire sha256 against the manifest, then verify Rekor.
  * 7. Atomically rename the temp file over `addon.path`.
  *
- * @throws {ProvenanceError} when manifest or sigstore verification fails.
+ * @throws {ProvenanceError} when manifest or Rekor verification fails.
  * @throws {Error} on malformed `package.json`, unsupported platform/arch,
  *   download / HTTP / decompression failure, or sha256 mismatch.
  */
@@ -117,7 +114,7 @@ export async function wget(packageDir: string, options?: VerifyOptions): Promise
     ...options,
   });
 
-  const manifest = await readManifestFile(packageDir, addon.manifest);
+  const manifest = await readManifestFile(packageDir, addon.manifest ?? DEFAULT_MANIFEST_PATH);
   const entry = resolveAddonEntry(manifest);
 
   const resolvedPkgDir = resolve(packageDir);

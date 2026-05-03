@@ -2,6 +2,8 @@
 
 /** URLs, OIDs, and defaults for verification endpoints. */
 
+import { BRAND_PUBLISH_WORKFLOW_PATH, BRAND_REPO } from "./brand.ts";
+
 // Sigstore Fulcio OID extensions — https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md
 
 /** Fulcio OID for the v1 OIDC token issuer. */
@@ -22,102 +24,104 @@ export const OID_RUN_INVOCATION_URI = "1.3.6.1.4.1.57264.1.21";
 /** Expected OIDC issuer for GitHub Actions identity tokens. */
 export const GITHUB_ACTIONS_ISSUER = "https://token.actions.githubusercontent.com";
 
-/** 256 MiB. Same default on the publish side (`verify-addons`) and consumer side (`slsa wget`). */
+/** Default manifest path inside the published tarball; overridden by `addon.manifest`. */
+export const DEFAULT_MANIFEST_PATH = "slsa-manifest.json";
+
+/**
+ * Default per-binary download cap (256 MiB). Shared by the publish-side
+ * `verify-addons` action and the consumer-side `slsa wget` / `requireAddon`
+ * flow so both ends enforce the same bound unless explicitly overridden.
+ */
 export const DEFAULT_MAX_BINARY_BYTES = 256 * 1024 * 1024;
 
 /** Default per-binary fetch timeout, seconds. Applied as undici headersTimeout + bodyTimeout. */
 export const DEFAULT_MAX_BINARY_SECONDS = 300;
 
-/** Upper bound for JSON responses (sigstore bundles ~a few KB; cap generously). */
+/** Upper bound for JSON API responses (Rekor). */
 export const MAX_JSON_RESPONSE_BYTES = 50 * 1024 * 1024;
 
-/** GitHub release assets (and most CDNs) take a few seconds to propagate after upload. */
-export const BUNDLE_FETCH_RETRY_DELAYS: readonly number[] = [2_000, 5_000, 10_000, 15_000];
+/** Rekor search-by-hash endpoint. */
+export const REKOR_SEARCH_URL = "https://rekor.sigstore.dev/api/v1/index/retrieve";
+/** Rekor get-entry endpoint template; `{uuid}` expands to the entry UUID. */
+export const REKOR_ENTRY_URL = "https://rekor.sigstore.dev/api/v1/log/entries/{uuid}";
 
-/** Escape regex metacharacters so a literal string matches exactly inside a pattern. */
-export function escapeRegExp(s: string): string {
+/**
+ * Retry delays (ms) for Rekor ingestion lag. Newly-published attestations
+ * take ~30s to appear in Rekor's index; the publish-side self-verify in
+ * `verify-addons` retries through this schedule before giving up.
+ */
+export const REKOR_INGESTION_RETRY_DELAYS: readonly number[] = [2_000, 5_000, 10_000, 15_000];
+
+/**
+ * Max Rekor entries to check per artifact hash. Rekor's index is append-only;
+ * any GitHub actor with `id-token: write` can submit an attestation for an
+ * arbitrary sha256. An attacker flooding the log with entries for a legit
+ * hash could push the legit entry out of a too-small newest-N window.
+ *
+ * 100 matches Rekor's default pagination page size and tolerates 99 attacker
+ * entries per release before verification degrades from "rejected flooder,
+ * found legit" to "all visible entries rejected" (still fail-closed — no
+ * bypass — but the error becomes less diagnostic).
+ */
+export const MAX_REKOR_ENTRIES = 100;
+
+/** Shared advice appended to Rekor network errors. */
+export const REKOR_NETWORK_ADVICE =
+  "Check your network connection and try again.\n" +
+  "If this persists, check https://status.sigstore.dev for outages.";
+
+function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Options for {@link buildAttestSignerPattern}. */
-export type BuildAttestSignerPatternOptions = {
-  /** "owner/repo" */
-  readonly repo: string;
-  /** Workflow filename, e.g. "release.yaml". No path segments allowed. */
-  readonly workflow: string;
-};
-
 /**
- * Fulcio Build Signer URI pin (OID 1.3.6.1.4.1.57264.1.9). Tag and branch
- * refs are rejected — only `@<40-hex>` SHA pins, because tags are mutable
- * and could mint attestations passing a looser pin after retagging.
+ * SHA-only pin for Fulcio cert's Build Signer URI. Tags are mutable; a
+ * retagged `publish.yaml` could mint attestations passing a tag-based pin.
+ * GitHub populates `job_workflow_ref` with the literal ref from the
+ * caller's `uses:` line, so a SHA-pinned `uses:` produces `@<40-hex>`.
+ * Override via {@link VerifyPackageOptions.attestSignerPattern} only to
+ * verify a package produced by a different fork's publish workflow.
  */
-export function buildAttestSignerPattern(opts: BuildAttestSignerPatternOptions): RegExp {
-  if (opts.workflow.includes("/") || opts.workflow.includes("\\")) {
-    throw new TypeError(`attest workflow must be a bare filename: ${opts.workflow}`);
-  }
-  const base = `https://github.com/${opts.repo}/.github/workflows/${opts.workflow}`;
-  return new RegExp(`^${escapeRegExp(base)}@[0-9a-f]{40}$`);
-}
-
-// Single trust anchor for every package published with this toolkit:
-// consumers SHA-pin `attest-addon.yaml` via `uses:`, and the Fulcio
-// Build Signer URI resolves to that workflow regardless of caller.
-const TOOLKIT_REPO = "vadimpiven/node-addon-slsa";
-const ATTEST_WORKFLOW_FILENAME = "attest-addon.yaml";
-
-/**
- * Build the toolkit's reusable-workflow Build Signer URI pin —
- * `attest-addon.yaml` in `vadimpiven/node-addon-slsa`, SHA-anchored.
- * This is the default trust anchor when no custom `attestSignerPattern` is set.
- */
-export function buildToolkitAttestSignerPattern(): RegExp {
-  return buildAttestSignerPattern({ repo: TOOLKIT_REPO, workflow: ATTEST_WORKFLOW_FILENAME });
-}
+export const DEFAULT_ATTEST_SIGNER_PATTERN = new RegExp(
+  `^${escapeRegExp(`${BRAND_REPO}/${BRAND_PUBLISH_WORKFLOW_PATH}`)}@` + String.raw`[0-9a-f]{40}$`,
+);
 
 if (import.meta.vitest) {
   const { describe, it } = import.meta.vitest;
 
-  describe("buildAttestSignerPattern", () => {
-    const pattern = buildAttestSignerPattern({ repo: "owner/repo", workflow: "release.yaml" });
-    const base = "https://github.com/owner/repo/.github/workflows/release.yaml";
-
-    it("accepts a SHA-pinned reusable workflow URI", ({ expect }) => {
-      expect(pattern.test(`${base}@${"a".repeat(40)}`)).toBe(true);
+  describe("DEFAULT_ATTEST_SIGNER_PATTERN", () => {
+    it("derives its prefix from BRAND_REPO/BRAND_PUBLISH_WORKFLOW_PATH", ({ expect }) => {
+      // Pins the "forks only edit brand.ts" invariant: a drift where someone
+      // inlines a hard-coded owner/repo would fail this round-trip check.
+      const uri = `${BRAND_REPO}/${BRAND_PUBLISH_WORKFLOW_PATH}@${"a".repeat(40)}`;
+      expect(DEFAULT_ATTEST_SIGNER_PATTERN.test(uri)).toBe(true);
+      const evil = `evil/fork/${BRAND_PUBLISH_WORKFLOW_PATH}@${"a".repeat(40)}`;
+      expect(DEFAULT_ATTEST_SIGNER_PATTERN.test(evil)).toBe(false);
     });
 
-    it("rejects values missing the https://github.com/ prefix", ({ expect }) => {
-      // Regression: Fulcio emits the wrapped URI, not the raw claim.
-      const uri = `owner/repo/.github/workflows/release.yaml@${"a".repeat(40)}`;
-      expect(pattern.test(uri)).toBe(false);
+    it("accepts SHA-pinned reusable workflow URI", ({ expect }) => {
+      const uri = `${BRAND_REPO}/${BRAND_PUBLISH_WORKFLOW_PATH}@${"a".repeat(40)}`;
+      expect(DEFAULT_ATTEST_SIGNER_PATTERN.test(uri)).toBe(true);
     });
 
     it("rejects tag-pinned URIs", ({ expect }) => {
-      expect(pattern.test(`${base}@refs/tags/v1.2.3`)).toBe(false);
+      const uri = `${BRAND_REPO}/${BRAND_PUBLISH_WORKFLOW_PATH}@refs/tags/v1.2.3`;
+      expect(DEFAULT_ATTEST_SIGNER_PATTERN.test(uri)).toBe(false);
     });
 
     it("rejects branch-pinned URIs", ({ expect }) => {
-      expect(pattern.test(`${base}@refs/heads/main`)).toBe(false);
+      const uri = `${BRAND_REPO}/${BRAND_PUBLISH_WORKFLOW_PATH}@refs/heads/main`;
+      expect(DEFAULT_ATTEST_SIGNER_PATTERN.test(uri)).toBe(false);
     });
 
     it("rejects URIs from unrelated workflows", ({ expect }) => {
-      const uri = `https://github.com/other/repo/.github/workflows/release.yaml@${"a".repeat(40)}`;
-      expect(pattern.test(uri)).toBe(false);
-    });
-
-    it("rejects a different workflow filename in the same repo", ({ expect }) => {
-      const uri = `https://github.com/owner/repo/.github/workflows/evil.yaml@${"a".repeat(40)}`;
-      expect(pattern.test(uri)).toBe(false);
+      const uri = `other/repo/.github/workflows/publish.yaml@${"a".repeat(40)}`;
+      expect(DEFAULT_ATTEST_SIGNER_PATTERN.test(uri)).toBe(false);
     });
 
     it("rejects short hex", ({ expect }) => {
-      expect(pattern.test(`${base}@${"a".repeat(20)}`)).toBe(false);
-    });
-
-    it("rejects workflow with path separator", ({ expect }) => {
-      expect(() =>
-        buildAttestSignerPattern({ repo: "owner/repo", workflow: "../evil.yaml" }),
-      ).toThrow(TypeError);
+      const uri = `${BRAND_REPO}/${BRAND_PUBLISH_WORKFLOW_PATH}@${"a".repeat(20)}`;
+      expect(DEFAULT_ATTEST_SIGNER_PATTERN.test(uri)).toBe(false);
     });
   });
 }

@@ -1,0 +1,317 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+/**
+ * Zod schemas: SLSA manifest (source of truth for the JSON Schema published
+ * to GitHub Pages) and Rekor API responses.
+ */
+
+import { z } from "zod/v4";
+
+import { BRAND_PAGES_BASE } from "./brand.ts";
+
+/** URL embedded in every manifest's `$schema` field; compared by exact string equality. */
+export const SLSA_MANIFEST_V1_SCHEMA_URL = `${BRAND_PAGES_BASE}/schema/slsa-manifest.v1.json`;
+
+/** Closed set of Node.js `process.platform` values supported by prebuilt addons. */
+export const PlatformSchema = z.enum(["darwin", "linux", "win32"]);
+/**
+ * Closed set of Node.js `process.arch` values. Electron reports `arm` for
+ * armv7l; `ia32` covers 32-bit Windows. Other `process.arch` values
+ * (e.g. `riscv64`, `mips`) are rejected.
+ */
+export const ArchSchema = z.enum(["x64", "arm64", "arm", "ia32"]);
+export type Platform = z.infer<typeof PlatformSchema>;
+export type Arch = z.infer<typeof ArchSchema>;
+
+const HttpsUrlSchema = z
+  .string()
+  .url()
+  .refine((s) => s.startsWith("https://"), { message: "url must use https://" });
+
+/**
+ * Addon URLs must point at a gzip-compressed `.node` binary. The consumer's
+ * download pipeline unconditionally pipes through `createGunzip()`; a URL
+ * that served a plain `.node` would fail obscurely at gunzip. The sha256
+ * pinned in the manifest is computed over the *compressed* bytes, so the
+ * extension also locks the wire format that hash applies to.
+ *
+ * The check keys on the URL's pathname (not the raw string) so query
+ * strings / fragments don't bypass it.
+ */
+const AddonArtifactUrlSchema = HttpsUrlSchema.refine(
+  (s) => {
+    try {
+      return new URL(s).pathname.toLowerCase().endsWith(".node.gz");
+    } catch {
+      return false;
+    }
+  },
+  { message: "addon url path must end with .node.gz" },
+);
+
+export const AddonEntrySchema = z.object({
+  url: AddonArtifactUrlSchema,
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+});
+export type AddonEntry = z.infer<typeof AddonEntrySchema>;
+
+export const AddonInventorySchema = z.partialRecord(
+  PlatformSchema,
+  z.partialRecord(ArchSchema, AddonEntrySchema),
+);
+export type AddonInventory = z.infer<typeof AddonInventorySchema>;
+
+/**
+ * Declared-URLs shape accepted by `verify-addons` / `attest-addons`: nested
+ * `{ [platform]: { [arch]: httpsUrl } }`. Identical key set to
+ * {@link AddonInventorySchema}; leaves are bare URLs because sha256 is
+ * computed by fetching each URL.
+ */
+export const AddonUrlMapSchema = z.partialRecord(
+  PlatformSchema,
+  z.partialRecord(ArchSchema, AddonArtifactUrlSchema),
+);
+export type AddonUrlMap = z.infer<typeof AddonUrlMapSchema>;
+
+/**
+ * Flatten a nested {@link AddonUrlMap} into ordered `{ platform, arch, url }`
+ * triples. Centralises the `Object.entries(...).flatMap(...)` idiom used by
+ * both publish-side actions so key typing is consistent.
+ */
+export function flattenAddonUrlMap(
+  map: AddonUrlMap,
+): Array<{ platform: Platform; arch: Arch; url: string }> {
+  return Object.entries(map).flatMap(([platform, byArch]) =>
+    Object.entries(byArch ?? {}).map(([arch, url]) => ({
+      platform: platform as Platform,
+      arch: arch as Arch,
+      url,
+    })),
+  );
+}
+
+/**
+ * Reassemble flat `{ platform, arch, entry }` triples into an
+ * {@link AddonInventory}. Type-safe counterpart to ad-hoc nested
+ * dictionary building at call sites.
+ */
+export function buildAddonInventory(
+  entries: ReadonlyArray<{
+    readonly platform: Platform;
+    readonly arch: Arch;
+    readonly entry: AddonEntry;
+  }>,
+): AddonInventory {
+  const inventory: AddonInventory = {};
+  for (const { platform, arch, entry } of entries) {
+    const byArch = (inventory[platform] ??= {});
+    byArch[arch] = entry;
+  }
+  return inventory;
+}
+
+const PackageNameSchema = z.string().min(1);
+const GitHubRepoSchema = z.string().regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/);
+const RunInvocationURISchema = z
+  .string()
+  .regex(
+    /^https:\/\/github\.com\/[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+\/actions\/runs\/\d+\/attempts\/\d+$/,
+  );
+
+export const SlsaManifestSchemaV1 = z.object({
+  $schema: z.literal(SLSA_MANIFEST_V1_SCHEMA_URL),
+  packageName: PackageNameSchema,
+  runInvocationURI: RunInvocationURISchema,
+  sourceRepo: GitHubRepoSchema,
+  sourceCommit: z.string().regex(/^[0-9a-f]{40}$/),
+  sourceRef: z.string().regex(/^refs\/tags\//),
+  addons: AddonInventorySchema,
+});
+export type SlsaManifest = z.infer<typeof SlsaManifestSchemaV1>;
+
+/** Registry of published manifest schemas; consumed by `scripts/generate-schemas.ts`. */
+export const PublishedSchemas = {
+  "slsa-manifest.v1.json": SlsaManifestSchemaV1,
+} as const;
+
+// --- Rekor API response schemas (used by rekor.ts) ---
+
+/** Rekor search-by-hash response: hex entry UUIDs. */
+export const RekorSearchResponseSchema = z.array(z.string().regex(/^[a-f0-9]+$/));
+
+const RekorLogEntryObject = z.object({
+  body: z.string(),
+  integratedTime: z.number(),
+  logID: z.string(),
+  logIndex: z.number(),
+  // Full DSSE envelope — base64 of JSON `{payloadType, payload, signatures}`.
+  // Required for subject-digest cross-check and Verifier signature check:
+  // Rekor's `body` only carries envelope/payload hashes, not the payload
+  // itself, so without this field no subject binding is possible.
+  attestation: z.object({ data: z.string() }),
+  verification: z.object({
+    signedEntryTimestamp: z.string(),
+    inclusionProof: z.object({
+      checkpoint: z.string(),
+      hashes: z.array(z.string()),
+      logIndex: z.number(),
+      rootHash: z.string(),
+      treeSize: z.number(),
+    }),
+  }),
+});
+
+export type RekorLogEntry = z.infer<typeof RekorLogEntryObject>;
+
+/** Rekor GET /log/entries/{uuid}: `{ [uuid]: entry }`. */
+export const RekorLogEntrySchema = z.record(z.string(), RekorLogEntryObject);
+
+export const RekorDsseBodySchema = z.object({
+  apiVersion: z.string(),
+  kind: z.literal("dsse"),
+  spec: z.object({
+    envelopeHash: z.object({
+      algorithm: z.literal("sha256"),
+      value: z.string(),
+    }),
+    payloadHash: z.object({
+      algorithm: z.literal("sha256"),
+      value: z.string(),
+    }),
+    signatures: z
+      .array(
+        z.object({
+          signature: z.string(),
+          verifier: z.string(),
+        }),
+      )
+      .min(1),
+  }),
+});
+
+/**
+ * DSSE envelope as returned by Rekor's `attestation.data` (base64-decoded).
+ * `payload` is base64-encoded in-toto Statement bytes.
+ */
+export const DsseEnvelopeSchema = z.object({
+  payloadType: z.string(),
+  payload: z.string(),
+  signatures: z
+    .array(
+      z.object({
+        sig: z.string(),
+        keyid: z.string().optional(),
+      }),
+    )
+    .min(1),
+});
+
+/**
+ * Minimal in-toto Statement shape. Only `subject` is used for the artifact
+ * binding; `predicateType` and `predicate` are carried through unread.
+ */
+export const InTotoStatementSchema = z.object({
+  _type: z.string(),
+  subject: z
+    .array(
+      z.object({
+        name: z.string().optional(),
+        digest: z.object({ sha256: z.string().regex(/^[a-f0-9]{64}$/) }),
+      }),
+    )
+    .min(1),
+  predicateType: z.string(),
+});
+
+if (import.meta.vitest) {
+  const { describe, it } = import.meta.vitest;
+
+  const VALID: SlsaManifest = {
+    $schema: SLSA_MANIFEST_V1_SCHEMA_URL,
+    packageName: "@scope/my-native-addon",
+    runInvocationURI: "https://github.com/owner/repo/actions/runs/123/attempts/1",
+    sourceRepo: "owner/repo",
+    sourceCommit: "a".repeat(40),
+    sourceRef: "refs/tags/v1.2.3",
+    addons: {
+      linux: {
+        x64: { url: "https://example.com/a.node.gz", sha256: "b".repeat(64) },
+      },
+    },
+  };
+
+  describe("SlsaManifestSchemaV1", () => {
+    it("derives $schema URL from BRAND_PAGES_BASE", ({ expect }) => {
+      // Pins the "forks only edit brand.ts" invariant: inlining a hard-coded
+      // origin here would sever the rebrand-by-constant-edit design promise.
+      expect(SLSA_MANIFEST_V1_SCHEMA_URL.startsWith(BRAND_PAGES_BASE)).toBe(true);
+    });
+
+    it("parses valid manifest", ({ expect }) => {
+      expect(SlsaManifestSchemaV1.parse(VALID)).toEqual(VALID);
+    });
+
+    it("rejects wrong $schema URL", ({ expect }) => {
+      const bad = { ...VALID, $schema: "https://other.example/schema.json" };
+      expect(() => SlsaManifestSchemaV1.parse(bad)).toThrow();
+    });
+
+    it("rejects missing $schema", ({ expect }) => {
+      const { $schema: _drop, ...bad } = VALID;
+      void _drop;
+      expect(() => SlsaManifestSchemaV1.parse(bad)).toThrow();
+    });
+
+    it("rejects invalid fields", ({ expect }) => {
+      for (const [field, value] of [
+        ["packageName", ""],
+        ["sourceCommit", "not-hex"],
+        ["sourceRef", "refs/heads/main"],
+        ["sourceRepo", "no-slash"],
+      ]) {
+        const bad = { ...VALID, [field!]: value };
+        expect(() => SlsaManifestSchemaV1.parse(bad), `field=${field}`).toThrow();
+      }
+    });
+
+    it("rejects unknown platform key", ({ expect }) => {
+      const bad = {
+        ...VALID,
+        addons: { freebsd: { x64: { url: "https://e.com/a.node.gz", sha256: "c".repeat(64) } } },
+      };
+      expect(() => SlsaManifestSchemaV1.parse(bad)).toThrow();
+    });
+
+    it("rejects unknown arch key", ({ expect }) => {
+      const bad = {
+        ...VALID,
+        addons: { linux: { riscv64: { url: "https://e.com/a.node.gz", sha256: "c".repeat(64) } } },
+      };
+      expect(() => SlsaManifestSchemaV1.parse(bad)).toThrow();
+    });
+
+    it("rejects non-https URL", ({ expect }) => {
+      const bad = {
+        ...VALID,
+        addons: { linux: { x64: { url: "http://e.com/a.node.gz", sha256: "c".repeat(64) } } },
+      };
+      expect(() => SlsaManifestSchemaV1.parse(bad)).toThrow();
+    });
+
+    it("rejects non-hex sha256", ({ expect }) => {
+      const bad = {
+        ...VALID,
+        addons: { linux: { x64: { url: "https://e.com/a.node.gz", sha256: "not-hex" } } },
+      };
+      expect(() => SlsaManifestSchemaV1.parse(bad)).toThrow();
+    });
+
+    it("rejects malformed runInvocationURI", ({ expect }) => {
+      const bad = {
+        ...VALID,
+        runInvocationURI: "https://gitlab.com/owner/repo/actions/runs/1/attempts/1",
+      };
+      expect(() => SlsaManifestSchemaV1.parse(bad)).toThrow();
+    });
+  });
+}

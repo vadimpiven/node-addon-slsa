@@ -22,7 +22,7 @@ describe("withRetry", () => {
         calls++;
         return 42;
       },
-      { classify: () => ({ retry: false }) },
+      () => ({ retry: false }),
     );
     expect(out).toBe(42);
     expect(calls).toBe(1);
@@ -36,9 +36,7 @@ describe("withRetry", () => {
         if (calls < 3) throw new Error(`fail ${calls}`);
         return "ok";
       },
-      {
-        classify: (_err, attempt) => (attempt < 3 ? { retry: true, delayMs: 1 } : { retry: false }),
-      },
+      (_err, attempt) => (attempt < 3 ? { retry: true, delayMs: 1 } : { retry: false }),
     );
     expect(out).toBe("ok");
     expect(calls).toBe(3);
@@ -52,7 +50,7 @@ describe("withRetry", () => {
           calls++;
           throw new Error("boom");
         },
-        { classify: () => ({ retry: false }) },
+        () => ({ retry: false }),
       ),
     ).rejects.toThrow(/boom/);
     expect(calls).toBe(1);
@@ -62,10 +60,11 @@ describe("withRetry", () => {
     const ac = new AbortController();
     ac.abort();
     await expect(
-      withRetry(async () => "unused", {
-        classify: () => ({ retry: true, delayMs: 10_000 }),
-        signal: ac.signal,
-      }),
+      withRetry(
+        async () => "unused",
+        () => ({ retry: true, delayMs: 10_000 }),
+        { signal: ac.signal },
+      ),
     ).rejects.toThrow();
   });
 });
