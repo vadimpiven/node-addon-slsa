@@ -22,7 +22,6 @@ import {
   normalizeHttpsPrefix,
   readPositiveIntInput,
   type AddonDescriptor,
-  type Sha256Hex,
 } from "@node-addon-slsa/internal";
 
 export async function main(): Promise<void> {
@@ -34,10 +33,7 @@ export async function main(): Promise<void> {
   const maxBinaryBytes = readPositiveIntInput("max-binary-bytes", 268_435_456);
   const retentionDays = readPositiveIntInput("descriptor-retention-days", 14);
 
-  if (!urlPrefix.startsWith("https://")) {
-    throw new Error(`url-prefix must start with https://, got: ${urlPrefix}`);
-  }
-  const normalizedPrefix = normalizeHttpsPrefix(urlPrefix);
+  const normalizedPrefix = normalizeHttpsPrefix(urlPrefix, { label: "url-prefix" });
 
   const platformParsed = PlatformSchema.safeParse(platformInput);
   if (!platformParsed.success) {
@@ -89,7 +85,7 @@ export async function main(): Promise<void> {
     arch,
     url,
     bundleUrl,
-    sha256: sha256 as Sha256Hex,
+    sha256,
   });
   await writeFile(descriptorPath, JSON.stringify(descriptor));
   info(`Wrote descriptor: ${descriptorPath}`);

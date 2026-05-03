@@ -28,7 +28,7 @@ import { verifyAddonBundle, verifyBundleSerialized } from "./bundle.ts";
 import type { CertificateOIDExpectations } from "./certificates.ts";
 import type { ResolvedConfig } from "./config.ts";
 import { resolveConfig } from "./config.ts";
-import { getDefaultAttestSignerPattern } from "./constants.ts";
+import { buildToolkitAttestSignerPattern } from "./constants.ts";
 import { findAddonEntryBySha, readManifest } from "./manifest-lookup.ts";
 import {
   classifyBundle404,
@@ -227,7 +227,7 @@ export async function verifyPackageAt(
   const http = httpFromConfig(config);
   const attestSignerPattern = options.attestSignerPattern
     ? toRegExp(options.attestSignerPattern)
-    : getDefaultAttestSignerPattern();
+    : buildToolkitAttestSignerPattern();
   const expect: CertificateOIDExpectations = {
     sourceCommit: manifest.sourceCommit,
     sourceRef: manifest.sourceRef,

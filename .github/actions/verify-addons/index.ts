@@ -17,8 +17,8 @@ import {
   AddonDescriptorSchema,
   SLSA_MANIFEST_V1_SCHEMA_URL,
   buildAddonInventory,
+  buildToolkitAttestSignerPattern,
   errorMessage,
-  getDefaultAttestSignerPattern,
   isEnoent,
   loadTrustMaterial,
   normalizeHttpsPrefix,
@@ -99,26 +99,62 @@ function assertNoDuplicates(loaded: ReadonlyArray<LoadedDescriptor>): void {
   }
 }
 
-// `fetch` follows redirects by default — required to chase the GH
-// releases → S3 signed URL.
+const HEAD_TIMEOUT_MS = 30_000;
+
+// Hosts where it is safe to attach the workflow's GITHUB_TOKEN: only
+// first-party GitHub hosts. Release-asset downloads redirect to a signed
+// `objects.githubusercontent.com` URL that does NOT need (and will reject)
+// the bearer token, so we use `redirect: "manual"` and treat the redirect
+// itself as proof of reachability for private repos.
+function shouldSendGithubAuth(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    return hostname === "github.com" || hostname === "api.github.com";
+  } catch {
+    return false;
+  }
+}
+
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
 async function checkUrlReachable(url: string, label: string): Promise<void> {
+  const token = process.env["GITHUB_TOKEN"];
+  const useAuth = Boolean(token) && shouldSendGithubAuth(url);
+  const init: RequestInit = {
+    method: "HEAD",
+    signal: AbortSignal.timeout(HEAD_TIMEOUT_MS),
+    ...(useAuth
+      ? {
+          headers: { Authorization: `Bearer ${token}` },
+          redirect: "manual" as const,
+        }
+      : {}),
+  };
   let res: Response;
   try {
-    res = await fetch(url, { method: "HEAD" });
+    res = await fetch(url, init);
   } catch (err) {
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      throw new Error(
+        `${label}: HEAD ${url} timed out after ${HEAD_TIMEOUT_MS / 1000}s — ` +
+          `CDN unreachable or asset propagation lagging.`,
+      );
+    }
     throw new Error(`${label}: release asset not reachable at ${url}: ${errorMessage(err)}`);
   }
   if (res.ok) return;
+  if (useAuth && REDIRECT_STATUSES.has(res.status)) return;
+  const authHint = useAuth ? " (token may lack repo access)" : "";
   if (res.status === 403) {
     throw new Error(
       `${label}: release asset not reachable at ${url}: HEAD returned 403 — ` +
-        `asset exists but is inaccessible (private repo, expired URL, or upload still finalizing).`,
+        `asset exists but is inaccessible${authHint || " (private repo, expired URL, or upload still finalizing)"}.`,
     );
   }
   if (res.status === 404) {
     throw new Error(
       `${label}: release asset not reachable at ${url}: HEAD returned 404 — ` +
-        `asset was not uploaded (the release-upload step in attest-addon.yaml may have failed).`,
+        `asset was not uploaded${authHint} (the release-upload step in attest-addon.yaml may have failed).`,
     );
   }
   throw new Error(`${label}: release asset not reachable at ${url}: HEAD returned ${res.status}`);
@@ -129,10 +165,7 @@ export async function main(): Promise<void> {
   const descriptorsDir = getInput("descriptors-dir", { required: true });
   const releaseBaseUrl = getInput("release-base-url", { required: true });
 
-  if (!releaseBaseUrl.startsWith("https://")) {
-    throw new Error(`release-base-url must start with https://, got: ${releaseBaseUrl}`);
-  }
-  const normalizedPrefix = normalizeHttpsPrefix(releaseBaseUrl);
+  const normalizedPrefix = normalizeHttpsPrefix(releaseBaseUrl, { label: "release-base-url" });
 
   const repo = requireEnv("GITHUB_REPOSITORY");
   const commit = requireEnv("GITHUB_SHA");
@@ -160,7 +193,7 @@ export async function main(): Promise<void> {
   const trustMaterial = await loadTrustMaterial();
   info(`  ✓ loaded`);
 
-  const attestSignerPattern = getDefaultAttestSignerPattern();
+  const attestSignerPattern = buildToolkitAttestSignerPattern();
 
   info(`[2/3] Verifying each binary's signature chain (parallel, in-memory)…`);
   const verified = await Promise.all(

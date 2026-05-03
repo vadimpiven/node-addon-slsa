@@ -69,14 +69,10 @@ const ATTEST_WORKFLOW_FILENAME = "attest-addon.yaml";
 /**
  * Build the toolkit's reusable-workflow Build Signer URI pin —
  * `attest-addon.yaml` in `vadimpiven/node-addon-slsa`, SHA-anchored.
+ * This is the default trust anchor when no custom `attestSignerPattern` is set.
  */
 export function buildToolkitAttestSignerPattern(): RegExp {
   return buildAttestSignerPattern({ repo: TOOLKIT_REPO, workflow: ATTEST_WORKFLOW_FILENAME });
-}
-
-/** Default Fulcio Build Signer URI pattern — the toolkit's reusable workflow. */
-export function getDefaultAttestSignerPattern(): RegExp {
-  return buildToolkitAttestSignerPattern();
 }
 
 if (import.meta.vitest) {

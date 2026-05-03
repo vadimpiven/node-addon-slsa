@@ -111,6 +111,11 @@ jobs:
           package-name: "${{ steps.pkg.outputs.name }}"
           descriptors-dir: "${{ runner.temp }}/slsa-descriptors"
           release-base-url: "${{ steps.resolve-url.outputs.release-base-url }}"
+        env:
+          # Lets the HEAD reachability check authenticate against private
+          # release assets. The action only attaches it to github.com /
+          # api.github.com; ignored otherwise.
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
       # Block `addon.manifest: "../escape.json"` traversal and refuse to
       # overwrite — the pre-packed tarball must not already ship a manifest.
       - name: "Embed SLSA manifest"

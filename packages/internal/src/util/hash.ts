@@ -56,3 +56,48 @@ export async function hashFileSha256(
   );
   return { sha256: digest(), size };
 }
+
+if (import.meta.vitest) {
+  const { describe, it } = import.meta.vitest;
+  const { writeFile } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  const { tempDir } = await import("./fs.ts");
+
+  describe("hashFileSha256", () => {
+    it("hashes a small file and returns sha256+size", async ({ expect }) => {
+      await using tmp = await tempDir();
+      const file = join(tmp.path, "x.bin");
+      await writeFile(file, "hello");
+      const { sha256, size } = await hashFileSha256(file);
+      expect(size).toBe(5);
+      // sha256("hello")
+      expect(sha256).toBe("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
+    });
+
+    it("succeeds when size is under cap", async ({ expect }) => {
+      await using tmp = await tempDir();
+      const file = join(tmp.path, "x.bin");
+      await writeFile(file, "hello");
+      await expect(hashFileSha256(file, { sizeCap: 1024 })).resolves.toBeDefined();
+    });
+
+    it("rejects with actionable max-binary-bytes hint when size exceeds cap", async ({
+      expect,
+    }) => {
+      await using tmp = await tempDir();
+      const file = join(tmp.path, "x.bin");
+      await writeFile(file, "hello world");
+      await expect(hashFileSha256(file, { sizeCap: 5 })).rejects.toThrow(/max-binary-bytes/);
+    });
+  });
+
+  describe("createHashPassthrough", () => {
+    it("computes sha256 of streamed bytes", async ({ expect }) => {
+      const { stream, digest } = createHashPassthrough();
+      stream.end(Buffer.from("hello"));
+      // drain
+      for await (const _ of stream) void _;
+      expect(digest()).toBe("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824");
+    });
+  });
+}

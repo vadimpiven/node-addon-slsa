@@ -34,11 +34,9 @@ export { buildAttestSignerPattern } from "@node-addon-slsa/internal";
 /**
  * The toolkit's reusable-workflow Build Signer URI pin —
  * `attest-addon.yaml` in `vadimpiven/node-addon-slsa`, SHA-anchored.
+ * Used as the default trust anchor when no `attestSignerPattern` is given.
  */
 export { buildToolkitAttestSignerPattern } from "@node-addon-slsa/internal";
-
-/** Default Fulcio Build Signer URI pattern — equivalent to the toolkit pattern. */
-export { getDefaultAttestSignerPattern } from "@node-addon-slsa/internal";
 
 export { createBundleVerifier, loadTrustMaterial } from "@node-addon-slsa/internal";
 export type { BundleVerifier, TrustMaterial } from "@node-addon-slsa/internal";

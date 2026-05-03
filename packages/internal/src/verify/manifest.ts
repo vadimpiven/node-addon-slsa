@@ -39,10 +39,22 @@ export function buildAddonInventory(
     readonly entry: AddonEntry;
   }>,
 ): AddonInventory {
-  const inventory: AddonInventory = {};
+  // Build via Map<Platform, Map<Arch, AddonEntry>> so the schema-validated
+  // platform/arch keys never become computed-property writes on a
+  // prototype-bearing object — keeps CodeQL's `js/prototype-polluting-assignment`
+  // happy without changing the public shape.
+  const grouped = new Map<Platform, Map<Arch, AddonEntry>>();
   for (const { platform, arch, entry } of entries) {
-    const byArch = (inventory[platform] ??= {});
-    byArch[arch] = entry;
+    let byArch = grouped.get(platform);
+    if (!byArch) {
+      byArch = new Map();
+      grouped.set(platform, byArch);
+    }
+    byArch.set(arch, entry);
+  }
+  const inventory = Object.create(null) as Record<Platform, Record<Arch, AddonEntry>>;
+  for (const [platform, byArch] of grouped) {
+    inventory[platform] = Object.fromEntries(byArch) as Record<Arch, AddonEntry>;
   }
   return inventory;
 }
@@ -61,7 +73,7 @@ export const SlsaManifestSchemaV1 = z.object({
   runInvocationURI: RunInvocationURISchema,
   sourceRepo: GitHubRepoSchema,
   sourceCommit: z.string().regex(/^[0-9a-f]{40}$/),
-  sourceRef: z.string().regex(/^refs\/tags\/[A-Za-z0-9._/-]+$/),
+  sourceRef: z.string().regex(/^refs\/tags\/[A-Za-z0-9._@+/-]+$/),
   addons: AddonInventorySchema,
 });
 export type SlsaManifest = z.infer<typeof SlsaManifestSchemaV1>;
@@ -136,10 +148,17 @@ if (import.meta.vitest) {
         ["packageName", ""],
         ["sourceCommit", "not-hex"],
         ["sourceRef", "refs/heads/main"],
+        ["sourceRef", "refs/tags/v1 0"],
         ["sourceRepo", "no-slash"],
       ]) {
         const bad = { ...VALID, [field!]: value };
         expect(() => SlsaManifestSchemaV1.parse(bad), `field=${field}`).toThrow();
+      }
+    });
+
+    it("accepts non-SemVer git tag characters (@, +)", ({ expect }) => {
+      for (const sourceRef of ["refs/tags/v1.0.0+build.1", "refs/tags/@scope/pkg@1.0.0"]) {
+        expect(SlsaManifestSchemaV1.parse({ ...VALID, sourceRef }).sourceRef).toBe(sourceRef);
       }
     });
 

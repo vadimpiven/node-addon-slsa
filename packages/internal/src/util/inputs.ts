@@ -36,13 +36,24 @@ export function readPositiveIntInput(name: string, defaultValue: number): number
   return n;
 }
 
+/** Options for {@link normalizeHttpsPrefix}. */
+export type NormalizeHttpsPrefixOptions = {
+  /** Domain-specific label for the error message (e.g. `release-base-url`). */
+  readonly label?: string;
+};
+
 /**
  * Validate that `url` uses `https://` and return it with a trailing slash
- * appended if missing. Throws on non-https inputs.
+ * appended if missing. Throws on non-https inputs; the optional `label`
+ * names the input in the error so call sites don't need their own guard.
  */
-export function normalizeHttpsPrefix(url: string): string {
+export function normalizeHttpsPrefix(
+  url: string,
+  options: NormalizeHttpsPrefixOptions = {},
+): string {
   if (!url.startsWith("https://")) {
-    throw new Error(`url must start with https://, got: ${url}`);
+    const subject = options.label ?? "url";
+    throw new Error(`${subject} must start with https://, got: ${url}`);
   }
   return url.endsWith("/") ? url : `${url}/`;
 }
@@ -57,8 +68,71 @@ if (import.meta.vitest) {
     it("preserves existing trailing slash", ({ expect }) => {
       expect(normalizeHttpsPrefix("https://e.com/v1/")).toBe("https://e.com/v1/");
     });
-    it("rejects non-https", ({ expect }) => {
-      expect(() => normalizeHttpsPrefix("http://e.com/")).toThrow(/https:\/\//);
+    it("rejects non-https with default label", ({ expect }) => {
+      expect(() => normalizeHttpsPrefix("http://e.com/")).toThrow(
+        /^url must start with https:\/\//,
+      );
+    });
+    it("rejects non-https using a domain-specific label", ({ expect }) => {
+      expect(() => normalizeHttpsPrefix("http://e.com/", { label: "release-base-url" })).toThrow(
+        /^release-base-url must start with https:\/\//,
+      );
+    });
+  });
+
+  describe("readPositiveIntInput", () => {
+    const KEY = "INPUT_FOOBAR";
+    it("returns defaultValue when input is empty", ({ expect }) => {
+      delete process.env[KEY];
+      expect(readPositiveIntInput("foobar", 42)).toBe(42);
+    });
+    it("returns defaultValue when input is whitespace", ({ expect }) => {
+      process.env[KEY] = "   ";
+      try {
+        expect(readPositiveIntInput("foobar", 7)).toBe(7);
+      } finally {
+        delete process.env[KEY];
+      }
+    });
+    it("parses a positive integer", ({ expect }) => {
+      process.env[KEY] = "123";
+      try {
+        expect(readPositiveIntInput("foobar", 1)).toBe(123);
+      } finally {
+        delete process.env[KEY];
+      }
+    });
+    it("rejects zero", ({ expect }) => {
+      process.env[KEY] = "0";
+      try {
+        expect(() => readPositiveIntInput("foobar", 1)).toThrow(/positive integer/);
+      } finally {
+        delete process.env[KEY];
+      }
+    });
+    it("rejects negative", ({ expect }) => {
+      process.env[KEY] = "-5";
+      try {
+        expect(() => readPositiveIntInput("foobar", 1)).toThrow(/positive integer/);
+      } finally {
+        delete process.env[KEY];
+      }
+    });
+    it("rejects non-integer", ({ expect }) => {
+      process.env[KEY] = "1.5";
+      try {
+        expect(() => readPositiveIntInput("foobar", 1)).toThrow(/positive integer/);
+      } finally {
+        delete process.env[KEY];
+      }
+    });
+    it("rejects non-numeric", ({ expect }) => {
+      process.env[KEY] = "abc";
+      try {
+        expect(() => readPositiveIntInput("foobar", 1)).toThrow(/positive integer/);
+      } finally {
+        delete process.env[KEY];
+      }
     });
   });
 

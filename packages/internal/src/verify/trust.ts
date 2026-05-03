@@ -66,3 +66,67 @@ export function classifyBundle404(
     return { retry: false };
   };
 }
+
+if (import.meta.vitest) {
+  const { describe, it } = import.meta.vitest;
+
+  describe("toRegExp", () => {
+    it("returns RegExp inputs unchanged", ({ expect }) => {
+      const re = /foo/;
+      expect(toRegExp(re)).toBe(re);
+    });
+    it("anchors and escapes string inputs", ({ expect }) => {
+      const re = toRegExp("v1.2.3");
+      expect(re.test("v1.2.3")).toBe(true);
+      expect(re.test("v1x2x3")).toBe(false);
+      expect(re.test("v1.2.3-suffix")).toBe(false);
+    });
+  });
+
+  describe("defaultRefPattern", () => {
+    it("matches both v-prefixed and bare tags", ({ expect }) => {
+      const re = defaultRefPattern("1.2.3");
+      expect(re.test("refs/tags/v1.2.3")).toBe(true);
+      expect(re.test("refs/tags/1.2.3")).toBe(true);
+    });
+    it("rejects other versions and non-tag refs", ({ expect }) => {
+      const re = defaultRefPattern("1.2.3");
+      expect(re.test("refs/tags/v1.2.4")).toBe(false);
+      expect(re.test("refs/heads/main")).toBe(false);
+    });
+    it("escapes regex metacharacters in version", ({ expect }) => {
+      const re = defaultRefPattern("1.2.3");
+      expect(re.test("refs/tags/v1x2x3")).toBe(false);
+    });
+  });
+
+  describe("classifyBundle404", () => {
+    const delays = [10, 20] as const;
+    const classify = classifyBundle404(delays);
+
+    it("retries 404 with delays from the list", ({ expect }) => {
+      const err = new HttpError({ kind: "status", status: 404, message: "404", url: "u" });
+      expect(classify(err, 1)).toEqual({ retry: true, delayMs: 10 });
+      expect(classify(err, 2)).toEqual({ retry: true, delayMs: 20 });
+    });
+
+    it("stops retrying once attempt exceeds delay table", ({ expect }) => {
+      const err = new HttpError({ kind: "status", status: 404, message: "404", url: "u" });
+      expect(classify(err, 3)).toEqual({ retry: false });
+    });
+
+    it("does not retry non-404 status errors", ({ expect }) => {
+      const err = new HttpError({ kind: "status", status: 500, message: "500", url: "u" });
+      expect(classify(err, 1)).toEqual({ retry: false });
+    });
+
+    it("does not retry network errors", ({ expect }) => {
+      const err = new HttpError({ kind: "network", message: "boom", url: "u" });
+      expect(classify(err, 1)).toEqual({ retry: false });
+    });
+
+    it("does not retry generic errors", ({ expect }) => {
+      expect(classify(new Error("nope"), 1)).toEqual({ retry: false });
+    });
+  });
+}

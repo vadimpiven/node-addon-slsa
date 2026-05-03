@@ -17,8 +17,7 @@
  *                            Sha256HexSchema, PlatformSchema, ArchSchema,
  *                            buildAddonInventory, PublishedSchemas
  *   - Trust-anchor builders: buildAttestSignerPattern,
- *                            buildToolkitAttestSignerPattern,
- *                            getDefaultAttestSignerPattern
+ *                            buildToolkitAttestSignerPattern
  *   - HTTP / FS / hashing:   createHttpClient, withRetry, HttpError,
  *                            assertWithinDir, isEnoent, isEnotdir,
  *                            safeUnlink, tempDir, fetchAndHashAddon,
@@ -81,7 +80,6 @@ export type { AddonDescriptor, AddonEntry, Arch, Platform } from "./verify/descr
 export {
   buildAttestSignerPattern,
   buildToolkitAttestSignerPattern,
-  getDefaultAttestSignerPattern,
   DEFAULT_MAX_BINARY_BYTES,
   DEFAULT_MAX_BINARY_SECONDS,
 } from "./verify/constants.ts";
@@ -108,3 +106,4 @@ export { evalTemplate } from "./util/template.ts";
 export { log, warn } from "./util/log.ts";
 export { errorMessage } from "./util/error.ts";
 export { normalizeHttpsPrefix, readPositiveIntInput, requireEnv } from "./util/inputs.ts";
+export type { NormalizeHttpsPrefixOptions } from "./util/inputs.ts";
