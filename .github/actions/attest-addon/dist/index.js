@@ -94973,13 +94973,13 @@ async function main() {
     }
     const { sha256, size } = await (0,_node_addon_slsa_internal__WEBPACK_IMPORTED_MODULE_5__/* .hashFileSha256 */ .MR)(binaryPath, { sizeCap: maxBinaryBytes });
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .info */ .pq)(`Hashed ${size} bytes: sha256=${sha256}`);
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .info */ .pq)(`Minting sigstore bundle for ${url} on public-good Sigstore...`);
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .info */ .pq)(`Minting sigstore bundle for ${url} on public-good Sigstore…`);
     const result = await (0,_actions_attest__WEBPACK_IMPORTED_MODULE_3__/* .attestProvenance */ .XA)({
         subjects: [{ name: url, digest: { sha256 } }],
         token,
         sigstore: "public-good",
     });
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .info */ .pq)(`Attestation id: ${result.attestationID ?? "(unknown)"}`);
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .info */ .pq)(`  ✓ minted (attestation id: ${result.attestationID ?? "unknown"})`);
     // Pretty-print so auditors can diff sidecars by eye.
     await (0,node_fs_promises__WEBPACK_IMPORTED_MODULE_0__.writeFile)(bundlePath, JSON.stringify(result.bundle, null, 2));
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .info */ .pq)(`Wrote bundle: ${bundlePath}`);
@@ -94994,8 +94994,9 @@ async function main() {
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .info */ .pq)(`Wrote descriptor: ${descriptorPath}`);
     const artifactName = `slsa-addons-${platform}-${arch}`;
     const artifactClient = new _actions_artifact__WEBPACK_IMPORTED_MODULE_2__/* .DefaultArtifactClient */ .t9();
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .info */ .pq)(`Uploading workflow artifact '${artifactName}'…`);
     await artifactClient.uploadArtifact(artifactName, [descriptorPath, bundlePath], (0,node_path__WEBPACK_IMPORTED_MODULE_1__.dirname)(descriptorPath), { retentionDays });
-    (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .info */ .pq)(`Uploaded artifact '${artifactName}' (retention ${retentionDays}d).`);
+    (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .info */ .pq)(`  ✓ uploaded (retention ${retentionDays}d)`);
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .setOutput */ .uH)("binary-path", binaryPath);
     (0,_actions_core__WEBPACK_IMPORTED_MODULE_4__/* .setOutput */ .uH)("bundle-path", bundlePath);
 }

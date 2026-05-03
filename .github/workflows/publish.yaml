@@ -34,11 +34,14 @@ jobs:
       # Checkout the toolkit at the same SHA the consumer pinned this
       # reusable workflow to, so local-path composite actions below
       # resolve from a SHA-anchored, untrusted-input-free tree.
+      # `github.job_workflow_sha` is the SHA of *this* reusable workflow
+      # file in *this* repo (the callee); `github.workflow_sha` would be
+      # the caller's workflow-file SHA, which lives in a different repo.
       - name: "Checkout toolkit"
         uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
         with:
           repository: "vadimpiven/node-addon-slsa"
-          ref: "${{ github.workflow_sha }}"
+          ref: "${{ github.job_workflow_sha }}"
           path: "node-addon-slsa-toolkit"
           fetch-depth: 1
           persist-credentials: false
@@ -138,6 +141,7 @@ jobs:
           fi
           mkdir -p "$(dirname "$manifest_abs")"
           printf '%s\n' "$MANIFEST" > "$manifest_abs"
+          echo "Embedded SLSA manifest: $manifest_abs"
       # Reproducibility for auditors, not security: `npm publish` re-hashes
       # for `dist.integrity`.
       - name: "Repack tarball deterministically"
@@ -149,6 +153,7 @@ jobs:
           set -euo pipefail
           workdir=$(dirname "$PACKAGE_DIR")
           out="$workdir/package.tgz"
+          echo "Repacking tarball deterministically..."
           tar \
             --format=ustar \
             --sort=name \
@@ -159,6 +164,7 @@ jobs:
             -czf "$out" \
             -C "$workdir" \
             package
+          echo "✓ repacked: $out ($(stat -c%s "$out" 2>/dev/null || stat -f%z "$out") bytes)"
           echo "tarball=$out" >>"$GITHUB_OUTPUT"
       - name: "npm publish"
         shell: "bash"
@@ -166,9 +172,18 @@ jobs:
           TARBALL: "${{ steps.repack.outputs.tarball }}"
           ACCESS: "${{ inputs.access }}"
           TAG: "${{ inputs.tag }}"
+          PKG_NAME: "${{ steps.pkg.outputs.name }}"
+          GH_REF_NAME: "${{ github.ref_name }}"
         run: |
           set -euo pipefail
           args=(publish "$TARBALL")
           [[ -n "$ACCESS" ]] && args+=(--access "$ACCESS")
           [[ -n "$TAG"    ]] && args+=(--tag    "$TAG")
-          npm "${args[@]}"
+          echo "Publishing $PKG_NAME (tag $GH_REF_NAME) to npmjs.org via trusted publishing..."
+          if npm "${args[@]}"; then
+            echo "✓ published $PKG_NAME"
+          else
+            status=$?
+            echo "✗ npm publish failed (exit $status)" >&2
+            exit "$status"
+          fi
