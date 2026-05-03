@@ -68,13 +68,13 @@ export async function main(): Promise<void> {
   const { sha256, size } = await hashFileSha256(binaryPath, { sizeCap: maxBinaryBytes });
   info(`Hashed ${size} bytes: sha256=${sha256}`);
 
-  info(`Minting sigstore bundle for ${url} on public-good Sigstore...`);
+  info(`Minting sigstore bundle for ${url} on public-good Sigstore…`);
   const result = await attestProvenance({
     subjects: [{ name: url, digest: { sha256 } }],
     token,
     sigstore: "public-good",
   });
-  info(`Attestation id: ${result.attestationID ?? "(unknown)"}`);
+  info(`  ✓ minted (attestation id: ${result.attestationID ?? "unknown"})`);
 
   // Pretty-print so auditors can diff sidecars by eye.
   await writeFile(bundlePath, JSON.stringify(result.bundle, null, 2));
@@ -92,13 +92,14 @@ export async function main(): Promise<void> {
 
   const artifactName = `slsa-addons-${platform}-${arch}`;
   const artifactClient = new DefaultArtifactClient();
+  info(`Uploading workflow artifact '${artifactName}'…`);
   await artifactClient.uploadArtifact(
     artifactName,
     [descriptorPath, bundlePath],
     dirname(descriptorPath),
     { retentionDays },
   );
-  info(`Uploaded artifact '${artifactName}' (retention ${retentionDays}d).`);
+  info(`  ✓ uploaded (retention ${retentionDays}d)`);
 
   setOutput("binary-path", binaryPath);
   setOutput("bundle-path", bundlePath);
