@@ -8,9 +8,10 @@
 
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { Agent, request, type Dispatcher } from "undici";
+import { Agent, interceptors, request, type Dispatcher } from "undici";
 
 import type { FetchOptions } from "./types.ts";
+import { errorMessage } from "./util/error.ts";
 import { log } from "./util/log.ts";
 
 /** Per-request timeout used when {@link FetchOptions.timeoutMs} is not supplied. */
@@ -33,11 +34,27 @@ function jitteredDelay(attempt: number, baseMs: number): number {
 // connection reuse provide no benefit. Disabling keep-alive ensures
 // connections close immediately after each response is consumed,
 // avoiding dangling H2 session promises.
-const defaultDispatcher: Dispatcher = new Agent({
+const baseDispatcher: Dispatcher = new Agent({
   allowH2: false,
   keepAliveTimeout: 1,
   keepAliveMaxTimeout: 1,
 });
+
+// GitHub release-asset URLs 302 → CDN. Redirect-following is part of
+// the client contract, so the interceptor is composed on top of
+// whatever dispatcher the caller hands in — caller's dispatcher is
+// transport, redirect semantics are policy. The composed default is
+// cached; the caller-supplied path composes per call (rare; tests
+// pass a fresh MockAgent each time anyway).
+const defaultDispatcher: Dispatcher = baseDispatcher.compose(
+  interceptors.redirect({ maxRedirections: 5 }),
+);
+
+function withRedirects(dispatcher: Dispatcher): Dispatcher {
+  return dispatcher === baseDispatcher
+    ? defaultDispatcher
+    : dispatcher.compose(interceptors.redirect({ maxRedirections: 5 }));
+}
 
 /** Response from {@link fetchWithRetry}. */
 export type FetchResponse = {
@@ -79,7 +96,7 @@ export async function fetchWithRetry(url: string, options?: FetchOptions): Promi
         ...(options?.headers && { headers: options.headers }),
         ...(options?.body && { body: options.body }),
         signal,
-        dispatcher: options?.dispatcher ?? defaultDispatcher,
+        dispatcher: withRedirects(options?.dispatcher ?? baseDispatcher),
         bodyTimeout: stallTimeoutMs,
       });
 
@@ -98,8 +115,9 @@ export async function fetchWithRetry(url: string, options?: FetchOptions): Promi
 
       if (attempt < maxAttempts) {
         const delay = jitteredDelay(attempt, retryBaseMs);
-        const reason = err instanceof Error ? err.message : String(err);
-        log(`retrying ${url} in ${delay}ms (attempt ${attempt}/${maxAttempts}): ${reason}`);
+        log(
+          `retrying ${url} in ${delay}ms (attempt ${attempt}/${maxAttempts}): ${errorMessage(err)}`,
+        );
         await sleep(delay, undefined, { signal: parentSignal });
         continue;
       }
