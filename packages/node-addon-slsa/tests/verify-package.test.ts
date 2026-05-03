@@ -57,7 +57,6 @@ async function makePackage(): Promise<{ path: string } & AsyncDisposable> {
       addon: {
         path: "./dist/my.node",
         manifest: "./slsa-manifest.json",
-        attestWorkflow: "release.yaml",
       },
     }),
   );
@@ -180,7 +179,6 @@ describe("verifyPackage (top-level)", () => {
         addon: {
           path: "./dist/my.node",
           manifest: "./slsa-manifest.json",
-          attestWorkflow: "release.yaml",
         },
       }),
     );

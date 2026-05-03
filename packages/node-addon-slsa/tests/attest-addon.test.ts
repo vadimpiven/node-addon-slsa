@@ -56,24 +56,33 @@ afterEach(async () => {
   await workdir[Symbol.asyncDispose]();
 });
 
+/** Wire all required inputs for one binary; tests override individual fields as needed. */
+function wireDefaults(binaryPath: string, opts: { platform?: string; arch?: string } = {}): void {
+  setInput("binary-path", binaryPath);
+  setInput("url-prefix", "https://cdn.example.com/v1/");
+  setInput("github-token", "stub-token");
+  setInput("platform", opts.platform ?? "linux");
+  setInput("arch", opts.arch ?? "x64");
+}
+
 describe("attest-addon main()", () => {
-  it("hashes binary, mints bundle, writes descriptor, uploads artifact", async ({ expect }) => {
+  it("hashes binary, mints bundle, writes descriptor + bundle, uploads artifact", async ({
+    expect,
+  }) => {
     const bytes = Buffer.from("hello-addon-bytes");
     const expectedSha = createHash("sha256").update(bytes).digest("hex");
-    const platformBasename = `myaddon-${process.platform}-${process.arch}.node.gz`;
-    const binaryPath = join(workdir.path, platformBasename);
+    const baseName = "myaddon-linux-x64.node.gz";
+    const binaryPath = join(workdir.path, baseName);
     await writeFile(binaryPath, bytes);
 
-    setInput("binary", join(workdir.path, "*.node.gz"));
-    setInput("url-prefix", "https://cdn.example.com/v1/");
-    setInput("github-token", "stub-token");
+    wireDefaults(binaryPath);
 
     await main();
 
     expect(mockAttestProvenance).toHaveBeenCalledTimes(1);
     const subjects = mockAttestProvenance.mock.calls[0]?.[0]?.subjects;
     expect(subjects).toEqual([
-      { name: `https://cdn.example.com/v1/${platformBasename}`, digest: { sha256: expectedSha } },
+      { name: `https://cdn.example.com/v1/${baseName}`, digest: { sha256: expectedSha } },
     ]);
 
     const bundlePath = `${binaryPath}.sigstore`;
@@ -85,68 +94,66 @@ describe("attest-addon main()", () => {
       JSON.parse(await readFile(descriptorPath, "utf8")),
     );
     expect(descriptor).toEqual({
-      platform: process.platform,
-      arch: process.arch,
-      url: `https://cdn.example.com/v1/${platformBasename}`,
-      bundleUrl: `https://cdn.example.com/v1/${platformBasename}.sigstore`,
+      platform: "linux",
+      arch: "x64",
+      url: `https://cdn.example.com/v1/${baseName}`,
+      bundleUrl: `https://cdn.example.com/v1/${baseName}.sigstore`,
       sha256: expectedSha,
     });
 
+    // Both descriptor and bundle must ship in the artifact so verify-addons
+    // can read them without a network round-trip.
     expect(mockUploadArtifact).toHaveBeenCalledTimes(1);
     const [artifactName, files] = mockUploadArtifact.mock.calls[0] ?? [];
-    expect(artifactName).toBe(`slsa-addons-${process.platform}-${process.arch}`);
-    expect(files).toEqual([descriptorPath]);
+    expect(artifactName).toBe("slsa-addons-linux-x64");
+    expect(files).toEqual([descriptorPath, bundlePath]);
   });
 
   it("auto-appends trailing slash to url-prefix", async ({ expect }) => {
-    const platformBasename = `myaddon-${process.platform}-${process.arch}.node.gz`;
-    await writeFile(join(workdir.path, platformBasename), Buffer.from("x"));
-    setInput("binary", join(workdir.path, "*.node.gz"));
+    const baseName = "myaddon-linux-x64.node.gz";
+    const binaryPath = join(workdir.path, baseName);
+    await writeFile(binaryPath, Buffer.from("x"));
+    wireDefaults(binaryPath);
     setInput("url-prefix", "https://cdn.example.com/v1");
-    setInput("github-token", "stub");
     await main();
     const subjects = mockAttestProvenance.mock.calls[0]?.[0]?.subjects;
-    expect(subjects?.[0]?.name).toBe(`https://cdn.example.com/v1/${platformBasename}`);
+    expect(subjects?.[0]?.name).toBe(`https://cdn.example.com/v1/${baseName}`);
   });
 
   it("rejects http url-prefix", async ({ expect }) => {
-    await writeFile(join(workdir.path, "x.node.gz"), Buffer.from("x"));
-    setInput("binary", join(workdir.path, "*.node.gz"));
+    const binaryPath = join(workdir.path, "x.node.gz");
+    await writeFile(binaryPath, Buffer.from("x"));
+    wireDefaults(binaryPath);
     setInput("url-prefix", "http://cdn.example.com/v1/");
-    setInput("github-token", "stub");
     await expect(main()).rejects.toThrow(/must start with https:\/\//);
   });
 
-  it("fails when glob matches zero files", async ({ expect }) => {
-    setInput("binary", join(workdir.path, "*.node.gz"));
-    setInput("url-prefix", "https://cdn.example.com/v1/");
-    setInput("github-token", "stub");
-    await expect(main()).rejects.toThrow(/matched no files/);
+  it("rejects unsupported platform input", async ({ expect }) => {
+    const binaryPath = join(workdir.path, "x.node.gz");
+    await writeFile(binaryPath, Buffer.from("x"));
+    wireDefaults(binaryPath, { platform: "freebsd" });
+    await expect(main()).rejects.toThrow(/unsupported platform/);
   });
 
-  it("fails when glob matches multiple files", async ({ expect }) => {
-    await writeFile(join(workdir.path, "a.node.gz"), Buffer.from("a"));
-    await writeFile(join(workdir.path, "b.node.gz"), Buffer.from("b"));
-    setInput("binary", join(workdir.path, "*.node.gz"));
-    setInput("url-prefix", "https://cdn.example.com/v1/");
-    setInput("github-token", "stub");
-    await expect(main()).rejects.toThrow(/matched 2 files/);
+  it("rejects unsupported arch input", async ({ expect }) => {
+    const binaryPath = join(workdir.path, "x.node.gz");
+    await writeFile(binaryPath, Buffer.from("x"));
+    wireDefaults(binaryPath, { arch: "riscv64" });
+    await expect(main()).rejects.toThrow(/unsupported arch/);
   });
 
   it("rejects binary larger than max-binary-bytes", async ({ expect }) => {
-    await writeFile(join(workdir.path, "big.node.gz"), Buffer.alloc(2048));
-    setInput("binary", join(workdir.path, "*.node.gz"));
-    setInput("url-prefix", "https://cdn.example.com/v1/");
-    setInput("github-token", "stub");
+    const binaryPath = join(workdir.path, "big.node.gz");
+    await writeFile(binaryPath, Buffer.alloc(2048));
+    wireDefaults(binaryPath);
     setInput("max-binary-bytes", "1024");
     await expect(main()).rejects.toThrow(/exceeds cap/);
   });
 
   it("rejects non-numeric max-binary-bytes", async ({ expect }) => {
-    await writeFile(join(workdir.path, "x.node.gz"), Buffer.from("x"));
-    setInput("binary", join(workdir.path, "*.node.gz"));
-    setInput("url-prefix", "https://cdn.example.com/v1/");
-    setInput("github-token", "stub");
+    const binaryPath = join(workdir.path, "x.node.gz");
+    await writeFile(binaryPath, Buffer.from("x"));
+    wireDefaults(binaryPath);
     setInput("max-binary-bytes", "not-a-number");
     await expect(main()).rejects.toThrow(/positive integer/);
   });

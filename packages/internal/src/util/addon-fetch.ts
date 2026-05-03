@@ -11,6 +11,7 @@ import { createHash } from "node:crypto";
 import { HttpError, jitteredDelay, withRetry, type HttpClient } from "../http.ts";
 
 export type FetchAndHashAddonOptions = {
+  readonly http: HttpClient;
   readonly maxBinaryBytes: number;
   readonly maxBinaryMs: number;
   /** Human-readable label (e.g. `linux/x64`) used in error messages. */
@@ -30,13 +31,12 @@ const RETRY_BASE_MS = 500;
  * overflow. The response body is always drained before returning.
  */
 export async function fetchAndHashAddon(
-  http: HttpClient,
   url: string,
   opts: FetchAndHashAddonOptions,
 ): Promise<string> {
   return withRetry(
     async () => {
-      const result = await http.request(url, {
+      const result = await opts.http.request(url, {
         timeoutMs: opts.maxBinaryMs,
         stallTimeoutMs: opts.maxBinaryMs,
       });
@@ -62,19 +62,21 @@ export async function fetchAndHashAddon(
       }
       return hash.digest("hex");
     },
-    // Retry transient network/5xx; retry 404 only when the caller opts
-    // in (publish-side CDN propagation). 4xx otherwise is a caller error.
-    (err, attempt) => {
-      const maxAttempts = 1 + (opts.retryCount ?? 3);
-      if (attempt >= maxAttempts) return { retry: false };
-      if (err instanceof HttpError) {
-        if (err.kind === "network") return backoff(attempt);
-        if (err.kind === "status") {
-          if (err.status !== undefined && err.status >= 500) return backoff(attempt);
-          if (opts.retryOn404 && err.status === 404) return backoff(attempt);
+    {
+      // Retry transient network/5xx; retry 404 only when the caller opts
+      // in (publish-side CDN propagation). 4xx otherwise is a caller error.
+      classify: (err, attempt) => {
+        const maxAttempts = 1 + (opts.retryCount ?? 3);
+        if (attempt >= maxAttempts) return { retry: false };
+        if (err instanceof HttpError) {
+          if (err.kind === "network") return backoff(attempt);
+          if (err.kind === "status") {
+            if (err.status !== undefined && err.status >= 500) return backoff(attempt);
+            if (opts.retryOn404 && err.status === 404) return backoff(attempt);
+          }
         }
-      }
-      return { retry: false };
+        return { retry: false };
+      },
     },
   );
 }

@@ -14,7 +14,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { z } from "zod/v4";
 
-import { PublishedSchemas } from "../../internal/src/verify/schemas.ts";
+import { PublishedSchemas } from "../../internal/src/verify/manifest.ts";
 
 const PAGES_BASE = "https://vadimpiven.github.io/node-addon-slsa";
 

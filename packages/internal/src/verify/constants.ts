@@ -22,11 +22,7 @@ export const OID_RUN_INVOCATION_URI = "1.3.6.1.4.1.57264.1.21";
 /** Expected OIDC issuer for GitHub Actions identity tokens. */
 export const GITHUB_ACTIONS_ISSUER = "https://token.actions.githubusercontent.com";
 
-/**
- * Default per-binary download cap (256 MiB). Shared by the publish-side
- * `verify-addons` action and the consumer-side `slsa wget` / `requireAddon`
- * flow so both ends enforce the same bound unless explicitly overridden.
- */
+/** 256 MiB. Same default on the publish side (`verify-addons`) and consumer side (`slsa wget`). */
 export const DEFAULT_MAX_BINARY_BYTES = 256 * 1024 * 1024;
 
 /** Default per-binary fetch timeout, seconds. Applied as undici headersTimeout + bodyTimeout. */
@@ -35,12 +31,7 @@ export const DEFAULT_MAX_BINARY_SECONDS = 300;
 /** Upper bound for JSON responses (sigstore bundles ~a few KB; cap generously). */
 export const MAX_JSON_RESPONSE_BYTES = 50 * 1024 * 1024;
 
-/**
- * Retry delays (ms) for sidecar bundle 404s — GitHub release assets (and
- * most CDNs) take a few seconds to propagate after upload, so the
- * publish-side self-verify in `verify-addons` retries through this schedule
- * before giving up.
- */
+/** GitHub release assets (and most CDNs) take a few seconds to propagate after upload. */
 export const BUNDLE_FETCH_RETRY_DELAYS: readonly number[] = [2_000, 5_000, 10_000, 15_000];
 
 /** Escape regex metacharacters so a literal string matches exactly inside a pattern. */
@@ -48,26 +39,40 @@ export function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/** Options for {@link buildAttestSignerPattern}. */
+export type BuildAttestSignerPatternOptions = {
+  /** "owner/repo" */
+  readonly repo: string;
+  /** Workflow filename, e.g. "release.yaml". No path segments allowed. */
+  readonly workflow: string;
+};
+
 /**
- * Build a Fulcio Build Signer URI pin (OID 1.3.6.1.4.1.57264.1.9) for a
- * specific GitHub Actions workflow. Attestations must originate from
- * `https://github.com/<repo>/.github/workflows/<workflow>@<40-hex>`; tag
- * and branch refs are rejected because they are mutable. A retagged
- * workflow could otherwise mint attestations passing a looser pin.
- *
- * GitHub populates Fulcio's `job_workflow_ref` claim with the literal
- * ref from the caller's `uses:` line; SHA-pinned `uses:` produces the
- * `@<40-hex>` form this pattern anchors on.
+ * Fulcio Build Signer URI pin (OID 1.3.6.1.4.1.57264.1.9). Tag and branch
+ * refs are rejected — only `@<40-hex>` SHA pins, because tags are mutable
+ * and could mint attestations passing a looser pin after retagging.
  */
-export function buildAttestSignerPattern(opts: {
-  readonly repo: string; // "owner/repo"
-  readonly workflow: string; // filename, e.g. "release.yaml", no path segments
-}): RegExp {
+export function buildAttestSignerPattern(opts: BuildAttestSignerPatternOptions): RegExp {
   if (opts.workflow.includes("/") || opts.workflow.includes("\\")) {
     throw new TypeError(`attest workflow must be a bare filename: ${opts.workflow}`);
   }
   const base = `https://github.com/${opts.repo}/.github/workflows/${opts.workflow}`;
   return new RegExp(`^${escapeRegExp(base)}@[0-9a-f]{40}$`);
+}
+
+// Single trust anchor for every package published with this toolkit:
+// consumers SHA-pin `attest-addon.yaml` via `uses:`, and the Fulcio
+// Build Signer URI resolves to that workflow regardless of caller.
+const TOOLKIT_REPO = "vadimpiven/node-addon-slsa";
+const ATTEST_WORKFLOW_FILENAME = "attest-addon.yaml";
+
+/**
+ * Build the toolkit's reusable-workflow Build Signer URI pin —
+ * `attest-addon.yaml` in `vadimpiven/node-addon-slsa`, SHA-anchored.
+ * This is the default trust anchor when no custom `attestSignerPattern` is set.
+ */
+export function buildToolkitAttestSignerPattern(): RegExp {
+  return buildAttestSignerPattern({ repo: TOOLKIT_REPO, workflow: ATTEST_WORKFLOW_FILENAME });
 }
 
 if (import.meta.vitest) {

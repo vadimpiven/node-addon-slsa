@@ -15,30 +15,13 @@ const SemVerStringSchema = z
   .regex(SEMVER_RE)
   .transform((v) => v as SemVerString);
 
-/**
- * `addon` block in package.json. All fields are required: hidden
- * conventions cause silent install failures when they drift, and an
- * explicit declaration is one extra line per consumer.
- *
- * `path` is the `.node` location inside `node_modules/<pkg>/`;
- * `manifest` is the SLSA manifest path inside the same tarball;
- * `attestWorkflow` is the filename of the GitHub Actions workflow that
- * mints provenance attestations for this package — the consumer-side
- * verifier pins the Fulcio Build Signer URI to
- * `<repo>/.github/workflows/<attestWorkflow>`, so attestations produced
- * by any other workflow (including new evil workflows added to the
- * same repo) are rejected. URLs are read from the manifest at install
- * time, not from here.
- */
+/** `addon` block: `.node` path and SLSA manifest path, both relative to the tarball root. */
 const AddonConfigSchema = z.object({
   path: z.string().refine((path) => !path.split(/[/\\]/).includes("..") && path.endsWith(".node"), {
     message: "addon.path must be a relative .node file path",
   }),
   manifest: z.string().refine((p) => !p.split(/[/\\]/).includes("..") && p.endsWith(".json"), {
     message: "addon.manifest must be a relative .json file path",
-  }),
-  attestWorkflow: z.string().regex(/^[A-Za-z0-9._-]+\.ya?ml$/, {
-    message: 'addon.attestWorkflow must be a workflow filename like "release.yaml"',
   }),
 });
 
@@ -79,27 +62,20 @@ export async function readPackageJson(packageDir: string): Promise<PackageJson> 
   }
 }
 
-/**
- * Extract GitHub `owner/repo` from a `repository` field. Returns null
- * when the format is unrecognized — callers treat that as "no trust
- * anchor in package.json."
- */
+// Anchored to the full string so a nested path
+// (`https://github.com/foo/bar/baz.git`) returns null instead of silently
+// capturing the wrong owner/repo.
+const GITHUB_URL_FORM =
+  /^(?:git\+)?(?:https?|git|ssh):\/\/(?:[^@/]*@)?github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/;
+const GITHUB_SCP_FORM = /^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/;
+
+/** Returns null on unknown formats; callers treat that as "no trust anchor". */
 export function extractExpectedRepo(repository: Repository | undefined): GitHubRepo | null {
   if (!repository) return null;
   const raw = typeof repository === "string" ? repository : (repository.url ?? "");
-  // Anchor to the full string and accept only the classic github.com forms:
-  //   https://github.com/<owner>/<repo>(.git)?(/)?
-  //   git://github.com/<owner>/<repo>(.git)?(/)?
-  //   ssh://git@github.com/<owner>/<repo>(.git)?(/)?
-  //   git@github.com:<owner>/<repo>(.git)?
-  // Loose match (e.g. `https://github.com/foo/bar/baz.git`) must return
-  // null rather than silently capturing the wrong owner/repo pair.
-  const match = raw.match(
-    /^(?:git\+)?(?:https?|git|ssh):\/\/(?:[^@/]*@)?github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$|^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/,
-  );
+  const match = raw.match(GITHUB_URL_FORM) ?? raw.match(GITHUB_SCP_FORM);
   if (!match) return null;
-  const owner = match[1] ?? match[3];
-  const repo = match[2] ?? match[4];
+  const [, owner, repo] = match;
   if (!owner || !repo) return null;
   try {
     return githubRepo(`${owner}/${repo}`);
@@ -147,7 +123,6 @@ if (import.meta.vitest) {
       addon: {
         path: "./dist/test.node",
         manifest: "./slsa-manifest.json",
-        attestWorkflow: "release.yaml",
       },
       repository: { url: "git+https://github.com/owner/repo.git" },
     };
@@ -169,7 +144,6 @@ if (import.meta.vitest) {
           addon: {
             path: "./dist/test.node",
             manifest: "./custom/slsa.json",
-            attestWorkflow: "release.yaml",
           },
         }),
       );
@@ -186,7 +160,6 @@ if (import.meta.vitest) {
           addon: {
             path: "./dist/test.node",
             manifest: "../../etc/passwd.json",
-            attestWorkflow: "release.yaml",
           },
         }),
       );
@@ -201,7 +174,7 @@ if (import.meta.vitest) {
         join(tmp.path, "package.json"),
         JSON.stringify({
           ...validPkg,
-          addon: { path: "./dist/test.node", attestWorkflow: "release.yaml" },
+          addon: { path: "./dist/test.node" },
         }),
       );
       await expect(readPackageJson(tmp.path)).rejects.toThrow(/addon\.manifest/);
@@ -221,7 +194,6 @@ if (import.meta.vitest) {
           addon: {
             path: "../etc/evil.node",
             manifest: "./slsa-manifest.json",
-            attestWorkflow: "release.yaml",
           },
         }),
       );

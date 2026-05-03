@@ -85,8 +85,7 @@ compromised, verification may pass for malicious artifacts.
   },
   "addon": {
     "path": "./dist/my_addon.node",
-    "manifest": "./dist/slsa-manifest.json",
-    "attestWorkflow": "release.yaml"
+    "manifest": "./dist/slsa-manifest.json"
   },
   "scripts": {
     "postinstall": "slsa wget",
@@ -99,17 +98,16 @@ compromised, verification may pass for malicious artifacts.
 ```
 
 - **`addon.path`** — where the addon is installed (relative to package root).
-- **`addon.attestWorkflow`** — filename (no path) of the GitHub Actions
-  workflow in your repo that mints provenance attestations (the one that
-  runs `attest-addon` — see [CI workflow](#2-ci-workflow)). The verifier
-  pins the Fulcio Build Signer URI to
-  `<repo>/.github/workflows/<attestWorkflow>@<40-hex>`; attestations
-  minted by any other workflow in the same repo (including a malicious
-  new one) are rejected.
 - **`addon.manifest`** — path to the generated SLSA manifest inside the
   published tarball. The manifest carries each platform/arch binary's
   download URL, sidecar sigstore bundle URL, and SHA-256; the publish
   workflow produces it, so do not commit it by hand.
+
+The Fulcio Build Signer URI is pinned to the toolkit's reusable
+`attest-addon.yaml` workflow at install time — one trust anchor for
+every package that publishes through this toolkit, no per-package
+configuration needed.
+
 - **`postinstall`** — `slsa wget` reads the manifest, downloads the
   binary for the current platform/arch, and verifies its provenance.
   Pair with [`requireAddon`](#3-loading-the-addon): pnpm ≥ 10 blocks
@@ -121,43 +119,54 @@ compromised, verification may pass for malicious artifacts.
 ### 2. CI workflow
 
 ```yaml
-env:
-  RELEASE_BASE_URL: "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/"
-
 jobs:
-  # Must be ONE file named exactly as `addon.attestWorkflow` in
-  # package.json — the install-time verifier pins attestations to this
-  # exact workflow file. Don't rename it without bumping a release.
   build-addon:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15, windows-2025]
+        include:
+          - { os: ubuntu-24.04, platform: linux, arch: x64 }
+          - { os: macos-15, platform: darwin, arch: arm64 }
+          - { os: windows-2025, platform: win32, arch: x64 }
     runs-on: ${{ matrix.os }}
-    permissions:
-      contents: write # release upload
-      id-token: write # sigstore OIDC
-      attestations: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       # ... set up toolchain, build native addon, then:
       - name: Compress binary for release
         run: npx slsa pack
-      - name: Attest addon (public-good sigstore)
-        id: attest
-        uses: vadimpiven/node-addon-slsa/.github/actions/attest-addon@<commit-sha>
+      - name: Upload binary for attest job
+        # Name must match the `binary-artifact` input on the attest job below.
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
-          binary: dist/my_addon-v*.node.gz
-          url-prefix: ${{ env.RELEASE_BASE_URL }}
-      - name: Upload binary and sidecar to release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BINARY_PATH: ${{ steps.attest.outputs.binary-path }}
-          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
-        # `--clobber` so re-running a single failed matrix cell overwrites
-        # any partial assets from the previous attempt instead of 422-ing.
-        run: gh release upload "${{ github.ref_name }}" --clobber "$BINARY_PATH" "$BUNDLE_PATH"
+          name: addon-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ./dist/*.node.gz
+          if-no-files-found: error
+
+  attest-addon:
+    needs: build-addon
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: linux, arch: x64 }
+          - { platform: darwin, arch: arm64 }
+          - { platform: win32, arch: x64 }
+    permissions:
+      contents: write # upload sidecar + binary to draft release
+      id-token: write # sigstore OIDC
+      attestations: write
+    # Reusable workflow: SHA-pinned `uses:` is what lets Fulcio's
+    # `job_workflow_ref` resolve to a 40-hex commit, which is the
+    # toolkit-side trust pin the verifier anchors on.
+    uses: vadimpiven/node-addon-slsa/.github/workflows/attest-addon.yaml@<commit-sha>
+    with:
+      binary-artifact: addon-${{ matrix.platform }}-${{ matrix.arch }}
+      platform: ${{ matrix.platform }}
+      arch: ${{ matrix.arch }}
+      # release-base-url is optional; defaults to
+      # https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/
+      # Override only for monorepos that scope tags by package, or for
+      # CDN-published packages.
 
   pack-tarball:
     runs-on: ubuntu-latest
@@ -166,43 +175,44 @@ jobs:
       # ... set up Node / pnpm, build JS, then:
       - run: npm pack
       - name: Upload pre-packed tarball
+        # Name must be exactly "slsa-tarball" — the toolkit's `publish.yaml`
+        # downloads this artifact by that name.
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
-          name: my-tarball # any name; passed to publish.yaml below
+          name: slsa-tarball
           path: ./*.tgz
           if-no-files-found: error
           retention-days: 1
 
   publish:
-    needs: [build-addon, pack-tarball]
+    needs: [attest-addon, pack-tarball]
     uses: vadimpiven/node-addon-slsa/.github/workflows/publish.yaml@<commit-sha>
     permissions:
       id-token: write # npm trusted publishing
-    with:
-      tarball-artifact: my-tarball # must match the upload-artifact name
-      addons-artifact-pattern: slsa-addons-*
-      release-base-url: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/
+    # `access` defaults to "public"; override to "restricted" for paid scoped packages.
+    # `release-base-url` defaults from github.repository / github.ref_name.
 ```
 
 Pin every third-party action to a commit SHA with a trailing `# vX.Y.Z`
 comment, not a mutable tag — SHAs are immutable and audit-friendly.
 
-Flow: each matrix runner builds its `.node.gz`, calls `attest-addon` to
-hash the local binary, mint a public-good sigstore bundle covering the
-future public URL, and upload a per-binary descriptor as a GHA artifact
-named `slsa-addons-<platform>-<arch>`. The same step uploads the
-binary and its `.sigstore` sidecar to the caller's distribution
-(GitHub Releases, S3, R2 — anywhere public). `publish.yaml` then
-downloads every matching descriptor artifact, validates each
-descriptor's `url` against `release-base-url` (the trust anchor),
-aggregates them into the addon URL map, re-fetches both binary and
-bundle from their public URLs (with CDN-propagation retries), runs the
-full sigstore verify chain (TUF → Fulcio → Rekor inclusion), pins the
-Fulcio Build Signer URI to the caller's `attestWorkflow`, writes the
-SLSA manifest into the tarball, and publishes to npm via trusted
-publishing. At install time `slsa wget` re-fetches the binary, its
-bundle, and runs the same chain — no token required because bundles
-inherit the binary's auth model.
+Flow: each matrix runner builds its `.node.gz` and uploads it as a
+per-cell workflow artifact `addon-<platform>-<arch>`. The toolkit's
+reusable `attest-addon.yaml` (one job per matrix cell) downloads the
+binary, hashes it, mints a public-good sigstore bundle covering the
+future public URL, uploads the binary and its `.sigstore` sidecar to
+the caller's distribution (GitHub Releases by default), and uploads
+a per-binary descriptor + bundle pair as a GHA artifact
+`slsa-addons-<platform>-<arch>`. `publish.yaml` then downloads every
+descriptor artifact, validates each descriptor's `url` against
+`release-base-url` (the trust anchor), runs the full sigstore verify
+chain on each pre-fetched bundle (TUF → Fulcio → Rekor inclusion),
+pins the Fulcio Build Signer URI to the toolkit's
+`attest-addon.yaml`, writes the SLSA manifest into the tarball, and
+publishes to npm via trusted publishing. At install time `slsa wget`
+re-fetches each binary and its bundle from the public URL and runs
+the same chain — no token required because bundles inherit the
+binary's auth model.
 
 If `publish` fails after the GitHub release has been finalized
 (immutable releases), retry only the `publish` job from the GHA UI:

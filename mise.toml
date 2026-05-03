@@ -273,14 +273,10 @@ hide = true
 # built before we invoke ncc.
 depends = ["setup", "build:package"]
 run = [
-  'pnpm -F "{.github/actions/aggregate-descriptors}" run build',
   'pnpm -F "{.github/actions/attest-addon}" run build',
   'pnpm -F "{.github/actions/verify-addons}" run build',
 ]
 sources = [
-  ".github/actions/aggregate-descriptors/index.ts",
-  ".github/actions/aggregate-descriptors/package.json",
-  ".github/actions/aggregate-descriptors/tsconfig.json",
   ".github/actions/attest-addon/index.ts",
   ".github/actions/attest-addon/package.json",
   ".github/actions/attest-addon/tsconfig.json",
@@ -293,7 +289,6 @@ sources = [
   "pnpm-lock.yaml",
 ]
 outputs = [
-  ".github/actions/aggregate-descriptors/dist/",
   ".github/actions/attest-addon/dist/",
   ".github/actions/verify-addons/dist/",
 ]
@@ -314,7 +309,6 @@ description = "Run actions tests"
 hide = true
 depends = ["fix"]
 run = [
-  'pnpm -F "{.github/actions/aggregate-descriptors}" --if-present run test',
   'pnpm -F "{.github/actions/attest-addon}" --if-present run test',
   'pnpm -F "{.github/actions/verify-addons}" --if-present run test',
 ]
