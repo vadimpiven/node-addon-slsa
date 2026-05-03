@@ -5,5 +5,4 @@ useDefault = true
 # Present in every GitHub Action that bundles @actions/core.
 [[rules]]
 id = "generic-api-key"
-[rules.allowlist]
-paths = ["attest-public/dist/"]
+allowlist = { paths = [".*/dist/"] }
