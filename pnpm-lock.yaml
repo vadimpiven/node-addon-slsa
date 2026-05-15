@@ -83,12 +83,8 @@ catalogs:
       version: 4.4.2
 
 patchedDependencies:
-  '@sigstore/verify@3.1.0':
-    hash: ead7e03de97054fccf2b59f533bfbd6d817cd4521724b1cd5d75d601f4d5d4ea
-    path: patches/@sigstore__verify@3.1.0.patch
-  undici@8.0.2:
-    hash: b3d3916d68e5961fc0bea5fa0e2e49e69a539a5fe5bc463f8044bd1d667286b0
-    path: patches/undici@8.0.2.patch
+  '@sigstore/verify@3.1.0': ead7e03de97054fccf2b59f533bfbd6d817cd4521724b1cd5d75d601f4d5d4ea
+  undici@8.0.2: b3d3916d68e5961fc0bea5fa0e2e49e69a539a5fe5bc463f8044bd1d667286b0
 
 importers:
 
