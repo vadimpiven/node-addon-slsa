@@ -1,0 +1,59 @@
+diff --git a/lib/api/api-request.js b/lib/api/api-request.js
+index e9f72a428b2317807c704d96f2a57a59eb38b594..c0784ed3645aa59ad9be5ee44b3502ea6c4e5b2d 100644
+--- a/lib/api/api-request.js
++++ b/lib/api/api-request.js
+@@ -1,14 +1,13 @@
+ 'use strict'
+ 
+ const assert = require('node:assert')
+-const { AsyncResource } = require('node:async_hooks')
+ const { Readable } = require('./readable')
+ const { InvalidArgumentError, RequestAbortedError } = require('../core/errors')
+ const util = require('../core/util')
+ 
+ function noop () {}
+ 
+-class RequestHandler extends AsyncResource {
++class RequestHandler {
+   constructor (opts, callback) {
+     if (!opts || typeof opts !== 'object') {
+       throw new InvalidArgumentError('invalid opts')
+@@ -37,7 +36,6 @@ class RequestHandler extends AsyncResource {
+         throw new InvalidArgumentError('invalid onInfo callback')
+       }
+ 
+-      super('UNDICI_REQUEST')
+     } catch (err) {
+       if (util.isStream(body)) {
+         util.destroy(body.on('error', noop), err)
+@@ -130,7 +128,7 @@ class RequestHandler extends AsyncResource {
+     this.res = res
+     if (callback !== null) {
+       try {
+-        this.runInAsyncScope(callback, null, null, {
++        callback(null, {
+           statusCode,
+           statusText,
+           headers: responseHeaderData,
+@@ -190,7 +188,7 @@ class RequestHandler extends AsyncResource {
+       // TODO: Does this need queueMicrotask?
+       this.callback = null
+       queueMicrotask(() => {
+-        this.runInAsyncScope(callback, null, err, { opaque })
++        callback(err, { opaque })
+       })
+     }
+ 
+diff --git a/types/index.d.ts b/types/index.d.ts
+index 891358f33105597e8ff82f34441a2a73e3155f59..aef43f7d55c0b727acad03243795b46cb7d40c84 100644
+--- a/types/index.d.ts
++++ b/types/index.d.ts
+@@ -41,7 +41,7 @@ export * from './diagnostics-channel'
+ export * from './websocket'
+ export * from './content-type'
+ export * from './cache'
+-export { Interceptable } from './mock-interceptor'
++export { Interceptable, MockInterceptor } from './mock-interceptor'
+ 
+ declare function globalThisInstall (): void
+ 

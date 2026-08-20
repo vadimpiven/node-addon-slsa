@@ -12,11 +12,10 @@ export function mockFetch(
 ): MockAgent & AsyncDisposable {
   const agent = new MockAgent();
   agent.disableNetConnect();
-  agent
-    .get(() => true)
-    .intercept({ path: () => true, method: () => true })
-    .reply(handler)
-    .times(times);
+  const pool = agent.get(() => true);
+  for (let i = 0; i < times; i++) {
+    pool.intercept({ path: () => true, method: () => true }).reply(handler);
+  }
   return Object.assign(agent, {
     [Symbol.asyncDispose]: () => agent.close(),
   });
