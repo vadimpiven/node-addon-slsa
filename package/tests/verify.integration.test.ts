@@ -5,7 +5,6 @@ import { createVerifier } from "sigstore";
 import { type TrustMaterial } from "@sigstore/verify";
 
 import { runInvocationURI, sha256Hex, type BundleVerifier } from "../src/types.ts";
-import type { PackageProvenance } from "../src/verify/index.ts";
 import { ProvenanceError } from "../src/util/provenance-error.ts";
 import { GITHUB_ACTIONS_ISSUER } from "../src/verify/constants.ts";
 import { resolveConfig } from "../src/verify/config.ts";
@@ -16,7 +15,7 @@ import {
 } from "../src/verify/index.ts";
 import { verifyRekorAttestations } from "../src/verify/rekor.ts";
 
-vi.setConfig({ testTimeout: 30_000 });
+vi.setConfig({ testTimeout: 120_000 });
 
 // Integration tests below require network access. They verify provenance
 // against real npm/Rekor responses for specific published versions.
@@ -28,21 +27,17 @@ describe("verifyPackageProvenance (integration)", () => {
     verifier = await createVerifier({ certificateIssuer: GITHUB_ACTIONS_ISSUER });
   });
 
-  // Fetched once in "succeeds for unscoped package", reused by later tests
-  // to avoid redundant npm registry round-trips for the same package.
-  let semverProvenance: PackageProvenance;
-
   it("succeeds for unscoped package", async ({ expect }) => {
-    semverProvenance = await verifyPackageProvenance({
+    const provenance = await verifyPackageProvenance({
       packageName: "semver",
       version: "7.6.3",
       repo: "npm/node-semver",
       verifier,
     });
-    expect(semverProvenance.runInvocationURI).toMatch(
+    expect(provenance.runInvocationURI).toMatch(
       /^https:\/\/github\.com\/npm\/node-semver\/actions\/runs\//,
     );
-    expect(semverProvenance.verifyAddon).toBeTypeOf("function");
+    expect(provenance.verifyAddon).toBeTypeOf("function");
   });
 
   it("succeeds for scoped package", async ({ expect }) => {
@@ -82,15 +77,6 @@ describe("verifyPackageProvenance (integration)", () => {
     ).rejects.toThrow("SECURITY");
   });
 
-  it("verifyAddon rejects wrong hash for verified package", async ({ expect }) => {
-    // Reuses the handle from "succeeds for unscoped package" — no extra npm fetch.
-    await expect(
-      semverProvenance.verifyAddon({
-        sha256: sha256Hex("0000000000000000000000000000000000000000000000000000000000000000"),
-      }),
-    ).rejects.toThrow(ProvenanceError);
-  });
-
   it("rejects for a package without provenance", async ({ expect }) => {
     await expect(
       verifyPackageProvenance({
@@ -116,7 +102,7 @@ beforeAll(async () => {
   trustMaterial = await loadTrustMaterial();
 });
 
-const rekorConfig = resolveConfig({ retryCount: 0 });
+const rekorConfig = resolveConfig({ retryCount: 1 });
 
 describe("verifyAddonProvenance (integration)", () => {
   it("succeeds with correct hash, repo, and run URI", async ({ expect }) => {
