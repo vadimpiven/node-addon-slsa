@@ -1,0 +1,12 @@
+diff --git a/dist/fetcher.js b/dist/fetcher.js
+index dc6373d8288961ec16367e32b00f6d663b1f0963..81aea33bff2d44ea8e3161a8f70cc3409a84b445 100644
+--- a/dist/fetcher.js
++++ b/dist/fetcher.js
+@@ -108,6 +108,7 @@ class DefaultFetcher extends BaseFetcher {
+                 throw err;
+             }
+             if (!response.ok || !response.body) {
++                await response.body?.cancel().catch(() => { });
+                 const err = new error_1.DownloadHTTPError('Failed to download', response.status);
+                 if (shouldRetry && response.status >= 500 && response.status < 600) {
+                     return retry(err);
