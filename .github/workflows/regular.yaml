@@ -29,7 +29,7 @@ jobs:
       mise-version: "${{ steps.init.outputs.mise-version }}"
     steps:
       - name: "Checkout"
-        uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
+        uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
         with:
           ref: "${{ github.ref }}"
           fetch-depth: 1
@@ -47,7 +47,7 @@ jobs:
       id-token: "write" # for OIDC authentication
     steps:
       - name: "Checkout"
-        uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
+        uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
         with:
           ref: "${{ github.ref }}"
           fetch-depth: 1
@@ -76,13 +76,13 @@ jobs:
     runs-on: "ubuntu-24.04"
     steps:
       - name: "Checkout repository"
-        uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
+        uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
         with:
           ref: "${{ github.ref }}"
           fetch-depth: 1
           persist-credentials: false
       - name: "Run zizmor"
-        uses: "zizmorcore/zizmor-action@b1d7e1fb5de872772f31590499237e7cce841e8e" # v0.5.3
+        uses: "zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054" # v0.6.2
         with:
           persona: "auditor"
         env:
@@ -96,7 +96,7 @@ jobs:
     runs-on: "ubuntu-24.04"
     steps:
       - name: "Checkout repository"
-        uses: "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" # v6.0.2
+        uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
         with:
           ref: "${{ github.ref }}"
           fetch-depth: 1
@@ -111,6 +111,6 @@ jobs:
           output: "trivy-results.sarif"
           ignore-unfixed: true
       - name: "Upload Trivy scan results to GitHub Security tab"
-        uses: "github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e" # v4.35.4
+        uses: "github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd" # v4.37.7
         with:
           sarif_file: "trivy-results.sarif"

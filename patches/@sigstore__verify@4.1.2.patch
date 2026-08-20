@@ -1,0 +1,31 @@
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index dce96b8948ea56ddce71d13755eaeff99732be67..b414bc54d6f771f1d555285d69780567f3bf2120 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -4,3 +4,6 @@ export { KeyFinderFunc, TrustMaterial, toTrustMaterial } from './trust';
+ export { Verifier, VerifierOptions } from './verifier';
+ export type { SignedEntity, Signer, VerificationPolicy } from './shared.types';
+ export type { ObjectIdentifierValuePair } from '@sigstore/protobuf-specs';
++export { verifyCertificateChain } from './key/certificate';
++export { verifyTLogInclusion } from './tlog';
++export type { CertAuthority, TLogAuthority } from './trust';
+diff --git a/dist/index.js b/dist/index.js
+index 3222876fcd68b7d7edc5f18e3112c4ae31867f20..a65c662236e3515e63ab96d5875d425e280e8bc9 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1,6 +1,6 @@
+ "use strict";
+ Object.defineProperty(exports, "__esModule", { value: true });
+-exports.Verifier = exports.toTrustMaterial = exports.VerificationError = exports.PolicyError = exports.toSignedEntity = void 0;
++exports.verifyTLogInclusion = exports.verifyCertificateChain = exports.Verifier = exports.toTrustMaterial = exports.VerificationError = exports.PolicyError = exports.toSignedEntity = void 0;
+ /* istanbul ignore file */
+ /*
+ Copyright 2023 The Sigstore Authors.
+@@ -26,3 +26,7 @@ var trust_1 = require("./trust");
+ Object.defineProperty(exports, "toTrustMaterial", { enumerable: true, get: function () { return trust_1.toTrustMaterial; } });
+ var verifier_1 = require("./verifier");
+ Object.defineProperty(exports, "Verifier", { enumerable: true, get: function () { return verifier_1.Verifier; } });
++var certificate_1 = require("./key/certificate");
++Object.defineProperty(exports, "verifyCertificateChain", { enumerable: true, get: function () { return certificate_1.verifyCertificateChain; } });
++var tlog_1 = require("./tlog");
++Object.defineProperty(exports, "verifyTLogInclusion", { enumerable: true, get: function () { return tlog_1.verifyTLogInclusion; } });
