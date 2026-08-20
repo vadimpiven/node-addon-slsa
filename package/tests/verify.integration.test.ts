@@ -20,13 +20,15 @@ vi.setConfig({ testTimeout: 120_000 });
 // Integration tests below require network access. They verify provenance
 // against real npm/Rekor responses for specific published versions.
 
-describe("verifyPackageProvenance (integration)", () => {
-  // Shared sigstore verifier — avoids re-initialising TUF trust root per test.
-  let verifier: BundleVerifier;
-  beforeAll(async () => {
-    verifier = await createVerifier({ certificateIssuer: GITHUB_ACTIONS_ISSUER });
-  });
+// Load TUF resources serially: concurrent refreshes leave retries running after tests.
+let verifier: BundleVerifier;
+let trustMaterial: TrustMaterial;
+beforeAll(async () => {
+  verifier = await createVerifier({ certificateIssuer: GITHUB_ACTIONS_ISSUER });
+  trustMaterial = await loadTrustMaterial();
+});
 
+describe("verifyPackageProvenance (integration)", () => {
   it("succeeds for unscoped package", async ({ expect }) => {
     const provenance = await verifyPackageProvenance({
       packageName: "semver",
@@ -95,12 +97,6 @@ const CLI_REPO = "cli/cli";
 const CLI_RUN_URI = runInvocationURI(
   "https://github.com/cli/cli/actions/runs/22312430014/attempts/4",
 );
-
-// Pre-load TUF trust material once for all Rekor tests.
-let trustMaterial: TrustMaterial;
-beforeAll(async () => {
-  trustMaterial = await loadTrustMaterial();
-});
 
 const rekorConfig = resolveConfig({ retryCount: 1 });
 
