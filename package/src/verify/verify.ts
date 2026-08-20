@@ -95,9 +95,7 @@ export async function verifyPackageProvenance(
   } & VerifyOptions,
 ): Promise<PackageProvenance> {
   const { packageName, version, repo } = options;
-  const verifier =
-    options.verifier ?? (await createVerifier({ certificateIssuer: GITHUB_ACTIONS_ISSUER }));
-  const config = resolveConfig({ ...options, verifier });
+  const config = resolveConfig(options);
 
   log(`verifying npm package provenance: ${packageName}@${version}`);
   const attestations = await fetchNpmAttestations({ packageName, version }, config);
@@ -115,6 +113,8 @@ export async function verifyPackageProvenance(
     );
   }
 
+  const verifier =
+    config.verifier ?? (await createVerifier({ certificateIssuer: GITHUB_ACTIONS_ISSUER }));
   // Wrap: verify() may throw synchronously in some sigstore versions
   await Promise.resolve(verifier.verify(provenanceAttestation.bundle));
 

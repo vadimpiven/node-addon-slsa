@@ -35,11 +35,11 @@ catalog:
 
 minimumReleaseAge: 1440
 
-minimumReleaseAgeExclude:
+minimumReleaseAgeExclude: []
 
 onlyBuiltDependencies: []
 
-overrides:
+overrides: {}
 
 # @sigstore/verify: export verifyCertificateChain and verifyTLogInclusion
 # for direct Rekor entry verification without reconstructing a full Bundle.
@@ -53,6 +53,7 @@ overrides:
 # Re-evaluate on undici upgrades.
 patchedDependencies:
   "@sigstore/verify@4.1.2": patches/@sigstore__verify@4.1.2.patch
+  tuf-js@6.0.0: patches/tuf-js@6.0.0.patch
   undici@8.10.0: patches/undici@8.10.0.patch
 
 strictDepBuilds: true

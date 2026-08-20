@@ -84,6 +84,7 @@ catalogs:
 
 patchedDependencies:
   '@sigstore/verify@4.1.2': 851c435e06730dfe3cf47d78cc0ac5c23df678c92b83948f378f1462eedb7cbd
+  tuf-js@6.0.0: 8f4192fbee0af9dfc364cc6ae6f03455a7146358b045a508098918d332c99553
   undici@8.10.0: ef7528116ff3856b52932d46bf7843e93b546b9b601f269992d62237c072d6f4
 
 importers:
@@ -2777,7 +2778,7 @@ snapshots:
   '@sigstore/tuf@5.0.0':
     dependencies:
       '@sigstore/protobuf-specs': 0.5.1
-      tuf-js: 6.0.0
+      tuf-js: 6.0.0(patch_hash=8f4192fbee0af9dfc364cc6ae6f03455a7146358b045a508098918d332c99553)
     transitivePeerDependencies:
       - supports-color
 
@@ -4067,7 +4068,7 @@ snapshots:
     dependencies:
       is-number: 7.0.0
 
-  tuf-js@6.0.0:
+  tuf-js@6.0.0(patch_hash=8f4192fbee0af9dfc364cc6ae6f03455a7146358b045a508098918d332c99553):
     dependencies:
       '@gar/promise-retry': 1.0.3
       '@tufjs/models': 5.0.0
