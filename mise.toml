@@ -30,10 +30,10 @@ node = "25.9.0"
 "aqua:gitleaks/gitleaks" = "8.30.1"
 "aqua:rhysd/actionlint" = "1.7.12"
 "aqua:koalaman/shellcheck" = "0.11.0"
-"aqua:crate-ci/typos" = "1.49.0"
+"aqua:crate-ci/typos" = "1.50.0"
 "aqua:tamasfe/taplo" = "0.10.0"
 "aqua:zizmorcore/zizmor" = "1.29.0"
-"aqua:cli/cli" = "2.97.0"
+"aqua:cli/cli" = "2.98.0"
 
 # ============================================================================
 # SETUP TASKS - Initialize environment and tools
