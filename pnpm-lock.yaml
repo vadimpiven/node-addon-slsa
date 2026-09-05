@@ -1,3 +1,104 @@
+---
+lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    configDependencies: {}
+    packageManagerDependencies:
+      pnpm:
+        specifier: 12.1.0
+        version: 12.1.0
+
+packages:
+
+  '@pnpm/exe.darwin-arm64@12.1.0':
+    resolution: {integrity: sha512-9K+uSnTsJe9zD/YCMPiQDiwU8IiQRp+ZEE9IyVSr0Ppzfg5/xC0pwet2R320ifDIMroT3WYLkCEolV6XxtSS/g==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@pnpm/exe.darwin-x64@12.1.0':
+    resolution: {integrity: sha512-JcOc77W/KLg5ZZXr7q0WN8UDKirxQTuoaTkqRfMNkGyUHc/4bfNxLwjoZBilRQV6xmhJvU79ZUg++eYohzJhog==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@pnpm/exe.linux-arm64-musl@12.1.0':
+    resolution: {integrity: sha512-RVJlfI4T2l6XXA5s/Wv9HHEq4ztIq79fiZXDVHyHaKEbp+11ZM5k61z0gaGzXCEGUp5anW2Uc3UgQpmjAR+IPw==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@pnpm/exe.linux-arm64@12.1.0':
+    resolution: {integrity: sha512-iLEE0ykaRZ3/OBhIjwe/Zo96ac0c7pY7toyf6+jUN8gOsIIwJTS+AqSyOy+U1Zyhuuec8nJiRQ4URl60nRxTwA==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@pnpm/exe.linux-x64-musl@12.1.0':
+    resolution: {integrity: sha512-k+NUTRbz2CR9DBvGyAdtXU5HHPXytxi9MQ79uQRYNLF8nr/l1qHo++TvZ0OUuEpRxhg9B3n84Itv6MAHJR7TQQ==}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@pnpm/exe.linux-x64@12.1.0':
+    resolution: {integrity: sha512-GTi1DEM8vwIWpgC8P+xhw3Y2Ko2V88WtKAjbNwdeJAzMpzmcBeE4f0c2QKmeKpvi8/eYarxSIvBhYkTjA1BAcQ==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@pnpm/exe.win32-arm64@12.1.0':
+    resolution: {integrity: sha512-cK6kklZY8rs3d9gg8akGUgjDenFy65ZSAANXojs98d7Ne7gbzZYzU2joHRRilfpzCfawgG+lpPsh46a4xu55jQ==}
+    cpu: [arm64]
+    os: [win32]
+
+  '@pnpm/exe.win32-x64@12.1.0':
+    resolution: {integrity: sha512-Pk7Lvq3E5PWQFRJLLnLgW2qJAphtgPYCaaODB+FZRRvKksn8IPnF8Aj+/AT4+52GmckiANTbKwCsL18naJhohw==}
+    cpu: [x64]
+    os: [win32]
+
+  pnpm@12.1.0:
+    resolution: {integrity: sha512-2bgnbZf27IbkmBWHf5Hun2PO5h8gY7ME5Dttq4+gfOipr9RtL6zTn5Ieap0Gs8dagTSce4iMLSKIa64CKZAQNw==}
+    engines: {node: '>=18.*'}
+    hasBin: true
+
+snapshots:
+
+  '@pnpm/exe.darwin-arm64@12.1.0':
+    optional: true
+
+  '@pnpm/exe.darwin-x64@12.1.0':
+    optional: true
+
+  '@pnpm/exe.linux-arm64-musl@12.1.0':
+    optional: true
+
+  '@pnpm/exe.linux-arm64@12.1.0':
+    optional: true
+
+  '@pnpm/exe.linux-x64-musl@12.1.0':
+    optional: true
+
+  '@pnpm/exe.linux-x64@12.1.0':
+    optional: true
+
+  '@pnpm/exe.win32-arm64@12.1.0':
+    optional: true
+
+  '@pnpm/exe.win32-x64@12.1.0':
+    optional: true
+
+  pnpm@12.1.0:
+    optionalDependencies:
+      '@pnpm/exe.darwin-arm64': 12.1.0
+      '@pnpm/exe.darwin-x64': 12.1.0
+      '@pnpm/exe.linux-arm64': 12.1.0
+      '@pnpm/exe.linux-arm64-musl': 12.1.0
+      '@pnpm/exe.linux-x64': 12.1.0
+      '@pnpm/exe.linux-x64-musl': 12.1.0
+      '@pnpm/exe.win32-arm64': 12.1.0
+      '@pnpm/exe.win32-x64': 12.1.0
+
+---
 lockfileVersion: '9.0'
 
 settings:
@@ -64,8 +165,8 @@ catalogs:
       specifier: 0.3.0
       version: 0.3.0
     typescript:
-      specifier: 6.0.3
-      version: 6.0.3
+      specifier: 7.0.2
+      version: 7.0.2
     undici:
       specifier: 8.10.0
       version: 8.10.0
@@ -96,7 +197,7 @@ importers:
         version: 9.1.7
       markdownlint-cli2:
         specifier: 'catalog:'
-        version: 0.23.2
+        version: 0.23.2(supports-color@7.2.0)
       oxfmt:
         specifier: 'catalog:'
         version: 0.64.0
@@ -108,7 +209,7 @@ importers:
     devDependencies:
       '@actions/attest':
         specifier: 'catalog:'
-        version: 3.2.0(@octokit/core@7.0.7)
+        version: 3.2.0(@octokit/core@7.0.7)(supports-color@7.2.0)
       '@actions/core':
         specifier: 'catalog:'
         version: 3.0.1
@@ -120,7 +221,7 @@ importers:
         version: 0.45.0
       typescript:
         specifier: 'catalog:'
-        version: 6.0.3
+        version: 7.0.2
 
   package:
     devDependencies:
@@ -135,7 +236,7 @@ importers:
         version: 4.0.1
       '@sigstore/tuf':
         specifier: 'catalog:'
-        version: 5.0.0
+        version: 5.0.0(supports-color@7.2.0)
       '@sigstore/verify':
         specifier: 'catalog:'
         version: 4.1.2(patch_hash=851c435e06730dfe3cf47d78cc0ac5c23df678c92b83948f378f1462eedb7cbd)
@@ -153,16 +254,16 @@ importers:
         version: 4.0.0(rolldown@1.2.4)(vite@8.2.1(@types/node@26.2.0)(yaml@2.9.0))
       sigstore:
         specifier: 'catalog:'
-        version: 5.0.0
+        version: 5.0.0(supports-color@7.2.0)
       typedoc:
         specifier: 'catalog:'
-        version: 0.28.20(typescript@6.0.3)
+        version: 0.28.20(typescript@7.0.2)
       typedoc-theme-oxide:
         specifier: 'catalog:'
-        version: 0.3.0(typedoc@0.28.20(typescript@6.0.3))
+        version: 0.3.0(typedoc@0.28.20(typescript@7.0.2))
       typescript:
         specifier: 'catalog:'
-        version: 6.0.3
+        version: 7.0.2
       undici:
         specifier: 'catalog:'
         version: 8.10.0(patch_hash=ef7528116ff3856b52932d46bf7843e93b546b9b601f269992d62237c072d6f4)
@@ -171,7 +272,7 @@ importers:
         version: 8.2.1(@types/node@26.2.0)(yaml@2.9.0)
       vite-plugin-dts:
         specifier: 'catalog:'
-        version: 5.0.3(rolldown@1.2.4)(typescript@6.0.3)(vite@8.2.1(@types/node@26.2.0)(yaml@2.9.0))
+        version: 5.0.3(rolldown@1.2.4)(typescript@7.0.2)(vite@8.2.1(@types/node@26.2.0)(yaml@2.9.0))
       vitest:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@26.2.0)(@vitest/coverage-istanbul@4.1.11)(vite@8.2.1(@types/node@26.2.0)(yaml@2.9.0))
@@ -880,6 +981,126 @@ packages:
   '@types/unist@3.0.3':
     resolution: {integrity: sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q==}
 
+  '@typescript/typescript-aix-ppc64@7.0.2':
+    resolution: {integrity: sha512-MTKKkWB7p/0E9xi1d1tHtZ5PiLkGEMIq88pK2CubZjOsLtYTLqhgIgi6zepFa+9GHZ6h05NMCkQxGKiPXMxXtQ==}
+    engines: {node: '>=16.20.0'}
+    cpu: [ppc64]
+    os: [aix]
+
+  '@typescript/typescript-darwin-arm64@7.0.2':
+    resolution: {integrity: sha512-gowzar9MwS/aRWp6f3a4KUqzRjAZjOsmGNCM6LcTgXum+dBfgsBVMN+AgvOCCbguXyick6LJhpBszxMebJ8syA==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@typescript/typescript-darwin-x64@7.0.2':
+    resolution: {integrity: sha512-SZ9xZInqApNlNGc9s0W1VSsktYSOe9cFqNOIqmN1Gs8SmkjKZYFt017G4VwPxASInODuAdbTW7sXiFUf893RgA==}
+    engines: {node: '>=16.20.0'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@typescript/typescript-freebsd-arm64@7.0.2':
+    resolution: {integrity: sha512-W5NH4y/J0plIIS5b2xvTEkU7JFxyqdMAOgf+Ilhl0vHQXKO5dZoxd+C/jEtq56c4F3wk71RB4BMRQ2XdI+bwYQ==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm64]
+    os: [freebsd]
+
+  '@typescript/typescript-freebsd-x64@7.0.2':
+    resolution: {integrity: sha512-UMGDx5sTpzNw3WiPebH7l90IWfJggEd+egHt/q6p7/Cm3zqoV7VxkGXt+3DxPIw8CcmvAB0j3sVVfbhX+M4Tpw==}
+    engines: {node: '>=16.20.0'}
+    cpu: [x64]
+    os: [freebsd]
+
+  '@typescript/typescript-linux-arm64@7.0.2':
+    resolution: {integrity: sha512-Qh4eU4/y3yDjnfjjyPYihMj5/ODIlmt+Bzu17OI+fiSRDW57QmU5SiN63exPRNJPKUzcc1INa1NXdrJ+MqHjUQ==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@typescript/typescript-linux-arm@7.0.2':
+    resolution: {integrity: sha512-gffT3xPz9sR7j/YJExkyPntrI0P2EP9XbOyWzth2/Gs0RstK+90RBcO0ncXoXy/beYll1SXw846Nf2zdnEz0QQ==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm]
+    os: [linux]
+
+  '@typescript/typescript-linux-loong64@7.0.2':
+    resolution: {integrity: sha512-uEHck9i8hoAzXPiYRib1O7miOnz23SxIeVl6F4LXox+qov1K35jHcEW6VHKvZI+pyvl7fZEP4MCU5LYvIq1GuQ==}
+    engines: {node: '>=16.20.0'}
+    cpu: [loong64]
+    os: [linux]
+
+  '@typescript/typescript-linux-mips64el@7.0.2':
+    resolution: {integrity: sha512-R4KvAMnE43W5Qeqb0Ly56O3mWMWIAgsMyz36DCaycd5nbg/9kzm0liw3JocfRqyJY0KPmzFjbswozXyW0DnIYA==}
+    engines: {node: '>=16.20.0'}
+    cpu: [mips64el]
+    os: [linux]
+
+  '@typescript/typescript-linux-ppc64@7.0.2':
+    resolution: {integrity: sha512-DORx5b3sd/4S7eayxm4FQv+A7CrkUIGRaHiwI8oiHTAI1fAPWhF4J0vAlkC8biAlHSVVwxMQ3tjZ2/DVbnQiiA==}
+    engines: {node: '>=16.20.0'}
+    cpu: [ppc64]
+    os: [linux]
+
+  '@typescript/typescript-linux-riscv64@7.0.2':
+    resolution: {integrity: sha512-wf0jqEDOjrPRnKwYRyyJDRo11KMbvMFrU+q4zqKyChODBzvlkbhNQfKvLxQCcwTpdDaXSHZTVuh0JoCrKCUMHQ==}
+    engines: {node: '>=16.20.0'}
+    cpu: [riscv64]
+    os: [linux]
+
+  '@typescript/typescript-linux-s390x@7.0.2':
+    resolution: {integrity: sha512-IkwJc3L7yhytWd/ewjyxNDfOmswCm9GWMJT/ue/dU4aZNbwZeYAetq42VyLmsmSjvoX7z74X6ZaYCtzAr0EuGw==}
+    engines: {node: '>=16.20.0'}
+    cpu: [s390x]
+    os: [linux]
+
+  '@typescript/typescript-linux-x64@7.0.2':
+    resolution: {integrity: sha512-EYdf2cNg7rgCWJnxCdJ+F3V39O8ihb37eHAu1LK8oAFizgTQbPOK7zHHXbPt8rX24COqODXeI3sIf0fCXG7H/A==}
+    engines: {node: '>=16.20.0'}
+    cpu: [x64]
+    os: [linux]
+
+  '@typescript/typescript-netbsd-arm64@7.0.2':
+    resolution: {integrity: sha512-+polYF4MF04aPpO5FTkHran9yUQDSXqy5GiSDKpsll5jy3l3+g9QLhpf39T+ePtefhXLOGrLl0QIjkQP6VnelA==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm64]
+    os: [netbsd]
+
+  '@typescript/typescript-netbsd-x64@7.0.2':
+    resolution: {integrity: sha512-8YIT0EHM/3dq10ZOVF/A7pc/YSMtbcecct4rWtexrnSCHOPcpC2KTLXfTCR6vDpnSiY12heNb1GiN/wu+T/FyA==}
+    engines: {node: '>=16.20.0'}
+    cpu: [x64]
+    os: [netbsd]
+
+  '@typescript/typescript-openbsd-arm64@7.0.2':
+    resolution: {integrity: sha512-APT8+ClYnuYm1u9+kgGXoMj2VzWzcymwh2gNSQVySHfkRDGOTVkoWLjCmOQSaO+PoqQ57B0flRp9SA+7GnnkzQ==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm64]
+    os: [openbsd]
+
+  '@typescript/typescript-openbsd-x64@7.0.2':
+    resolution: {integrity: sha512-yX7s+Q0Dln0Dt9tEzZsAjXXR/+ytBM7AlglaqyeMPxQszJ1JhlJdZ6jLA+IzldHtflX81em7lDao1xXu+aRRkg==}
+    engines: {node: '>=16.20.0'}
+    cpu: [x64]
+    os: [openbsd]
+
+  '@typescript/typescript-sunos-x64@7.0.2':
+    resolution: {integrity: sha512-dLJDGaLZ1D4HPQn62u1n8mBDkJREwMsAkCdkwd4Ieqw+x3TUyTsqY0YiBCtE6H6OzzgGk3iuZ3vFWRS+E8/d1g==}
+    engines: {node: '>=16.20.0'}
+    cpu: [x64]
+    os: [sunos]
+
+  '@typescript/typescript-win32-arm64@7.0.2':
+    resolution: {integrity: sha512-Gyl1Vy6OsWesLzmq+EP0Fb7b4Nid5232AvcA2SFcdYreldpNtYFFofPjnt62y9hQy7VTaZp65ICJjuAQRaVcIQ==}
+    engines: {node: '>=16.20.0'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@typescript/typescript-win32-x64@7.0.2':
+    resolution: {integrity: sha512-0BQ3HkAHHlKLSp1qRvf3SUhGpGsDuhB/jgFw75guyqbxJqEaS0Cw/VFO8i2nHglJUzQCRtMMR/IBAKE3ETMC4g==}
+    engines: {node: '>=16.20.0'}
+    cpu: [x64]
+    os: [win32]
+
   '@vercel/ncc@0.45.0':
     resolution: {integrity: sha512-8zPi1yO2mHpoKTD+e+Bf0ZT3e+sWHSOyGapm9s7b5R0gxJi3CiFTqmeQiMEyu6ejrz2s09M8JkEoUaTWjBJPQQ==}
     hasBin: true
@@ -926,6 +1147,11 @@ packages:
 
   '@volar/typescript@2.4.28':
     resolution: {integrity: sha512-Ja6yvWrbis2QtN4ClAKreeUZPVYMARDYZl9LMEv1iQ1QdepB6wn0jTRxA9MftYmYa4DQ4k/DaSZpFPUfxl8giw==}
+    peerDependencies:
+      typescript: '*'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   acorn@8.18.0:
     resolution: {integrity: sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ==}
@@ -1989,9 +2215,9 @@ packages:
     peerDependencies:
       typescript: 5.0.x || 5.1.x || 5.2.x || 5.3.x || 5.4.x || 5.5.x || 5.6.x || 5.7.x || 5.8.x || 5.9.x || 6.0.x
 
-  typescript@6.0.3:
-    resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
-    engines: {node: '>=14.17'}
+  typescript@7.0.2:
+    resolution: {integrity: sha512-8FYau96o3NKOhbjKi/qNvG/W5jhzxkbdm5sj9AbZ/5T5sWqn3hJgLfGx27sRKZWTvyzCP8dLRBTf5tBTSRVUNA==}
+    engines: {node: '>=16.20.0'}
     hasBin: true
 
   uc.micro@2.1.0:
@@ -2231,14 +2457,14 @@ packages:
 
 snapshots:
 
-  '@actions/attest@3.2.0(@octokit/core@7.0.7)':
+  '@actions/attest@3.2.0(@octokit/core@7.0.7)(supports-color@7.2.0)':
     dependencies:
       '@actions/core': 3.0.1
       '@actions/github': 9.1.1
       '@actions/http-client': 4.0.1
       '@octokit/plugin-retry': 8.1.1(@octokit/core@7.0.7)
       '@sigstore/bundle': 3.1.0
-      '@sigstore/sign': 3.1.0
+      '@sigstore/sign': 3.1.0(supports-color@7.2.0)
       jose: 5.10.0
     transitivePeerDependencies:
       - '@octokit/core'
@@ -2296,7 +2522,7 @@ snapshots:
       '@babel/types': 7.29.8
       '@jridgewell/remapping': 2.3.5
       convert-source-map: 2.0.0
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@7.2.0)
       gensync: 1.0.0-beta.2
       json5: 2.2.3
       semver: 6.3.1
@@ -2366,7 +2592,7 @@ snapshots:
       '@babel/parser': 7.29.8
       '@babel/template': 7.29.7
       '@babel/types': 7.29.8
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@7.2.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -2451,23 +2677,23 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
-  '@npmcli/agent@3.0.0':
+  '@npmcli/agent@3.0.0(supports-color@7.2.0)':
     dependencies:
       agent-base: 7.1.4
-      http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
+      http-proxy-agent: 7.0.2(supports-color@7.2.0)
+      https-proxy-agent: 7.0.6(supports-color@7.2.0)
       lru-cache: 10.4.3
-      socks-proxy-agent: 8.0.5
+      socks-proxy-agent: 8.0.5(supports-color@7.2.0)
     transitivePeerDependencies:
       - supports-color
 
-  '@npmcli/agent@5.0.2':
+  '@npmcli/agent@5.0.2(supports-color@7.2.0)':
     dependencies:
       agent-base: 9.0.0
-      http-proxy-agent: 9.1.0
-      https-proxy-agent: 9.1.0
+      http-proxy-agent: 9.1.0(supports-color@7.2.0)
+      https-proxy-agent: 9.1.0(supports-color@7.2.0)
       lru-cache: 11.5.2
-      socks-proxy-agent: 10.1.0
+      socks-proxy-agent: 10.1.0(supports-color@7.2.0)
     transitivePeerDependencies:
       - kerberos
       - supports-color
@@ -2752,33 +2978,33 @@ snapshots:
 
   '@sigstore/protobuf-specs@0.5.1': {}
 
-  '@sigstore/sign@3.1.0':
+  '@sigstore/sign@3.1.0(supports-color@7.2.0)':
     dependencies:
       '@sigstore/bundle': 3.1.0
       '@sigstore/core': 2.0.0
       '@sigstore/protobuf-specs': 0.4.3
-      make-fetch-happen: 14.0.3
+      make-fetch-happen: 14.0.3(supports-color@7.2.0)
       proc-log: 5.0.0
       promise-retry: 2.0.1
     transitivePeerDependencies:
       - supports-color
 
-  '@sigstore/sign@5.0.0':
+  '@sigstore/sign@5.0.0(supports-color@7.2.0)':
     dependencies:
       '@gar/promise-retry': 1.0.3
       '@sigstore/bundle': 5.0.0
       '@sigstore/core': 4.0.1
       '@sigstore/protobuf-specs': 0.5.1
-      make-fetch-happen: 16.0.1
+      make-fetch-happen: 16.0.1(supports-color@7.2.0)
       proc-log: 7.0.0
     transitivePeerDependencies:
       - kerberos
       - supports-color
 
-  '@sigstore/tuf@5.0.0':
+  '@sigstore/tuf@5.0.0(supports-color@7.2.0)':
     dependencies:
       '@sigstore/protobuf-specs': 0.5.1
-      tuf-js: 6.0.0(patch_hash=8f4192fbee0af9dfc364cc6ae6f03455a7146358b045a508098918d332c99553)
+      tuf-js: 6.0.0(patch_hash=8f4192fbee0af9dfc364cc6ae6f03455a7146358b045a508098918d332c99553)(supports-color@7.2.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -2827,6 +3053,66 @@ snapshots:
   '@types/unist@2.0.11': {}
 
   '@types/unist@3.0.3': {}
+
+  '@typescript/typescript-aix-ppc64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-darwin-arm64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-darwin-x64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-freebsd-arm64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-freebsd-x64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-linux-arm64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-linux-arm@7.0.2':
+    optional: true
+
+  '@typescript/typescript-linux-loong64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-linux-mips64el@7.0.2':
+    optional: true
+
+  '@typescript/typescript-linux-ppc64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-linux-riscv64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-linux-s390x@7.0.2':
+    optional: true
+
+  '@typescript/typescript-linux-x64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-netbsd-arm64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-netbsd-x64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-openbsd-arm64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-openbsd-x64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-sunos-x64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-win32-arm64@7.0.2':
+    optional: true
+
+  '@typescript/typescript-win32-x64@7.0.2':
+    optional: true
 
   '@vercel/ncc@0.45.0': {}
 
@@ -2893,11 +3179,13 @@ snapshots:
 
   '@volar/source-map@2.4.28': {}
 
-  '@volar/typescript@2.4.28':
+  '@volar/typescript@2.4.28(typescript@7.0.2)':
     dependencies:
       '@volar/language-core': 2.4.28
       path-browserify: 1.0.1
       vscode-uri: 3.1.0
+    optionalDependencies:
+      typescript: 7.0.2
 
   acorn@8.18.0: {}
 
@@ -3053,9 +3341,11 @@ snapshots:
 
   css-what@6.2.2: {}
 
-  debug@4.4.3:
+  debug@4.4.3(supports-color@7.2.0):
     dependencies:
       ms: 2.1.3
+    optionalDependencies:
+      supports-color: 7.2.0
 
   decode-named-character-reference@1.3.0:
     dependencies:
@@ -3212,33 +3502,33 @@ snapshots:
 
   http-cache-semantics@4.2.0: {}
 
-  http-proxy-agent@7.0.2:
+  http-proxy-agent@7.0.2(supports-color@7.2.0):
     dependencies:
       agent-base: 7.1.4
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@7.2.0)
     transitivePeerDependencies:
       - supports-color
 
-  http-proxy-agent@9.1.0:
+  http-proxy-agent@9.1.0(supports-color@7.2.0):
     dependencies:
       agent-base: 9.0.0
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@7.2.0)
       proxy-agent-negotiate: 1.1.0
     transitivePeerDependencies:
       - kerberos
       - supports-color
 
-  https-proxy-agent@7.0.6:
+  https-proxy-agent@7.0.6(supports-color@7.2.0):
     dependencies:
       agent-base: 7.1.4
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@7.2.0)
     transitivePeerDependencies:
       - supports-color
 
-  https-proxy-agent@9.1.0:
+  https-proxy-agent@9.1.0(supports-color@7.2.0):
     dependencies:
       agent-base: 9.0.0
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@7.2.0)
       proxy-agent-negotiate: 1.1.0
     transitivePeerDependencies:
       - kerberos
@@ -3412,9 +3702,9 @@ snapshots:
     dependencies:
       semver: 7.8.5
 
-  make-fetch-happen@14.0.3:
+  make-fetch-happen@14.0.3(supports-color@7.2.0):
     dependencies:
-      '@npmcli/agent': 3.0.0
+      '@npmcli/agent': 3.0.0(supports-color@7.2.0)
       cacache: 19.0.1
       http-cache-semantics: 4.2.0
       minipass: 7.1.3
@@ -3428,10 +3718,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  make-fetch-happen@16.0.1:
+  make-fetch-happen@16.0.1(supports-color@7.2.0):
     dependencies:
       '@gar/promise-retry': 1.0.3
-      '@npmcli/agent': 5.0.2
+      '@npmcli/agent': 5.0.2(supports-color@7.2.0)
       '@npmcli/redact': 5.0.0
       cacache: 21.0.1
       http-cache-semantics: 4.2.0
@@ -3455,27 +3745,27 @@ snapshots:
       punycode.js: 2.3.1
       uc.micro: 2.1.0
 
-  markdownlint-cli2-formatter-default@0.0.6(markdownlint-cli2@0.23.2):
+  markdownlint-cli2-formatter-default@0.0.6(markdownlint-cli2@0.23.2(supports-color@7.2.0)):
     dependencies:
-      markdownlint-cli2: 0.23.2
+      markdownlint-cli2: 0.23.2(supports-color@7.2.0)
 
-  markdownlint-cli2@0.23.2:
+  markdownlint-cli2@0.23.2(supports-color@7.2.0):
     dependencies:
       globby: 16.2.2
       js-yaml: 5.2.2
       jsonc-parser: 3.3.1
       jsonpointer: 5.0.1
       markdown-it: 14.3.0
-      markdownlint: 0.41.1
-      markdownlint-cli2-formatter-default: 0.0.6(markdownlint-cli2@0.23.2)
+      markdownlint: 0.41.1(supports-color@7.2.0)
+      markdownlint-cli2-formatter-default: 0.0.6(markdownlint-cli2@0.23.2(supports-color@7.2.0))
       micromatch: 4.0.8
       smol-toml: 1.7.0
     transitivePeerDependencies:
       - supports-color
 
-  markdownlint@0.41.1:
+  markdownlint@0.41.1(supports-color@7.2.0):
     dependencies:
-      micromark: 4.0.2
+      micromark: 4.0.2(supports-color@7.2.0)
       micromark-core-commonmark: 2.0.3
       micromark-extension-directive: 4.0.0
       micromark-extension-gfm-autolink-literal: 2.1.0
@@ -3641,10 +3931,10 @@ snapshots:
 
   micromark-util-types@2.0.2: {}
 
-  micromark@4.0.2:
+  micromark@4.0.2(supports-color@7.2.0):
     dependencies:
       '@types/debug': 4.1.13
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@7.2.0)
       decode-named-character-reference: 1.3.0
       devlop: 1.1.0
       micromark-core-commonmark: 2.0.3
@@ -3940,13 +4230,13 @@ snapshots:
 
   signal-exit@4.1.0: {}
 
-  sigstore@5.0.0:
+  sigstore@5.0.0(supports-color@7.2.0):
     dependencies:
       '@sigstore/bundle': 5.0.0
       '@sigstore/core': 4.0.1
       '@sigstore/protobuf-specs': 0.5.1
-      '@sigstore/sign': 5.0.0
-      '@sigstore/tuf': 5.0.0
+      '@sigstore/sign': 5.0.0(supports-color@7.2.0)
+      '@sigstore/tuf': 5.0.0(supports-color@7.2.0)
       '@sigstore/verify': 4.1.2(patch_hash=851c435e06730dfe3cf47d78cc0ac5c23df678c92b83948f378f1462eedb7cbd)
     transitivePeerDependencies:
       - kerberos
@@ -3960,18 +4250,18 @@ snapshots:
 
   smol-toml@1.7.0: {}
 
-  socks-proxy-agent@10.1.0:
+  socks-proxy-agent@10.1.0(supports-color@7.2.0):
     dependencies:
       agent-base: 9.0.0
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@7.2.0)
       socks: 2.8.9
     transitivePeerDependencies:
       - supports-color
 
-  socks-proxy-agent@8.0.5:
+  socks-proxy-agent@8.0.5(supports-color@7.2.0):
     dependencies:
       agent-base: 7.1.4
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@7.2.0)
       socks: 2.8.9
     transitivePeerDependencies:
       - supports-color
@@ -4068,33 +4358,54 @@ snapshots:
     dependencies:
       is-number: 7.0.0
 
-  tuf-js@6.0.0(patch_hash=8f4192fbee0af9dfc364cc6ae6f03455a7146358b045a508098918d332c99553):
+  tuf-js@6.0.0(patch_hash=8f4192fbee0af9dfc364cc6ae6f03455a7146358b045a508098918d332c99553)(supports-color@7.2.0):
     dependencies:
       '@gar/promise-retry': 1.0.3
       '@tufjs/models': 5.0.0
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@7.2.0)
     transitivePeerDependencies:
       - supports-color
 
   tunnel@0.0.6: {}
 
-  typedoc-theme-oxide@0.3.0(typedoc@0.28.20(typescript@6.0.3)):
+  typedoc-theme-oxide@0.3.0(typedoc@0.28.20(typescript@7.0.2)):
     dependencies:
       cheerio: 1.2.0
       flexsearch: 0.8.212
       slug: 11.0.1
-      typedoc: 0.28.20(typescript@6.0.3)
+      typedoc: 0.28.20(typescript@7.0.2)
 
-  typedoc@0.28.20(typescript@6.0.3):
+  typedoc@0.28.20(typescript@7.0.2):
     dependencies:
       '@gerrit0/mini-shiki': 3.23.0
       lunr: 2.3.9
       markdown-it: 14.3.0
       minimatch: 10.2.6
-      typescript: 6.0.3
+      typescript: 7.0.2
       yaml: 2.9.0
 
-  typescript@6.0.3: {}
+  typescript@7.0.2:
+    optionalDependencies:
+      '@typescript/typescript-aix-ppc64': 7.0.2
+      '@typescript/typescript-darwin-arm64': 7.0.2
+      '@typescript/typescript-darwin-x64': 7.0.2
+      '@typescript/typescript-freebsd-arm64': 7.0.2
+      '@typescript/typescript-freebsd-x64': 7.0.2
+      '@typescript/typescript-linux-arm': 7.0.2
+      '@typescript/typescript-linux-arm64': 7.0.2
+      '@typescript/typescript-linux-loong64': 7.0.2
+      '@typescript/typescript-linux-mips64el': 7.0.2
+      '@typescript/typescript-linux-ppc64': 7.0.2
+      '@typescript/typescript-linux-riscv64': 7.0.2
+      '@typescript/typescript-linux-s390x': 7.0.2
+      '@typescript/typescript-linux-x64': 7.0.2
+      '@typescript/typescript-netbsd-arm64': 7.0.2
+      '@typescript/typescript-netbsd-x64': 7.0.2
+      '@typescript/typescript-openbsd-arm64': 7.0.2
+      '@typescript/typescript-openbsd-x64': 7.0.2
+      '@typescript/typescript-sunos-x64': 7.0.2
+      '@typescript/typescript-win32-arm64': 7.0.2
+      '@typescript/typescript-win32-x64': 7.0.2
 
   uc.micro@2.1.0: {}
 
@@ -4120,16 +4431,16 @@ snapshots:
 
   universal-user-agent@7.0.3: {}
 
-  unplugin-dts@1.0.3(rolldown@1.2.4)(typescript@6.0.3)(vite@8.2.1(@types/node@26.2.0)(yaml@2.9.0)):
+  unplugin-dts@1.0.3(rolldown@1.2.4)(typescript@7.0.2)(vite@8.2.1(@types/node@26.2.0)(yaml@2.9.0)):
     dependencies:
       '@rollup/pluginutils': 5.4.0
-      '@volar/typescript': 2.4.28
+      '@volar/typescript': 2.4.28(typescript@7.0.2)
       compare-versions: 6.1.1
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@7.2.0)
       kolorist: 1.8.0
       local-pkg: 1.2.1
       magic-string: 0.30.21
-      typescript: 6.0.3
+      typescript: 7.0.2
       unplugin: 2.3.11
     optionalDependencies:
       rolldown: 1.2.4
@@ -4160,9 +4471,9 @@ snapshots:
       spdx-correct: 3.2.0
       spdx-expression-parse: 3.0.1
 
-  vite-plugin-dts@5.0.3(rolldown@1.2.4)(typescript@6.0.3)(vite@8.2.1(@types/node@26.2.0)(yaml@2.9.0)):
+  vite-plugin-dts@5.0.3(rolldown@1.2.4)(typescript@7.0.2)(vite@8.2.1(@types/node@26.2.0)(yaml@2.9.0)):
     dependencies:
-      unplugin-dts: 1.0.3(rolldown@1.2.4)(typescript@6.0.3)(vite@8.2.1(@types/node@26.2.0)(yaml@2.9.0))
+      unplugin-dts: 1.0.3(rolldown@1.2.4)(typescript@7.0.2)(vite@8.2.1(@types/node@26.2.0)(yaml@2.9.0))
     optionalDependencies:
       vite: 8.2.1(@types/node@26.2.0)(yaml@2.9.0)
     transitivePeerDependencies:
