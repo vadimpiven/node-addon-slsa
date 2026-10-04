@@ -22,7 +22,7 @@ Launch ALL of the following sub-agents IN PARALLEL using the Task tool with `run
    - Update version numbers in mise.toml
    - Respect pinned versions with comments explaining why
    - Also update .mise-version with latest mise release: `gh api repos/jdx/mise/releases/latest --jq '.tag_name'`
-   - Update Node.js version in mise.toml using `mise latest node@25` to find latest v25.x
+   - Update Node.js version in mise.toml using `mise latest node@26` to find latest v26.x
    - Tools to check: jqlang/jq, mikefarah/yq, BurntSushi/ripgrep, aquasecurity/trivy, google/yamlfmt, gitleaks/gitleaks, rhysd/actionlint, koalaman/shellcheck, crate-ci/typos, tamasfe/taplo, zizmorcore/zizmor, cli/cli
 
 3. **GitHub Actions** - Update all action SHAs and version comments
