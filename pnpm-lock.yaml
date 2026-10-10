@@ -52,8 +52,8 @@ catalogs:
       specifier: 1.86.0
       version: 1.86.0
     rollup-plugin-sbom:
-      specifier: 4.0.0
-      version: 4.0.0
+      specifier: 4.0.1
+      version: 4.0.1
     sigstore:
       specifier: 5.0.0
       version: 5.0.0
@@ -150,7 +150,7 @@ importers:
         version: 1.7.2
       rollup-plugin-sbom:
         specifier: 'catalog:'
-        version: 4.0.0(rolldown@1.2.12)(vite@8.3.2(@types/node@26.6.4)(yaml@2.9.1))
+        version: 4.0.1(rolldown@1.2.12)(vite@8.3.2(@types/node@26.6.4)(yaml@2.9.1))
       sigstore:
         specifier: 'catalog:'
         version: 5.0.0(supports-color@7.2.0)
@@ -286,8 +286,8 @@ packages:
     peerDependencies:
       vite: 4.x || 5.x || 6.x
 
-  '@cyclonedx/cyclonedx-library@10.1.0':
-    resolution: {integrity: sha512-4yq0KTQIA32UHJwFMDeY5xj2asp3Mk5lzx4JRVXLOb0YE8w1KeR61c1m/gJ4sjMXpiiEDfaITVQu8BLUuy7t3A==}
+  '@cyclonedx/cyclonedx-library@10.3.0':
+    resolution: {integrity: sha512-RIT28sp1U0PCHaaeF3yNRwk6Jig/XJ8UsYAVOMYaHQ+0VVOvsjcp0PTWQFLUqJFF8XMud+Kdq6G+wtDAh+QJFA==}
     engines: {node: '>=20.18.0'}
     peerDependencies:
       ajv: ^8.12.0
@@ -1849,8 +1849,8 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
 
-  rollup-plugin-sbom@4.0.0:
-    resolution: {integrity: sha512-WwAq3ZZRv4He27yyExeV8WWZh4QeSqVnIahpMBGfsDX97bjDh2aBgbFLWp1COuYiBP9iHjeB3oaPMk8V8Dmpjg==}
+  rollup-plugin-sbom@4.0.1:
+    resolution: {integrity: sha512-gRzuUXt/9MFhQ8+Pf6W/yNmBvUYM7CxgXpO3x4xJOQ3l6c/7O7D/oFPIRsDvqHvxg5DDjlSYkqwshDbv7eMiCQ==}
     engines: {node: '>=22.9.0'}
     peerDependencies:
       rolldown: ^1
@@ -2423,7 +2423,7 @@ snapshots:
       unplugin: 1.16.1
       vite: 8.3.2(@types/node@26.6.4)(yaml@2.9.1)
 
-  '@cyclonedx/cyclonedx-library@10.1.0(packageurl-js@2.0.1)(spdx-expression-parse@5.0.0)':
+  '@cyclonedx/cyclonedx-library@10.3.0(packageurl-js@2.0.1)(spdx-expression-parse@5.0.0)':
     optionalDependencies:
       packageurl-js: 2.0.1
       spdx-expression-parse: 5.0.0
@@ -3957,9 +3957,9 @@ snapshots:
       '@rolldown/binding-win32-arm64-msvc': 1.2.12
       '@rolldown/binding-win32-x64-msvc': 1.2.12
 
-  rollup-plugin-sbom@4.0.0(rolldown@1.2.12)(vite@8.3.2(@types/node@26.6.4)(yaml@2.9.1)):
+  rollup-plugin-sbom@4.0.1(rolldown@1.2.12)(vite@8.3.2(@types/node@26.6.4)(yaml@2.9.1)):
     dependencies:
-      '@cyclonedx/cyclonedx-library': 10.1.0(packageurl-js@2.0.1)(spdx-expression-parse@5.0.0)
+      '@cyclonedx/cyclonedx-library': 10.3.0(packageurl-js@2.0.1)(spdx-expression-parse@5.0.0)
       normalize-package-data: 9.0.0
       packageurl-js: 2.0.1
       spdx-expression-parse: 5.0.0
