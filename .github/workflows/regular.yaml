@@ -17,7 +17,7 @@ concurrency:
 jobs:
   init:
     name: "Init"
-    runs-on: "ubuntu-24.04"
+    runs-on: "ubuntu-26.04"
     timeout-minutes: 5
     permissions:
       contents: "read" # to fetch code
@@ -40,7 +40,7 @@ jobs:
   build-and-test:
     name: "Build and test"
     needs: "init"
-    runs-on: "ubuntu-24.04"
+    runs-on: "ubuntu-26.04"
     timeout-minutes: 15
     permissions:
       contents: "read" # to fetch code
@@ -73,7 +73,7 @@ jobs:
     permissions:
       contents: "read" # to fetch code
       security-events: "write" # to upload sarif results
-    runs-on: "ubuntu-24.04"
+    runs-on: "ubuntu-26.04"
     steps:
       - name: "Checkout repository"
         uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
@@ -93,7 +93,7 @@ jobs:
     permissions:
       contents: "read" # to fetch code
       security-events: "write" # to upload sarif results
-    runs-on: "ubuntu-24.04"
+    runs-on: "ubuntu-26.04"
     steps:
       - name: "Checkout repository"
         uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" # v7.0.1
