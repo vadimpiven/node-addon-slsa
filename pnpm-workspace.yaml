@@ -12,26 +12,26 @@ catalog:
   "@sigstore/core": 4.0.1
   "@sigstore/tuf": 5.0.0
   "@sigstore/verify": 4.1.2
-  "@types/node": 26.6.4
+  "@types/node": 26.6.5
   "@vercel/ncc": 0.45.0
-  "@vitest/coverage-istanbul": 5.0.3
+  "@vitest/coverage-istanbul": 5.0.5
   dedent: 1.7.2
   husky: 9.1.7
   markdownlint-cli2: 0.23.3
-  oxfmt: 0.71.0
-  oxlint: 1.86.0
-  rollup-plugin-sbom: 4.0.0
+  oxfmt: 0.73.0
+  oxlint: 1.88.0
+  rollup-plugin-sbom: 4.0.1
   sigstore: 5.0.0
 
   typedoc: 0.28.20
   typedoc-theme-oxide: 0.3.0
   # @vercel/ncc@0.45.0 crashes with TypeScript 7; update when ncc supports it.
   typescript: 6.0.3
-  undici: 8.11.2
-  vite: 8.3.2
+  undici: 8.12.2
+  vite: 8.3.4
   vite-plugin-dts: 5.1.2
-  vitest: 5.0.3
-  zod: 4.6.5
+  vitest: 5.0.5
+  zod: 4.6.7
 
 minimumReleaseAge: 1440
 
